@@ -1,0 +1,5 @@
+figs/
+logs/
+vars/
+__pycache__/
+*.pyc
