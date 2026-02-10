@@ -1,0 +1,3 @@
+[submodule "external/NDNT"]
+	path = external/NDNT
+	url = https://github.com/NeuroTheoryUMD/NDNT.git
