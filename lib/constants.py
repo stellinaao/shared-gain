@@ -21,5 +21,5 @@ plt.rc('figure', titlesize=SMALL_SIZE)  # fontsize of the figure title
 rcParams['axes.spines.top'] = False
 rcParams['axes.spines.right'] = False
 
-PLOT_FOLDER = 'Figs/'  # folder path to save plots
-DATA_FOLDER = 'Data/'  # folder path for data files
+PLOT_FOLDER = 'figs/'  # folder path to save plots
+DATA_FOLDER = 'data/'  # folder path for data files

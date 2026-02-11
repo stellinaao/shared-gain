@@ -43,9 +43,10 @@ def get_dataset_dm(psths, trial_data, regions, task_vars=['response'], num_tents
     print(f"originally {sum([len(psths[region]) for region in regions])} units")
     
     # dfs
-    adiff = np.abs(robs - np.mean(robs, axis=0)) # abs diff from avg rate of units across all trials
-    mad = np.median(adiff) 
-    dfs = (adiff / mad) < 8 
+    adiff = np.abs(robs - np.mean(robs, axis=0)) # abs diff from avg rate of units across all trials, np.mean: shape = (# cells,), adiff: shape = (# trials, # cells)
+    mad = np.median(adiff) # scalar
+    dfs = (adiff / mad) < 8 # shape = (# trials, # cells)
+    print(mad)
 
     # filter for good units
     good = np.mean(dfs, axis=0) > .8
@@ -152,7 +153,7 @@ def fit_tvs(train_dl, val_dl, num_tv, num_units, mod_baseline, ntents=5):
     return mod_tv
 
 # Step 2a: Evaluate and plot comparison for baseline and task variable models
-def plot_r2_comp(figs, results_a, results_b, label_a="", label_b="", save=True, fpath=None):
+def plot_r2_comp(figs, results_a, results_b, label_a="", label_b="", title="", save=True, fpath=None):
     fig, ax = plt.subplots(figsize=(4,4))
     figs.append(fig)
     ax.plot(results_a['r2test'], 'o', color='#666666', label=label_a)
@@ -166,6 +167,9 @@ def plot_r2_comp(figs, results_a, results_b, label_a="", label_b="", save=True, 
     
     if save:
         plt.savefig(fpath)
+    
+    fig.suptitle(title)
+    fig.tight_layout()
 
     return figs
 
@@ -306,6 +310,7 @@ def fit_ae_affine(train_dl, val_dl, test_dl, mod_tv, mod_ae_gain, mod_ae_offset,
 
     mod_ae_affine.to(device)
     r2 = model_rsquared(mod_ae_affine, val_dl.dataset[:])
+    print(len(r2))
     # print(f"{torch.mean(r2)}, before r2<0 -> 0")
 
     # mod_ae_affine.readout_gain.weight.data[:,r2<0] = 0  # minor detriment to r2 ([-0.01, -0.1])
@@ -314,7 +319,9 @@ def fit_ae_affine(train_dl, val_dl, test_dl, mod_tv, mod_ae_gain, mod_ae_offset,
     print('Autoencoder iter %d, val r2: %.4f' %(0, r2.mean().item()))
 
     res_ae_affine = eval_model(mod_ae_affine, data_gd, test_dl.dataset)
+    
     print('confirming model r2 = %.4f' %res_ae_affine['r2test'].mean().item())
+    print(len(res_ae_affine['r2test']))
 
     return mod_ae_affine, r2
 
@@ -324,7 +331,7 @@ def ae2lvm(train_dl, val_dl, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, nu
     mod_ae_offset = fit_gain_model(num_tv, mod_ae_offset,
         num_units=num_units, num_trials=len(data_gd),
         num_latent=num_latents,
-        max_iter=0,
+        max_iter=10,
         cids=cids, ntents=ntents,
         train_dl=train_dl, val_dl=val_dl,
         verbose=0,
@@ -337,7 +344,7 @@ def ae2lvm(train_dl, val_dl, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, nu
     mod_ae_gain = fit_gain_model(num_tv, mod_ae_gain,
         num_units=num_units, num_trials=len(data_gd),
         num_latent=num_latents,
-        max_iter=0,
+        max_iter=10,
         cids=cids, ntents=ntents,
         train_dl=train_dl, val_dl=val_dl,
         verbose=0,
@@ -350,7 +357,7 @@ def ae2lvm(train_dl, val_dl, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, nu
     mod_ae_affine = fit_gain_model(num_tv, mod_ae_affine,
         num_units=num_units, num_trials=len(data_gd),
         num_latent=num_latents,
-        max_iter=0,
+        max_iter=10,
         cids=cids, ntents=ntents,
         train_dl=train_dl, val_dl=val_dl,
         verbose=0,
@@ -429,7 +436,7 @@ def get_cvpca_metrics(das, data_gd, cids, train_dl, test_dl, rank):
             das['cvpca_train_err'].append((rank, tre.mean().item()))
             das['cvpca_test_err'].append((rank, te.mean().item()))
 
-def eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, mod_gain, mod_offset, mod_affine, cids, data_gd):
+def eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, data_gd):
 
     '''Evaluate Models'''
     # baseline
@@ -469,40 +476,40 @@ def eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, 
     moddict_ae_affine['model'] = mod_ae_affine
     das['affineae'] = moddict_ae_affine
 
-    # affine
-    moddict_affine = eval_model(mod_affine, data_gd, test_dl.dataset)
-    moddict_affine['model'] = mod_affine
-    das['affine'] = moddict_affine
+    # # affine
+    # moddict_affine = eval_model(mod_affine, data_gd, test_dl.dataset)
+    # moddict_affine['model'] = mod_affine
+    # das['affine'] = moddict_affine
 
-    # set gain readout weights to zero
-    mod_affineng = deepcopy(mod_affine)
-    mod_affineng.readout_gain.weight.data[:] = 0
+    # # set gain readout weights to zero
+    # mod_affineng = deepcopy(mod_affine)
+    # mod_affineng.readout_gain.weight.data[:] = 0
 
-    moddict_affineng = eval_model(mod_affineng, data_gd, test_dl.dataset)
-    moddict_affineng['model'] = mod_affineng
-    das['affine_nogain'] = moddict_affineng
+    # moddict_affineng = eval_model(mod_affineng, data_gd, test_dl.dataset)
+    # moddict_affineng['model'] = mod_affineng
+    # das['affine_nogain'] = moddict_affineng
 
-    # set offset readout weights to zero
-    mod_affineno = deepcopy(mod_affine)
-    mod_affineno.readout_offset.weight.data[:] = 0
+    # # set offset readout weights to zero
+    # mod_affineno = deepcopy(mod_affine)
+    # mod_affineno.readout_offset.weight.data[:] = 0
 
-    moddict_affineno = eval_model(mod_affineno, data_gd, test_dl.dataset)
-    moddict_affineno['model'] = mod_affineno
-    das['affine_nooffset'] = moddict_affineno
+    # moddict_affineno = eval_model(mod_affineno, data_gd, test_dl.dataset)
+    # moddict_affineno['model'] = mod_affineno
+    # das['affine_nooffset'] = moddict_affineno
 
-    ''' Gain model'''
-    moddict_gain = eval_model(mod_gain, data_gd, test_dl.dataset)
-    moddict_gain['model'] = mod_gain
-    das['gain'] = moddict_gain
+    # ''' Gain model'''
+    # moddict_gain = eval_model(mod_gain, data_gd, test_dl.dataset)
+    # moddict_gain['model'] = mod_gain
+    # das['gain'] = moddict_gain
 
-    ''' Offset model'''
-    moddict_offset = eval_model(mod_offset, data_gd, test_dl.dataset)
-    moddict_offset['model'] = mod_offset
-    das['offset'] = moddict_offset
+    # ''' Offset model'''
+    # moddict_offset = eval_model(mod_offset, data_gd, test_dl.dataset)
+    # moddict_offset['model'] = mod_offset
+    # das['offset'] = moddict_offset
 
     return das
 
-def get_das(trial_data, regions, sample, train_inds, val_inds, test_inds, train_dl, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, mod_affine, mod_gain, mod_offset, cids, data_gd, apath="vars/", aname="placeholder.pkl", do_save=True, do_plot=True):
+def get_das(trial_data, regions, sample, train_inds, val_inds, test_inds, train_dl, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, data_gd, apath="vars/", aname="placeholder.pkl", do_save=True, do_plot=True):
     # init das
     das = dict()
     das['data'] = {
@@ -517,7 +524,7 @@ def get_das(trial_data, regions, sample, train_inds, val_inds, test_inds, train_
         'test_inds': test_inds}
 
     # evaluate models
-    das = eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, mod_gain, mod_offset, mod_affine, cids, data_gd)
+    das = eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, data_gd)
     
     # redo PCA on fit neurons
     print("Fitting CV PCA")
@@ -696,15 +703,26 @@ def get_dataloaders(data_gd, folds=5, batch_size=64, use_dropout=True, seed=1234
     return train_dl, val_dl, test_dl, (train_inds, val_inds, test_inds)
         
 def rsquared(y, yhat, dfs=None):
+    # if dfs is None:
+    #     dfs = torch.ones(y.shape, device=y.device)
+    # ybar = (y * dfs).sum(dim=0) / dfs.sum(dim=0) # the average y value
+    # resids = y - yhat # the difference between observed and predicted
+    # residnull = y - ybar # the difference between observed and observed avg
+    # sstot = torch.sum( residnull**2*dfs, dim=0) # denom
+    # ssres = torch.sum( resids**2*dfs, dim=0) # num
+    # r2 = 1 - ssres/sstot
+
+    # return r2.detach().cpu()
+    
     if dfs is None:
         dfs = torch.ones(y.shape, device=y.device)
-    ybar = (y * dfs).sum(dim=0) / dfs.sum(dim=0) # the average y value
+    ybar = (y).sum(dim=0) / dfs.shape[0] #sum(dim=0) # the average y value
     resids = y - yhat # the difference between observed and predicted
     residnull = y - ybar # the difference between observed and observed avg
-    sstot = torch.sum( residnull**2*dfs, dim=0) # denom
-    ssres = torch.sum( resids**2*dfs, dim=0) # num
+    sstot = torch.sum( residnull**2, dim=0) # denom
+    ssres = torch.sum( resids**2, dim=0) # num
     r2 = 1 - ssres/sstot
-
+    
     return r2.detach().cpu()
 
 def censored_lstsq(A, B, M):
@@ -1163,7 +1181,6 @@ def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter
     model: the model to be fit
     mod1: the initialization model. If it is an autoencoder, use the autoencoder parameters for the initial condition
     '''
-    
     # used for initialization
     data = train_dl.dataset[:]
     vdata = val_dl.dataset[:]
@@ -1224,6 +1241,7 @@ def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter
 
     # fit iteratively
     for itr in range(max_iter):
+        print(f"{itr}, BOO")
         
         if itr > min_iter:
             fit_sigmas = True
@@ -1291,7 +1309,7 @@ def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter
     
     return l0, model0
 
-def eval_model(mod2, ds, val_ds, cids=None, do_plot=False, save=False, fpath=None):
+def eval_model(mod2, ds, val_ds, model="", cids=None, do_plot=False, save=False, fpath=None):
     sample = ds[:]
     mod2 = mod2.to(ds.device)
     rhat = mod2(sample).detach().cpu().numpy()
@@ -1352,6 +1370,7 @@ def eval_model(mod2, ds, val_ds, cids=None, do_plot=False, save=False, fpath=Non
         plt.legend()
         if save:
             plt.savefig(fpath)
+        fig.suptitle(model)
         fig.tight_layout()
         fig.show()
         

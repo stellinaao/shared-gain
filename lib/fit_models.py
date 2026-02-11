@@ -103,21 +103,21 @@ def fit_sess(unit_spike_times, trial_data, session_data, regions, subj_idx, sess
     print("Step 3e: AE to LVM")
     mod_ae_offset, mod_ae_gain, mod_ae_affine = fitlvm_utils.ae2lvm(train_dl, val_dl, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, num_tv, num_units, data_gd, num_latents=num_latents)
     
-    # Step 4: Fit affine model
-    print("Step 4: Fit Affine")
-    mod_affine = fitlvm_utils.fit_affine(train_dl, val_dl, mod_tv, cids, num_tv, num_units, data_gd, num_latents=num_latents)
+    # # Step 4: Fit affine model
+    # print("Step 4: Fit Affine")
+    # mod_affine = fitlvm_utils.fit_affine(train_dl, val_dl, mod_tv, cids, num_tv, num_units, data_gd, num_latents=num_latents)
     
-    # Step 5a: Fit gain only
-    print("Step 5a: Fit gain only")
-    mod_gain = fitlvm_utils.fit_gain(mod_ae_gain, mod_affine, train_dl, val_dl, cids, num_tv, num_units, data_gd, ntents=2, num_latents=num_latents)
+    # # Step 5a: Fit gain only
+    # print("Step 5a: Fit gain only")
+    # mod_gain = fitlvm_utils.fit_gain(mod_ae_gain, mod_affine, train_dl, val_dl, cids, num_tv, num_units, data_gd, ntents=2, num_latents=num_latents)
     
-    # Step 5b: Fit offset only
-    print("Step 5b: Fit offset only")
-    mod_offset = fitlvm_utils.fit_offset(train_dl, val_dl, mod_ae_affine, mod_affine, cids, num_tv, num_units, data_gd, num_latents=num_latents)
+    # # Step 5b: Fit offset only
+    # print("Step 5b: Fit offset only")
+    # mod_offset = fitlvm_utils.fit_offset(train_dl, val_dl, mod_ae_affine, mod_affine, cids, num_tv, num_units, data_gd, num_latents=num_latents)
     
     # EVALUATION
     print("Evaluating...")
-    das_sess = fitlvm_utils.get_das(trial_data, regions, sample, train_inds, val_inds, test_inds, train_dl, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, mod_affine, mod_gain, mod_offset, cids, data_gd, apath="vars/", aname=f"{data.subject_ids[subj_idx]}-{data.session_ids[subj_idx][sess_idx]}-fpass.pkl", do_save=True, do_plot=True)
+    das_sess = fitlvm_utils.get_das(trial_data, regions, sample, train_inds, val_inds, test_inds, train_dl, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, data_gd, apath="vars/", aname=f"{data.subject_ids[subj_idx]}-{data.session_ids[subj_idx][sess_idx]}-fpass.pkl", do_save=True, do_plot=True)
     figs_sess.append(fitlvm_utils.plot_summary(das_sess, subj_idx=subj_idx, sess_idx=sess_idx))
     
     return das_sess, figs_sess
