@@ -4,6 +4,8 @@ import pandas as pd
 import torch
 from joblib import Parallel, delayed
 
+from scipy.stats import rankdata
+
 from lib import data, models
 
 import numpy as np
@@ -70,6 +72,20 @@ def list2ndarr(l):
     for i, sub in enumerate(l):
         arr[i] = np.array(sub, dtype=object)
     return arr
+
+def spearmanr_vec(x, y):
+    # x is one vector, y is a matrix, correlate x with y[:,i]
+    xr = rankdata(x)
+    yr = np.vstack([rankdata(y[:, i]) for i in range(y.shape[1])]).T
+
+    xr -= xr.mean()
+    yr -= yr.mean(axis=0)
+
+    return (xr[:, None] * yr).sum(0) / (
+        np.sqrt((xr**2).sum()) *
+        np.sqrt((yr**2).sum(0))
+    )
+
 
 def iterable(l):
     if isinstance(l, str): return False

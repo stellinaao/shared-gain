@@ -3,16 +3,22 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import torch
+import random
 
 from joblib import Parallel, delayed
 
 from lib import data, fitlvm_utils
 
-def seed():
-    seed = 1234
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
+def seed(seed_val=1234):
+    random.seed(seed_val)
+    np.random.seed(seed_val)
+    torch.manual_seed(seed_val)
+    torch.cuda.manual_seed(seed_val)
+    torch.cuda.manual_seed_all(seed_val)  # if using multiple GPUs
+
+    # Force deterministic behavior
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def fit_all(trial_data_all, session_data_all, unit_spike_times_all, regions_all):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

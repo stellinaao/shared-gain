@@ -46,7 +46,7 @@ def get_dataset_dm(psths, trial_data, regions, task_vars=['response'], num_tents
     adiff = np.abs(robs - np.mean(robs, axis=0)) # abs diff from avg rate of units across all trials, np.mean: shape = (# cells,), adiff: shape = (# trials, # cells)
     mad = np.median(adiff) # scalar
     dfs = (adiff / mad) < 8 # shape = (# trials, # cells)
-    print(mad)
+    # print(mad)
 
     # filter for good units
     good = np.mean(dfs, axis=0) > .8
@@ -153,16 +153,14 @@ def fit_tvs(train_dl, val_dl, num_tv, num_units, mod_baseline, ntents=5):
     return mod_tv
 
 # Step 2a: Evaluate and plot comparison for baseline and task variable models
-def plot_r2_comp(figs, results_a, results_b, label_a="", label_b="", title="", save=True, fpath=None):
+def plot_r2_comp(results_a, results_b, label_a="", label_b="", title="", save=True, fpath=None):
     fig, ax = plt.subplots(figsize=(4,4))
-    figs.append(fig)
     ax.plot(results_a['r2test'], 'o', color='#666666', label=label_a)
     ax.plot(results_b['r2test'], 'o', color='#E5A400', label=label_b)
     ax.axhline(0, color='k', linewidth=0.5, linestyle='--')
     ax.set_ylabel('$r^2$'); ax.set_xlabel("Unit ID")
     ax.set_title(f"R2, {label_a}: {torch.mean(np.delete(results_a['r2test'], np.where(results_a['r2test']==float('-inf')))):.3f},  {label_b}: {torch.mean(np.delete(results_b['r2test'], np.where(results_b['r2test']==float('-inf')))):.3f}")
     ax.set_ylim([-1,1])
-    fig.tight_layout()
     ax.legend()
     
     if save:
@@ -170,8 +168,23 @@ def plot_r2_comp(figs, results_a, results_b, label_a="", label_b="", title="", s
     
     fig.suptitle(title)
     fig.tight_layout()
-
-    return figs
+    plt.show()
+  
+def plot_r2(results_a, label_a="", title="", save=True, fpath=None):
+    fig, ax = plt.subplots(figsize=(4,4))
+    ax.plot(results_a['r2test'], 'o', color='#666666', label=label_a)
+    ax.axhline(0, color='k', linewidth=0.5, linestyle='--')
+    ax.set_ylabel('$r^2$'); ax.set_xlabel("Unit ID")
+    ax.set_title(f"R2, {label_a}: {torch.mean(np.delete(results_a['r2test'], np.where(results_a['r2test']==float('-inf')))):.3f}")
+    ax.set_ylim([-1,1])
+    ax.legend()
+    
+    if save:
+        plt.savefig(fpath)
+    
+    fig.suptitle(title)
+    fig.tight_layout()
+    plt.show()
 
 # Step 3a: Get units that had significant performance increase with a task variable model
 def get_cids(cids_pca, res_tv):
@@ -284,7 +297,7 @@ def fit_ae_affine(train_dl, val_dl, test_dl, mod_tv, mod_ae_gain, mod_ae_offset,
     # initialize with baseline model weights
     if ntents > 1:
         mod_ae_affine.drift.weight.data = mod_tv.drift.weight.data[:,cids].clone()
-        mod_ae_affine.drift.weight.requires_grad = True
+        mod_ae_affine.drift.weight.requires_grad = False # WHAT
         mod_ae_affine.bias.requires_grad = False
     else:
         mod_ae_affine.bias.requires_grad = True
@@ -310,7 +323,6 @@ def fit_ae_affine(train_dl, val_dl, test_dl, mod_tv, mod_ae_gain, mod_ae_offset,
 
     mod_ae_affine.to(device)
     r2 = model_rsquared(mod_ae_affine, val_dl.dataset[:])
-    print(len(r2))
     # print(f"{torch.mean(r2)}, before r2<0 -> 0")
 
     # mod_ae_affine.readout_gain.weight.data[:,r2<0] = 0  # minor detriment to r2 ([-0.01, -0.1])
@@ -321,17 +333,16 @@ def fit_ae_affine(train_dl, val_dl, test_dl, mod_tv, mod_ae_gain, mod_ae_offset,
     res_ae_affine = eval_model(mod_ae_affine, data_gd, test_dl.dataset)
     
     print('confirming model r2 = %.4f' %res_ae_affine['r2test'].mean().item())
-    print(len(res_ae_affine['r2test']))
 
     return mod_ae_affine, r2
 
 # Step 3e: Convert ae to lvm
-def ae2lvm(train_dl, val_dl, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, num_tv, num_units, data_gd, ntents=5, num_latents=1):
+def ae2lvm(train_dl, val_dl, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, num_tv, num_units, data_gd, ntents=5, num_latents=1, max_iters=10):
     # convert ae to lvm
     mod_ae_offset = fit_gain_model(num_tv, mod_ae_offset,
         num_units=num_units, num_trials=len(data_gd),
         num_latent=num_latents,
-        max_iter=10,
+        max_iter=max_iters,
         cids=cids, ntents=ntents,
         train_dl=train_dl, val_dl=val_dl,
         verbose=0,
@@ -344,7 +355,7 @@ def ae2lvm(train_dl, val_dl, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, nu
     mod_ae_gain = fit_gain_model(num_tv, mod_ae_gain,
         num_units=num_units, num_trials=len(data_gd),
         num_latent=num_latents,
-        max_iter=10,
+        max_iter=max_iters,
         cids=cids, ntents=ntents,
         train_dl=train_dl, val_dl=val_dl,
         verbose=0,
@@ -357,7 +368,7 @@ def ae2lvm(train_dl, val_dl, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, nu
     mod_ae_affine = fit_gain_model(num_tv, mod_ae_affine,
         num_units=num_units, num_trials=len(data_gd),
         num_latent=num_latents,
-        max_iter=10,
+        max_iter=max_iters,
         cids=cids, ntents=ntents,
         train_dl=train_dl, val_dl=val_dl,
         verbose=0,
@@ -436,7 +447,7 @@ def get_cvpca_metrics(das, data_gd, cids, train_dl, test_dl, rank):
             das['cvpca_train_err'].append((rank, tre.mean().item()))
             das['cvpca_test_err'].append((rank, te.mean().item()))
 
-def eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, data_gd):
+def eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, mod_ae_offset_lvm, mod_ae_gain_lvm, mod_ae_affine_lvm, cids, data_gd):
 
     '''Evaluate Models'''
     # baseline
@@ -476,6 +487,21 @@ def eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, 
     moddict_ae_affine['model'] = mod_ae_affine
     das['affineae'] = moddict_ae_affine
 
+    # autoencoder LVM offset
+    moddict_ae_offset_lvm = eval_model(mod_ae_offset_lvm, data_gd, test_dl.dataset)
+    moddict_ae_offset_lvm['model'] = mod_ae_offset_lvm
+    das['offsetae_lvm'] = moddict_ae_offset_lvm
+
+    # autoencoder LVM gain
+    moddict_ae_gain_lvm = eval_model(mod_ae_gain_lvm, data_gd, test_dl.dataset)
+    moddict_ae_gain_lvm['model'] = mod_ae_gain_lvm
+    das['gainae_lvm'] = moddict_ae_gain_lvm
+
+    # autoencoder LVM affine
+    moddict_ae_affine_lvm = eval_model(mod_ae_affine_lvm, data_gd, test_dl.dataset)
+    moddict_ae_affine_lvm['model'] = mod_ae_affine_lvm
+    das['affineae_lvm'] = moddict_ae_affine_lvm
+
     # # affine
     # moddict_affine = eval_model(mod_affine, data_gd, test_dl.dataset)
     # moddict_affine['model'] = mod_affine
@@ -509,11 +535,12 @@ def eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, 
 
     return das
 
-def get_das(trial_data, regions, sample, train_inds, val_inds, test_inds, train_dl, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, data_gd, apath="vars/", aname="placeholder.pkl", do_save=True, do_plot=True):
+def get_das(trial_data, regions, sample, train_inds, val_inds, test_inds, train_dl, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, mod_ae_offset_lvm, mod_ae_gain_lvm, mod_ae_affine_lvm, cids, data_gd, apath="vars/", aname="placeholder.pkl", do_save=True, do_plot=True):
     # init das
     das = dict()
     das['data'] = {
         'strategy': trial_data['is_mb'],
+        'block_side': np.where(trial_data['block_side'] == 'left', 1, -1), 
         'rewarded': trial_data['rewarded'],
         'regions': regions,
         'robs': sample['robs'].detach().cpu().numpy(),
@@ -524,7 +551,7 @@ def get_das(trial_data, regions, sample, train_inds, val_inds, test_inds, train_
         'test_inds': test_inds}
 
     # evaluate models
-    das = eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, cids, data_gd)
+    das = eval_models(das, test_dl, mod_baseline, mod_tv, mod_ae_offset, mod_ae_gain, mod_ae_affine, mod_ae_offset_lvm, mod_ae_gain_lvm, mod_ae_affine_lvm, cids, data_gd)
     
     # redo PCA on fit neurons
     print("Fitting CV PCA")
@@ -545,27 +572,30 @@ def get_das(trial_data, regions, sample, train_inds, val_inds, test_inds, train_
     return das
 
 # PLOTTING
-def plot_summary(das, subj_idx, sess_idx, save=False, fpath=None):
-    model = das['affineae']['model']
-    for latent_idx in range(model.gain_mu.get_weights().shape[1]):
+def plot_summary(das, subj_idx, sess_idx, model_name='affineae_lvm', sort_by="gain", save=False, fpath=None):
+    model = das[model_name]['model']
+    n_latents = das['affineae_lvm']['model'].offset_mu.get_weights().shape[1]
+    for latent_idx in range(n_latents): #gain_mu.get_weights().shape[1]):
         fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(7,7))
 
         # R_obs
-        zgain = model.gain_mu.get_weights()[:,latent_idx]
-        zweight = model.readout_gain.get_weights()[latent_idx]
-        if np.mean(np.sign(zweight)) < 0: # flip sign if both are negative
-            zgain *= -1
-            zweight *= -1
+        if "gain" in model_name or "affine" in model_name:
+            zgain = model.gain_mu.get_weights()[:,latent_idx]#gain_mu.get_weights()[:,latent_idx]
+            zweight = model.readout_gain.get_weights()[latent_idx] if n_latents > 1 else model.readout_gain.get_weights() #readout_gain.get_weights()[latent_idx]
+            if np.mean(np.sign(zweight)) < 0: # flip sign if both are negative
+                zgain *= -1
+                zweight *= -1
 
-        zoffset = model.offset_mu.get_weights()[:,latent_idx]
-        zoffweight = model.readout_offset.get_weights()[latent_idx]
-        if np.mean(np.sign(zoffweight)) < 0: # flip sign if both are negative
-            zoffset *= -1
-            zoffweight *= -1
+        if "offset" in model_name or "affine" in model_name:
+            zoffset = model.offset_mu.get_weights()[:,latent_idx]
+            zoffweight = model.readout_offset.get_weights()[latent_idx] if n_latents > 1 else model.readout_offset.get_weights()
+            if np.mean(np.sign(zoffweight)) < 0: # flip sign if both are negative
+                zoffset *= -1
+                zoffweight *= -1
 
-        robs = das['data']['robs'][:,das['affineae']['model'].cids]
+        robs = das['data']['robs'][:,model.cids]
 
-        ind = np.argsort(zweight)
+        ind = np.argsort(zoffweight) if sort_by == "offset" else np.argsort(zweight)
 
         axes[0][0].imshow(robs[:,ind].T, aspect='auto', interpolation='none', vmin=0, vmax=10, cmap='magma')
         axes[0][0].set_title("R_obs, sorted by gain weights")
@@ -573,46 +603,81 @@ def plot_summary(das, subj_idx, sess_idx, save=False, fpath=None):
 
 
         # Corr w Strategy
-        axes[1][0].plot(np.array(das['data']['strategy']), 'k', label='Strategy')
-        axes[1][0].plot(zgain, 'r', label='Gain Weights')
-        axes[1][0].plot(zoffset, 'b', label='Offset Weights')
+        # axes[1][0].plot(np.array(das['data']['block_side']), '#888888', linestyle="--", label='Block Side')
+        axes[1][0].plot(np.array(das['data']['strategy']), "#1E2A61", label='Strategy')
+        if "gain" in model_name or "affine" in model_name: axes[1][0].plot(zgain, 'r', label='Gain Weights')
+        if "offset" in model_name or "affine" in model_name: axes[1][0].plot(zoffset, 'b', label='Offset Weights')
+        # axes[1][0].plot(np.diff(zoffset), 'r', label='Offset Weights')
         axes[1][0].set_xlim((0, robs.shape[0]))
         axes[1][0].set_xlabel("Trials"); axes[1][0].set_ylabel("Weights")
         axes[1][0].legend()
 
         from scipy.stats import spearmanr
-        rhog = spearmanr(das['data']['strategy'], zgain)
-        rhoo = spearmanr(das['data']['strategy'], zoffset)
+        if "gain" in model_name or "affine" in model_name: rhog = spearmanr(das['data']['strategy'], zgain)
+        if "offset" in model_name or "affine" in model_name: rhoo = spearmanr(das['data']['strategy'], zoffset)
 
-        titlestr = 'Corr w/ strategy: gain '
-        titlestr += "%0.3f" %rhog[0]
+        titlestr = 'Corr w/ strategy: '
+        if "gain" in model_name or "affine" in model_name: 
+            titlestr += "gain %0.3f" %rhog[0]
 
-        if rhog[1] < 0.05:
-            titlestr += "*"
+            if rhog[1] < 0.05:
+                titlestr += "*"
 
-        titlestr += ", offset "
-        titlestr += "%0.3f" %rhoo[0]
+        if "offset" in model_name or "affine" in model_name: 
+            titlestr += ", offset "
+            titlestr += "%0.3f" %rhoo[0]
 
-        if rhoo[1] < 0.05:
-            titlestr += "*"
+            if rhoo[1] < 0.05:
+                titlestr += "*"
+                
         axes[1][0].set_title(titlestr)
 
         # R from TV vs + Gain
-        axes[0][1].plot(das['tv']['r2test'], das['affineae']['r2test'], 'o')
-        mn = min(min(das['tv']['r2test']), min(das['affineae']['r2test']))
+        axes[0][1].plot(das['tv']['r2test'], das[model_name]['r2test'], 'o')
+        mn = min(min(das['tv']['r2test']), min(das[model_name]['r2test']))
         axes[0][1].plot((mn,1), (mn,1), 'k')
-        axes[0][1].set_title(f"R, Task Var ({torch.mean(das['tv']['r2test']):.3f}) vs Affine-AE ({torch.mean(das['affineae']['r2test']):.3f})")
-        axes[0][1].set_xlabel('Task Vars, R'); axes[0][1].set_ylabel('Gain, R')
+        axes[0][1].set_title(f"R, Task Var ({torch.mean(das['tv']['r2test']):.3f}) vs {model_name} ({torch.mean(das[model_name]['r2test']):.3f})")
+        axes[0][1].set_xlabel('Task Vars, R'); axes[0][1].set_ylabel(f'{model_name}, R')
 
-        # Histogram
-        x = das['affineae']['r2test']-das['tv']['r2test']
-        x = x.numpy()
-        axes[1][1].hist(x, bins=np.linspace(-0.7, 0.7, 15))
-        axes[1][1].plot(np.median(x), plt.ylim()[1], 'v')
-        axes[1][1].set_title('R Increase from Adding Gain')
-        axes[1][1].set_xlabel('Gain - Task Vars'); axes[1][1].set_ylabel("Frequency")
+        # Corr w Block Side
+        axes[1][1].plot(np.array(das['data']['block_side']), '#888888', linestyle="--", label='Block Side')
+        # axes[1][0].plot(np.array(das['data']['strategy']), "#1E2A61", label='Strategy')
+        if "gain" in model_name or "affine" in model_name: axes[1][1].plot(zgain, 'r', label='Gain Weights')
+        if "offset" in model_name or "affine" in model_name: axes[1][1].plot(zoffset, 'b', label='Offset Weights')
+        # axes[1][0].plot(np.diff(zoffset), 'r', label='Offset Weights')
+        axes[1][1].set_xlim((0, robs.shape[0]))
+        axes[1][1].set_xlabel("Trials"); axes[1][0].set_ylabel("Weights")
+        axes[1][1].legend()
+
+        from scipy.stats import spearmanr
+        if "gain" in model_name or "affine" in model_name: rhog = spearmanr(das['data']['block_side'], zgain)
+        if "offset" in model_name or "affine" in model_name: rhoo = spearmanr(das['data']['block_side'], zoffset)
+
+        titlestr = 'Corr w/ block side: '
+        if "gain" in model_name or "affine" in model_name: 
+            titlestr += "gain %0.3f" %rhog[0]
+
+            if rhog[1] < 0.05:
+                titlestr += "*"
+
+        if "offset" in model_name or "affine" in model_name: 
+            titlestr += ", offset "
+            titlestr += "%0.3f" %rhoo[0]
+
+            if rhoo[1] < 0.05:
+                titlestr += "*"
+                
+        axes[1][1].set_title(titlestr)
         
-        fig.suptitle(f"{data.subject_ids[subj_idx]}, {data.session_ids[subj_idx][sess_idx]} - Latent Pair #{latent_idx}")
+        # Histogram
+        # x = das[model_name]['r2test']-das['tv']['r2test']
+        # x = x.numpy()
+        # axes[1][1].hist(x, bins=np.linspace(-0.7, 0.7, 15))
+        # axes[1][1].plot(np.median(x), plt.ylim()[1], 'v')
+        # axes[1][1].set_title(f'R Increase from TV by {model_name}')
+        # axes[1][1].set_xlabel(f'{model_name} - Task Vars'); axes[1][1].set_ylabel("Frequency")
+        
+        # fig.suptitle(f"{data.subject_ids[subj_idx]}, {data.session_ids[subj_idx][sess_idx]} - Latent Pair #{latent_idx}")
 
         plt.tight_layout()
         plt.show()
@@ -1241,7 +1306,7 @@ def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter
 
     # fit iteratively
     for itr in range(max_iter):
-        print(f"{itr}, BOO")
+        # print(f"{itr}, BOO")
         
         if itr > min_iter:
             fit_sigmas = True
@@ -1324,18 +1389,18 @@ def eval_model(mod2, ds, val_ds, model="", cids=None, do_plot=False, save=False,
         if mod2.tents_as_input:
             latent_input = sample['tents']
         else:
-            print("as expected")
+            # print("as expected")
             latent_input = sample['robs'][:,mod2.cids] * sample['latentdfs'][:,mod2.cids]
 
         if hasattr(mod2, 'latent_gain'):
-            print("checkpoint 1")
+            # print("checkpoint 1")
             zg = mod2.latent_gain(latent_input)
             
             zgav = mod2.readout_gain(zg).detach().cpu()
             zg = zg.detach().cpu()
             
         if hasattr(mod2, 'latent_offset'):
-            print("checkpoint 2")
+            # print("checkpoint 2")
             zh = mod2.latent_offset(latent_input)
             zhav = mod2.readout_offset(zh).detach().cpu()
             zh = zh.detach().cpu()
@@ -1372,9 +1437,7 @@ def eval_model(mod2, ds, val_ds, model="", cids=None, do_plot=False, save=False,
             plt.savefig(fpath)
         fig.suptitle(model)
         fig.tight_layout()
-        fig.show()
-        
-        
+        plt.show()
 
     return {'rhat': rhat, 'zgain': zg, 'zoffset': zh, 'zgainav': zgav, 'zoffsetav': zhav, 'r2test': r2test}
 

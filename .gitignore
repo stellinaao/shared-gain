@@ -1,5 +1,6 @@
 figs/
 logs/
 vars/
-__pycache__/
+__pycache_/
+checkpoints/
 *.pyc
