@@ -62,8 +62,8 @@ def get_dataset_dm(psths, trial_data, regions, task_vars=['response'], num_tents
 
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
-    tvs = OHE().fit_transform(trial_data[task_vars]).todense() # only choice for now (when adding reward, just: task_vars=['response', 'rewarded'])
-
+    tvs = OHE().fit_transform(trial_data[task_vars]).todense()
+     
     # tents
     from external.NDNT.utils.NDNutils import tent_basis_generate
     num_trials = len(trial_data)
@@ -152,6 +152,9 @@ def fit_tvs(train_dl, val_dl, num_tv, num_units, mod_baseline, ntents=5):
 
     return mod_tv
 
+def fit_tvs_ridge():
+    return
+
 # Step 2a: Evaluate and plot comparison for baseline and task variable models
 def plot_r2_comp(results_a, results_b, label_a="", label_b="", title="", save=True, fpath=None):
     fig, ax = plt.subplots(figsize=(4,4))
@@ -198,7 +201,7 @@ def get_cids(cids_pca, res_tv):
     return cids
 
 # Step 3b: Fit gain autoencoder
-def fit_ae_gain(train_dl, val_dl, mod_tv, cids, num_tv, num_units, data_gd, ntents=2, num_latents=1):
+def fit_ae_gain(train_dl, val_dl, mod_tv, cids, num_tv, num_units, data_gd, ntents=2, num_latents=1, max_iter=10):
     mod_ae_gain = models.SharedGain(num_tv,
                 num_units=num_units,
                 cids=cids,
@@ -231,13 +234,13 @@ def fit_ae_gain(train_dl, val_dl, mod_tv, cids, num_tv, num_units, data_gd, nten
     mod_ae_gain.prepare_regularization()
 
     print("Fitting gain autoencoder...", end='')
-    fit_autoencoder(mod_ae_gain, train_dl, val_dl, fit_sigmas=False, min_iter=0, max_iter=10)
+    fit_autoencoder(mod_ae_gain, train_dl, val_dl, fit_sigmas=False, min_iter=0, max_iter=max_iter)
     print("Done")
 
     return mod_ae_gain
 
 # Step 3c: Fit offset autoencoder
-def fit_ae_offset(train_dl, val_dl, mod_tv, cids, num_tv, num_units, data_gd, ntents=2, num_latents=1):
+def fit_ae_offset(train_dl, val_dl, mod_tv, cids, num_tv, num_units, data_gd, ntents=2, num_latents=1, max_iter=10):
     mod_ae_offset = models.SharedGain(num_tv,
                 num_units=num_units,
                 cids=cids,
@@ -270,13 +273,13 @@ def fit_ae_offset(train_dl, val_dl, mod_tv, cids, num_tv, num_units, data_gd, nt
     mod_ae_offset.prepare_regularization()
 
     print("Fitting offset autoencoder...")
-    fit_autoencoder(mod_ae_offset, train_dl, val_dl, fit_sigmas=False, min_iter=0, max_iter=10)
+    fit_autoencoder(mod_ae_offset, train_dl, val_dl, fit_sigmas=False, min_iter=0, max_iter=max_iter)
     print("Done")
     
     return mod_ae_offset
 
 # Step 3d: Fit affine autoencoder
-def fit_ae_affine(train_dl, val_dl, test_dl, mod_tv, mod_ae_gain, mod_ae_offset, cids, num_tv, num_units, data_gd, device, ntents=5, num_latents=1):
+def fit_ae_affine(train_dl, val_dl, test_dl, mod_tv, mod_ae_gain, mod_ae_offset, cids, num_tv, num_units, data_gd, device, ntents=5, num_latents=1, max_iter=10):
     mod_ae_affine = models.SharedGain(num_tv,
                 num_units=num_units,
                 cids=cids,
@@ -318,7 +321,7 @@ def fit_ae_affine(train_dl, val_dl, test_dl, mod_tv, mod_ae_gain, mod_ae_offset,
 
     # fit_autoencoder: initialize latents by only fitting latents, then refit task var and refit latents
     print("Fitting affine autoencoder...", end='')
-    fit_autoencoder(mod_ae_affine, train_dl, val_dl, fit_sigmas=False, min_iter=0, max_iter=10)
+    fit_autoencoder(mod_ae_affine, train_dl, val_dl, fit_sigmas=False, min_iter=0, max_iter=max_iter)
     print("Done")
 
     mod_ae_affine.to(device)
@@ -604,7 +607,7 @@ def plot_summary(das, subj_idx, sess_idx, model_name='affineae_lvm', sort_by="ga
 
         # Corr w Strategy
         # axes[1][0].plot(np.array(das['data']['block_side']), '#888888', linestyle="--", label='Block Side')
-        axes[1][0].plot(np.array(das['data']['strategy']), "#1E2A61", label='Strategy')
+        axes[1][0].plot(np.array(das['data']['strategy']), "#A02A2A", linewidth=2, label='Strategy')
         if "gain" in model_name or "affine" in model_name: axes[1][0].plot(zgain, 'r', label='Gain Weights')
         if "offset" in model_name or "affine" in model_name: axes[1][0].plot(zoffset, 'b', label='Offset Weights')
         # axes[1][0].plot(np.diff(zoffset), 'r', label='Offset Weights')
@@ -640,7 +643,7 @@ def plot_summary(das, subj_idx, sess_idx, model_name='affineae_lvm', sort_by="ga
         axes[0][1].set_xlabel('Task Vars, R'); axes[0][1].set_ylabel(f'{model_name}, R')
 
         # Corr w Block Side
-        axes[1][1].plot(np.array(das['data']['block_side']), '#888888', linestyle="--", label='Block Side')
+        axes[1][1].plot(np.array(das['data']['block_side']), "#264F3A", linestyle="-", linewidth=2, label='Block Side')
         # axes[1][0].plot(np.array(das['data']['strategy']), "#1E2A61", label='Strategy')
         if "gain" in model_name or "affine" in model_name: axes[1][1].plot(zgain, 'r', label='Gain Weights')
         if "offset" in model_name or "affine" in model_name: axes[1][1].plot(zoffset, 'b', label='Offset Weights')
@@ -1160,8 +1163,7 @@ def fit_autoencoder(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_
     
     print("Initial: %.4f" %l0)
 
-    if max_iter == 0:
-        return l0, model
+    
 
     # initialize fit by fixing stim, readout; fit gain / offset latents
     model.tv.weight.requires_grad = False
@@ -1182,6 +1184,9 @@ def fit_autoencoder(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_
     print('Fit latents: %.4f, %.4f' % (l0, l1))
     
     l0 = l1
+    
+    if max_iter == 0:
+        return l0, model
 
     # fit iteratively
     for itr in range(max_iter):
@@ -1260,7 +1265,6 @@ def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter
     
 
     
-    
     from copy import deepcopy
     
     tol = 1e-9
@@ -1277,8 +1281,7 @@ def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter
     
     print("Initial: %.4f" %l0)
 
-    if max_iter == 0:
-        return l0, model
+   
 
     # initialize fit by fixing stim, readout, fit gain / offset latents
 
@@ -1303,6 +1306,8 @@ def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter
     l1 = r2.mean().item()
     
     print('Fit latents: %.4f, %.4f' % (l0, l1))
+    if max_iter == 0:
+        return l0, model
 
     # fit iteratively
     for itr in range(max_iter):
@@ -1328,6 +1333,7 @@ def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter
         fit_model(model, train_dl, train_dl, use_lbfgs=True, verbose=0, seed=seed)
         r2 = model_rsquared(model, vdata)
         l1 = r2.mean().item()
+        print("BROCCOLI")
 
         print('%d) fit stim: %.4f, %.4f' % (itr, l0, l1))
         
