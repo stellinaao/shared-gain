@@ -1,6 +1,8 @@
 figs/
 logs/
 vars/
+archive/
 __pycache_/
 checkpoints/
+external/
 *.pyc
