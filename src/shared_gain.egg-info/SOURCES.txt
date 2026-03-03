@@ -1,0 +1,16 @@
+README.md
+setup.py
+src/sg/__init__.py
+src/sg/constants.py
+src/sg/data.py
+src/sg/eval_models.py
+src/sg/fit_models.py
+src/sg/fitlvm_utils.py
+src/sg/model_plotters.py
+src/sg/models.py
+src/sg/utils.py
+src/shared_gain.egg-info/PKG-INFO
+src/shared_gain.egg-info/SOURCES.txt
+src/shared_gain.egg-info/dependency_links.txt
+src/shared_gain.egg-info/requires.txt
+src/shared_gain.egg-info/top_level.txt

@@ -2,13 +2,13 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from src import fitlvm_utils
+from sg import fitlvm_utils
 import torch
 import random
 
 from joblib import Parallel, delayed
 
-from lib import data
+from sg import data
 
 def seed(seed_val=1234):
     random.seed(seed_val)

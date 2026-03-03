@@ -3,8 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
 
-from lib import constants
-
+import sg.constants
 import spks.event_aligned as ea
 from spks.utils import get_cluster_spike_times
 

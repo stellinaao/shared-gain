@@ -4,5 +4,5 @@ vars/
 archive/
 __pycache_/
 checkpoints/
-external/
+src/external/
 *.pyc

@@ -1,13 +1,13 @@
 from typing import Dict
 import numpy as np
 import pandas as pd
-from src import models
+from sg import models
 import torch
 from joblib import Parallel, delayed
 
 from scipy.stats import rankdata
 
-from lib import data
+from sg import data
 
 import numpy as np
 

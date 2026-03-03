@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
-from lib import data
+from sg import data
 
 def get_num_latents(das, subj_idx, sess_idx, is_msess=True, ae=True, do_plot=False):
     das_ = das[subj_idx][sess_idx] if is_msess else das

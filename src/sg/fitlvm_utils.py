@@ -3,8 +3,8 @@ from copy import deepcopy
 import os, sys
 
 from NDNT.training.trainer import Trainer
-from archive import spks_utils
-from src import models
+from sg import spks_utils
+from sg import models
 sys.path.insert(0, '/mnt/Data/Repos/')
 sys.path.append("../")
 
@@ -20,11 +20,11 @@ from scipy.io import loadmat
 
 from NDNT.training import LBFGSTrainer
 from torch.utils.data import Subset, DataLoader
-from src.models import SharedGain, SharedLatentGain, GenericDataset
+from sg.models import SharedGain, SharedLatentGain, GenericDataset
 
 
 from sklearn.preprocessing import OneHotEncoder as OHE
-from lib import data
+from sg import data
 
 '''
 Model fitting procedure for the shared gain / offset model
