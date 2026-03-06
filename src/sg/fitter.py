@@ -2,15 +2,15 @@ import torch
 import random
 import numpy as np
 
-from data import get_psths
-from fitlvm_utils import check_stable_lowd, get_data_model, fit_model, fit_autoencoder, fit_gain_model, eval_model
-from models import *
+from sg.data import get_psths
+from sg.fitlvm_utils import check_stable_lowd, get_data_model, fit_model, fit_autoencoder, fit_gain_model, eval_model
+from sg.models import *
 
 '''
 TODO
-- get cids
+- add verbosity flag
 '''
-class LVMFitter:
+class LVMFamily:
     def __init__(self, trial_data=None, spike_times=None, session_data=None, regions=None, **kwargs):
         '''
         kwargs:
@@ -22,17 +22,14 @@ class LVMFitter:
         self.trial_data = trial_data
         self.regions = regions
         
-        self.strategy = self.trial_data['is_mb']
-        self.rewarded = self.trial_data['rewarded']
-        self.response = self.trial_data['response']
-        self.block_side = self.trial_data['block_side']
-        
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         
         # kwargs
-        # seed
+        # seed & verbosity
         self.seed_val = kwargs.pop('seed', 1234)
-        self.seed(self.seed_val)
+        self.seed()
+        
+        self.verbosity = kwargs.pop('verbosity', 0)
         
         # neural data
         self.tpre = kwargs.pop('tpre', 0.5)
@@ -72,7 +69,6 @@ class LVMFitter:
         self.ae2lvm()
     
     def seed(self):
-        self.seed(self.seed_val)
         random.seed(self.seed_val)
         np.random.seed(self.seed_val)
         torch.manual_seed(self.seed_val)
@@ -82,8 +78,14 @@ class LVMFitter:
     def get_data(self):
         self.psths, self.trial_mask = get_psths(self.spike_times, self.trial_data, self.session_data, self.regions, 
                                                                 tpre=self.tpre, tpost=self.tpost, binwidth_ms=self.binwidth_ms, 
-                                                                alignment=self.alignment, get_strategy=False)
+                                                                alignment=self.alignment, reward_only=False, prev_filter=False, 
+                                                                get_strategy=False)
         self.trial_data = self.trial_data[self.trial_mask]
+        
+        self.strategy = self.trial_data['is_mb']
+        self.rewarded = self.trial_data['rewarded']
+        self.response = self.trial_data['response']
+        self.block_side = self.trial_data['block_side']
         
         self.data_gd, self.train_dl, self.val_dl, self.test_dl, self.indices, self.num_trials, self.num_tv, self.num_units = get_data_model(self.psths, 
                                                                                                                               self.trial_data, 
@@ -96,7 +98,7 @@ class LVMFitter:
         
     def fit_baseline(self):
         self.mod_baseline = SharedGain(
-            num_tv=self.num_tv,
+            tv_dims=self.num_tv,
             num_units=self.num_units,
             cids=None,
             num_latent=self.n_latents,
@@ -113,8 +115,10 @@ class LVMFitter:
         fit_model(self.mod_baseline, self.train_dl, self.val_dl, use_lbfgs=True)
         
     def fit_taskvar(self):
+        self.tv_reg = {'l2': 0.001}
+        self.reg = {'l2': 0.001}
         self.mod_taskvar = SharedGain(
-            num_tv=self.num_tv,
+            tv_dims=self.num_tv,
             num_units=self.num_units,
             cids=None,
             num_latent=self.n_latents,
@@ -134,11 +138,18 @@ class LVMFitter:
     def get_cids(self):
         res_taskvar = eval_model(self.mod_taskvar, self.data_gd, self.test_dl.dataset)
         self.cids_tv  = np.where(res_taskvar['r2test']>0)[0]
-        self.cids_pca = check_stable_lowd(self.data_gd, self.train_dl.dataset, self.val_dl.dataset, self.num_units, rank=4)
+        self.cids_pca = check_stable_lowd(self.data_gd, 
+                                          self.train_dl.dataset[:]['dfs']>0, 
+                                          self.val_dl.dataset[:]['dfs']>0, 
+                                          self.num_units, 
+                                          rank=4)
         self.cids = np.union1d(self.cids_tv, self.cids_pca)
+   
     def fit_ae_gain(self): 
+        self.tv_reg={'l2':1}
+        self.reg={'l2':0.001}
         self.mod_ae_gain = SharedGain(
-            num_tv=self.num_tv,
+            tv_dims=self.num_tv,
             num_units=self.num_units,
             cids=self.cids,
             num_latent=self.n_latents,
@@ -151,6 +162,7 @@ class LVMFitter:
             output_nonlinearity=self.nonlinearity,
             tv_act_func=self.tv_actv_fn,
             tv_reg_vals=self.tv_reg,
+            reg_vals=self.reg
         )
         
         if self.n_splines > 1:
@@ -159,7 +171,7 @@ class LVMFitter:
         else:
             self.mod_ae_gain.bias.requires_grad = True
         
-        self.mod_ae_gain.tv.weight_data          = self.mod_taskvar.tv.weight.data[:,self.cids].clone()
+        self.mod_ae_gain.tv.weight.data          = self.mod_taskvar.tv.weight.data[:,self.cids].clone()
         self.mod_ae_gain.bias.data               = self.mod_taskvar.bias.data[self.cids].clone()
         self.mod_ae_gain.tv.weight.requires_grad = False
         
@@ -170,11 +182,11 @@ class LVMFitter:
         self.mod_ae_gain.prepare_regularization()
         
         fit_autoencoder(self.mod_ae_gain, self.train_dl, self.val_dl, 
-                        min_iter=0, max_iter=self.max_iters)
+                        min_iter=0, max_iter=self.max_iter)
     
     def fit_ae_offset(self):
         self.mod_ae_offset = SharedGain(
-            num_tv=self.num_tv,
+            tv_dims=self.num_tv,
             num_units=self.num_units,
             cids=self.cids,
             num_latent=self.n_latents,
@@ -187,6 +199,7 @@ class LVMFitter:
             output_nonlinearity=self.nonlinearity,
             tv_act_func=self.tv_actv_fn,
             tv_reg_vals=self.tv_reg,
+            reg_vals=self.reg
         )
         
         if self.n_splines > 1:
@@ -195,23 +208,23 @@ class LVMFitter:
         else:
             self.mod_ae_offset.bias.requires_grad = True
         
-        self.mod_ae_offset.tv.weight_data          = self.mod_taskvar.tv.weight.data[:,self.cids].clone()
+        self.mod_ae_offset.tv.weight.data          = self.mod_taskvar.tv.weight.data[:,self.cids].clone()
         self.mod_ae_offset.bias.data               = self.mod_taskvar.bias.data[self.cids].clone()
         self.mod_ae_offset.tv.weight.requires_grad = False
         
-        self.mod_ae_offset.readout_gain.weight_scale   = 1.0
-        self.mod_ae_offset.latent_gain.weight_scale    = 1.0
-        self.mod_ae_offset.readout_gain.weight.data[:] = 1.0
+        self.mod_ae_offset.readout_offset.weight_scale   = 1.0
+        self.mod_ae_offset.latent_offset.weight_scale    = 1.0
+        self.mod_ae_offset.readout_offset.weight.data[:] = 1.0
         
         self.mod_ae_offset.prepare_regularization()
         
         fit_autoencoder(self.mod_ae_offset, self.train_dl, self.val_dl, 
-                        min_iter=0, max_iter=self.max_iters)
+                        min_iter=0, max_iter=self.max_iter)
     
     def fit_ae_affine(self):
         self.mod_ae_affine = SharedGain(
-            num_tv=self.num_tv,
-            num_unit=self.num_units,
+            tv_dims=self.num_tv,
+            num_units=self.num_units,
             cids=self.cids,
             num_latent=self.n_latents,
             num_tents=self.n_splines,
@@ -223,6 +236,7 @@ class LVMFitter:
             output_nonlinearity=self.nonlinearity,
             tv_act_func=self.tv_actv_fn,
             tv_reg_vals=self.tv_reg,
+            reg_vals=self.reg
         )
         
         if self.n_splines > 1:
@@ -233,7 +247,7 @@ class LVMFitter:
             self.mod_ae_affine.bias.requires_grad = True
         
         # initialize neuron-tv weights with tv model weights
-        self.mod_ae_affine.tv.weight_data          = self.mod_taskvar.tv.weight.data[:,self.cids].clone()
+        self.mod_ae_affine.tv.weight.data          = self.mod_taskvar.tv.weight.data[:,self.cids].clone()
         self.mod_ae_affine.bias.data               = self.mod_taskvar.bias.data[self.cids].clone()
         self.mod_ae_affine.tv.weight.requires_grad = False
         
@@ -261,7 +275,7 @@ class LVMFitter:
             ntents=self.n_splines,
             include_gain=True,
             include_offset=False,
-            l2s=self.reg['l2'],
+            l2s=[self.reg['l2']],
             d2ts=self.d2ts,
             train_dl=self.train_dl,
             val_dl=self.val_dl,
@@ -270,7 +284,7 @@ class LVMFitter:
         
         self.mod_offset = fit_gain_model(
             tv_dims=self.num_tv,
-            mod1=self.mod_ae_gain,
+            mod1=self.mod_ae_offset,
             num_units=self.num_units,
             num_trials=self.num_trials,
             cids=self.cids,
@@ -278,7 +292,7 @@ class LVMFitter:
             ntents=self.n_splines,
             include_gain=False,
             include_offset=True,
-            l2s=self.reg['l2'],
+            l2s=[self.reg['l2']],
             d2ts=self.d2ts,
             train_dl=self.train_dl,
             val_dl=self.val_dl,
@@ -287,7 +301,7 @@ class LVMFitter:
         
         self.mod_affine = fit_gain_model(
             tv_dims=self.num_tv,
-            mod1=self.mod_ae_gain,
+            mod1=self.mod_ae_affine,
             num_units=self.num_units,
             num_trials=self.num_trials,
             cids=self.cids,
@@ -295,7 +309,7 @@ class LVMFitter:
             ntents=self.n_splines,
             include_gain=True,
             include_offset=True,
-            l2s=self.reg['l2'],
+            l2s=[self.reg['l2']],
             d2ts=self.d2ts,
             train_dl=self.train_dl,
             val_dl=self.val_dl,

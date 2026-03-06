@@ -158,6 +158,7 @@ def get_psths(unit_spike_times, trial_data, session_data, regions, tpre=2, tpost
         mask_reward = trial_data['rewarded']
 
         mask = (mask_resp) & (mask_reward) if reward_only else (mask_resp)
+        
         idx = trial_data[mask].index # np.where(mask)[0] if 'response_prev' not in trial_data.columns else np.where(mask)[0] + 1
 
         choice_ts = trial_data['task_start_time'][mask]+trial_data['response_time'][mask] # s

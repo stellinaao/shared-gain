@@ -4,6 +4,59 @@ import matplotlib.pyplot as plt
 
 from sg import data
 
+from scipy.stats import pearsonr, spearmanr
+
+def plot_summary(family, model, potato=None, mode='offset', metric='spearman'):
+    do_gain   = mode=="gain" or mode=="affine"
+    do_offset = mode=="offset" or mode=="affine"
+    n_latents = model.offset_mu.get_weights().shape[1] if mode=='offset' else model.gain_mu.get_weights().shape[1]
+    
+    fig, axes = plt.subplots(ncols=1, nrows=n_latents, figsize=(3,1.5*n_latents), squeeze=False)
+    
+    for latent_idx, ax in enumerate(axes.flat): 
+        ax.plot(np.array(potato), "#9C9C9C", linewidth=2, label='Strategy')
+        if do_gain: 
+            zgain = model.gain_mu.get_weights()[:,latent_idx]
+            zweight = model.readout_gain.get_weights()[latent_idx] if n_latents > 1 else model.readout_gain.get_weights()
+            if np.mean(np.sign(zweight)) < 0: # flip sign if both are negative
+                zgain *= -1
+                zweight *= -1
+                
+            ax.plot(zgain, "#9E2D2D", label='Gain Weights')
+            
+        if do_offset: 
+            zoffset = model.offset_mu.get_weights()[:,latent_idx]
+            zoffweight = model.readout_offset.get_weights()[latent_idx] if n_latents > 1 else model.readout_offset.get_weights()
+            if np.mean(np.sign(zoffweight)) < 0: # flip sign if both are negative
+                zoffset *= -1
+                zoffweight *= -1
+                
+            ax.plot(zoffset, '#463C8B', label='Offset Weights')
+        
+        ax.set_xlim((0, family.num_trials))
+        ax.set_xlabel("Trials"); ax.set_ylabel("Weights")
+        ax.legend()
+
+        title = ""
+        if do_gain: 
+            if metric=='spearman':
+                corr_g = spearmanr(potato, zgain).statistic
+                title += fr"Gain $r$ = {corr_g:.3f}"
+            elif metric=='pearsonr':
+                corr_g = spearmanr(potato, zgain).statistic
+                title += fr"Gain $\rho$ = {corr_g:.3f}"
+        if do_offset: 
+            if metric=='spearman':
+                corr_o = spearmanr(potato, zoffset).statistic
+                title += fr"Offset $r$ = {corr_o:.3f}"
+            elif metric=='pearsonr':
+                corr_g = spearmanr(potato, zoffset).statistic
+                title += fr"Offset $\rho$ = {corr_o:.3f}"
+                
+        ax.set_title(title)
+
+    fig.tight_layout()
+    
 def get_num_latents(das, subj_idx, sess_idx, is_msess=True, ae=True, do_plot=False):
     das_ = das[subj_idx][sess_idx] if is_msess else das
     model_str = 'affineae' if ae else 'affine'

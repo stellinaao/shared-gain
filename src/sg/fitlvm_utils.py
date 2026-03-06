@@ -3,7 +3,7 @@ from copy import deepcopy
 import os, sys
 
 from NDNT.training.trainer import Trainer
-from archive import spks_utils
+# from archive import spks_utils
 from sg import models
 sys.path.insert(0, '/mnt/Data/Repos/')
 sys.path.append("../")
@@ -43,7 +43,7 @@ def seed(self):
     torch.cuda.manual_seed_all(self.seed_val)
     
 # STELLINA'S FUNCTIONS
-def get_dataset_dm(psths, trial_data, regions, task_vars=['response'], num_tents=2, norm=True, binwidth_ms=25, device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
+def get_dataset_dm(psths, trial_data, regions, task_vars=['response'], num_tents=2, norm=True, binwidth_ms=25, device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu"), verbosity=0):
     # NEURAL DATA
     # robs 
     robs = np.concatenate([np.sum(psths[region]*(binwidth_ms/1000), axis=2) for region in regions]).T**0.5 # spks_utils.get_nspikes_choice(unit_spike_times, trial_data, regions, pre=1, post=1)**0.5
@@ -51,7 +51,7 @@ def get_dataset_dm(psths, trial_data, regions, task_vars=['response'], num_tents
     
     # robs = spks_utils.get_nspikes_trial(unit_spike_times, trial_data, trial_dur_s, regions)
     
-    print(f"originally {sum([len(psths[region]) for region in regions])} units")
+    if verbosity>0: print(f"originally {sum([len(psths[region]) for region in regions])} units")
     
     # dfs
     adiff = np.abs(robs - np.mean(robs, axis=0)) # abs diff from avg rate of units across all trials, np.mean: shape = (# cells,), adiff: shape = (# trials, # cells)
@@ -61,9 +61,10 @@ def get_dataset_dm(psths, trial_data, regions, task_vars=['response'], num_tents
 
     # filter for good units
     good = np.mean(dfs, axis=0) > .8
-    print("good units %d" %np.sum(good))
+    if verbosity>0: print("good units %d" %np.sum(good))
     robs = robs[:,good]
     dfs = dfs[:,good]
+    dfs = np.ones_like(dfs)
     
     # normalize
     if norm:
@@ -97,7 +98,7 @@ def get_dataset_dm(psths, trial_data, regions, task_vars=['response'], num_tents
 
 # MODELING
 # Step 0: Check if dataset has stable low-dim structure at 4+ dims
-def check_stable_lowd(data_gd, Mtrain, Mtest, num_units, rank=1):
+def check_stable_lowd(data_gd, Mtrain, Mtest, num_units, rank=1, verbosity=0):
     data = data_gd.covariates['robs']
     U, Vt, tre, te = cv_pca(data=data_gd.covariates['robs'], rank=rank, Mtrain=Mtrain, Mtest=Mtest)
     resid = U@Vt - data
@@ -107,7 +108,7 @@ def check_stable_lowd(data_gd, Mtrain, Mtest, num_units, rank=1):
     te = 1 - torch.sum(resid**2*Mtest, dim=0) / torch.sum(total_err**2*Mtest, dim=0)
 
     cids_pca = np.where(te.detach().cpu()>0)[0]
-    print("Found %d /%d units with stable low-dimensional structure at rank %d" %(len(cids_pca), num_units, rank))
+    if verbosity>0: print("Found %d /%d units with stable low-dimensional structure at rank %d" %(len(cids_pca), num_units, rank))
 
     return cids_pca
 
@@ -127,8 +128,8 @@ def fit_baseline(train_dl, val_dl, num_tv, num_units, ntents=5):
             latent_noise=True,
             tv_act_func='lin',
             tv_reg_vals={'l2':0.01},
-            reg_vals={'l2':0.001},
-            act_func='lin')
+            reg_vals={'l2':0.001}) #,
+            # act_func='lin')
 
     print("Fitting baseline model...", end='')
     fit_model(mod_baseline, train_dl, val_dl, use_lbfgs=True, verbose=0)
@@ -142,18 +143,18 @@ def fit_tvs(train_dl, val_dl, num_tv, num_units, mod_baseline, ntents=5):
     mod_tv = models.SharedGain(num_tv,
             num_units=num_units,
             cids=None,
-            num_latent=1,
+            num_latent=4,
             num_tents=ntents,
             include_tv=True,
             include_gain=False,
             include_offset=False,
             tents_as_input=False,
             output_nonlinearity='Identity',
-            latent_noise=True,
+            # latent_noise=True,
             tv_act_func='lin',
             tv_reg_vals={'l2':0.001},
-            reg_vals={'l2':0.001},
-            act_func='lin')
+            reg_vals={'l2':0.001}) #,
+            #  act_func='lin')
 
     mod_tv.drift.weight.data = mod_baseline.drift.weight.data.clone()
 
@@ -226,8 +227,8 @@ def fit_ae_gain(train_dl, val_dl, mod_tv, cids, num_tv, num_units, data_gd, nten
                 output_nonlinearity='Identity',
                 tv_act_func='lin',
                 tv_reg_vals={'l2': 1},
-                reg_vals={'l2': .001},
-                act_func='lin')
+                reg_vals={'l2': .001}) #,
+                # act_func='lin')
 
     if ntents > 1:
         mod_ae_gain.drift.weight.data = mod_tv.drift.weight.data[:,cids].clone()
@@ -265,8 +266,8 @@ def fit_ae_offset(train_dl, val_dl, mod_tv, cids, num_tv, num_units, data_gd, nt
                 output_nonlinearity='Identity',
                 tv_act_func='lin',
                 tv_reg_vals={'l2': 1},
-                reg_vals={'l2': .001},
-                act_func='lin')
+                reg_vals={'l2': .001}) #,
+                # act_func='lin')
 
     if ntents > 1:
         mod_ae_offset.drift.weight.data = mod_tv.drift.weight.data[:,cids].clone()
@@ -304,8 +305,8 @@ def fit_ae_affine(train_dl, val_dl, test_dl, mod_tv, mod_ae_gain, mod_ae_offset,
                 output_nonlinearity='Identity',
                 tv_act_func='lin',
                 tv_reg_vals={'l2': 1},
-                reg_vals={'l2': .1},
-                act_func='lin')
+                reg_vals={'l2': .1}) #,
+                # act_func='lin')
     
     # INITIALIZE WEIGHTS
     # initialize with baseline model weights
@@ -703,7 +704,7 @@ def plot_summary(das, block_side,  subj_idx, sess_idx, model_name='affineae_lvm'
 
 ### LISKA'S CODE
 
-def get_data_model(psths, trial_data, regions, norm=True, num_tents=2, task_vars=['response']):
+def get_data_model(psths, trial_data, regions, norm=True, num_tents=2, task_vars=['response'], verbosity=0):
     data_gd, data_dict = get_dataset_dm(psths, trial_data, regions, norm=norm, num_tents=num_tents, task_vars=task_vars, binwidth_ms=25)
     
     train_dl, val_dl, test_dl, indices = get_dataloaders(data_gd, batch_size=264, folds=4, use_dropout=True)
@@ -714,7 +715,7 @@ def get_data_model(psths, trial_data, regions, norm=True, num_tents=2, task_vars
     sample = data_gd[:]
     num_trials, num_tv = sample['tv'].shape
     num_units = sample['robs'].shape[1]
-    print("%d Trials, %d Neurons" % (num_trials, num_units))
+    if verbosity>0: print("%d Trials, %d Neurons" % (num_trials, num_units))
     
     return data_gd, train_dl, val_dl, test_dl, indices, num_trials, num_tv, num_units
 
@@ -1144,7 +1145,7 @@ def initialize_from_model(model, mod1, train_dl, fit_sigmas=False):
     
     return model
 
-def fit_autoencoder(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter=10, seed=None):
+def fit_autoencoder(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter=10, seed=None, verbosity=0):
     '''
     fit latent variable model given an initialization
     model: the model to be fit
@@ -1172,7 +1173,7 @@ def fit_autoencoder(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_
     # l0 = model.validation_step(vdata)['loss'].item()
     model0 = deepcopy(model)
     
-    print("Initial: %.4f" %l0)
+    if verbosity>0: print("Initial: %.4f" %l0)
 
     
 
@@ -1192,7 +1193,7 @@ def fit_autoencoder(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_
     r2 = model_rsquared(model, vdata)
     l1 = r2.mean().item()
     
-    print('Fit latents: %.4f, %.4f' % (l0, l1))
+    if verbosity>0: print('Fit latents: %.4f, %.4f' % (l0, l1))
     
     l0 = l1
     
@@ -1256,7 +1257,7 @@ def fit_autoencoder(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_
     
     return l0, model0
 
-def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter=10, seed=None, fix_readout_weights=False):
+def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter=10, seed=None, fix_readout_weights=False, verbosity=0):
     '''
     fit latent variable model given an initialization
     model: the model to be fit
@@ -1290,7 +1291,7 @@ def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter
     l00 = deepcopy(l0)
     model00 = deepcopy(model)
     
-    print("Initial: %.4f" %l0)
+    if verbosity>0: print("Initial: %.4f" %l0)
 
    
 
@@ -1316,7 +1317,7 @@ def fit_latents(model, train_dl, val_dl, fit_sigmas=False, min_iter=-1, max_iter
     r2 = model_rsquared(model, vdata)
     l1 = r2.mean().item()
     
-    print('Fit latents: %.4f, %.4f' % (l0, l1))
+    if verbosity>0: print('Fit latents: %.4f, %.4f' % (l0, l1))
     if max_iter == 0:
         return l0, model
 
@@ -1482,7 +1483,8 @@ def fit_gain_model(tv_dims, mod1, num_units=None, num_trials=None,
     num_latent=1,
     verbose=0,
     l2s = [.1],
-    d2ts = [0, .001, 0.01, 1]): 
+    d2ts = [0, .001, 0.01, 1],
+    verbosity=0): 
     
     from copy import deepcopy    
     
@@ -1526,7 +1528,7 @@ def fit_gain_model(tv_dims, mod1, num_units=None, num_trials=None,
                     loss = model_rsquared(model, val_dl.dataset[:]).mean().item()
                     losses.append(loss)
                     models.append(model)
-                    print('Fit run %.3f,%.3f: %.4f' % (d2tg, d2th, loss))
+                    if verbosity>0: print('Fit run %.3f,%.3f: %.4f' % (d2tg, d2th, loss))
                     continue
 
                 model.tv.weight.requires_grad = False
