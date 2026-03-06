@@ -312,8 +312,7 @@ class SharedGain(Encoder):
             tv_act_func='lin',
             tv_reg_vals={'l2':0.0},
             reg_vals={'l2':0.001},
-            latent_noise=True,
-            act_func='lin'):
+            latent_noise=True):
         
         super().__init__()
 

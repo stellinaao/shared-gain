@@ -24,13 +24,16 @@ colors_model = {"default": "#333333",
 colors_region = {"ACC": "#140C6A", 
                  "DMS": "#7166E9", 
                  "M2": "#845910", 
-                 "DLS": "#F7E164"
+                 "DLS": "#F7E164",
+                 "M1": "#409B3D",
+                 
 }
 
 markers_region = {"ACC": 'v', 
                  "DMS": '^', 
                  "M2": 'x', 
-                 "DLS": '*'
+                 "DLS": '*',
+                 "M1": '.'
 }
 
 # LOAD DATA
@@ -149,7 +152,7 @@ def add_strat(trial_data, session_data):
     return trial_data
 
 # PSTHS
-def get_psths(unit_spike_times, trial_data, session_data, regions, tpre=2, tpost=2, binwidth_ms=50, alignment='choice', balance=True, reward_only=True, do_rem_zstd=True, shuffle=False, prev_filter=True):
+def get_psths(unit_spike_times, trial_data, session_data, regions, tpre=2, tpost=2, binwidth_ms=50, alignment='choice', get_strategy=False, balance=True, reward_only=True, do_rem_zstd=True, shuffle=False, prev_filter=True):
     if alignment=='choice':
         mask_resp = ~np.isnan(trial_data['response_time']) if ('response_prev' not in trial_data.columns or prev_filter==False) else (~np.isnan(trial_data['response_time'])) & (~trial_data['response_prev']==0) # account for trials where there was no response
         mask_reward = trial_data['rewarded']
@@ -159,35 +162,44 @@ def get_psths(unit_spike_times, trial_data, session_data, regions, tpre=2, tpost
 
         choice_ts = trial_data['task_start_time'][mask]+trial_data['response_time'][mask] # s
 
-        mb_idx = trial_data[trial_data['iblock'].isin(session_data['MBblocks']) & (mask)].index
-        mf_idx = trial_data[trial_data['iblock'].isin(session_data['MFblocks']) & (mask)].index
+        if get_strategy:
+            mb_idx = trial_data[trial_data['iblock'].isin(session_data['MBblocks']) & (mask)].index
+            mf_idx = trial_data[trial_data['iblock'].isin(session_data['MFblocks']) & (mask)].index
         
         # mb_idx = np.delete(mb_idx, np.where(mb_idx == 0))
         # mf_idx = np.delete(mf_idx, np.where(mf_idx == 0))
 
-        if balance: mb_idx, mf_idx = balance_strategy(trial_data, mb_idx, mf_idx)
+            if balance: mb_idx, mf_idx = balance_strategy(trial_data, mb_idx, mf_idx)
 
-        if shuffle:
-            pool = np.concatenate((mb_idx, mf_idx))
-            mb_idx = np.random.choice(pool, len(mb_idx))
-            mf_idx = np.random.choice(pool, len(mf_idx))
+            if shuffle:
+                pool = np.concatenate((mb_idx, mf_idx))
+                mb_idx = np.random.choice(pool, len(mb_idx))
+                mf_idx = np.random.choice(pool, len(mf_idx))
 
         psths = {}
-        psths_mb = {}
-        psths_mf = {}
+        
+        if get_strategy:
+            psths_mb = {}
+            psths_mf = {}
 
         for region in regions:
             # dimensions will be cells x trials x time
             psths[region] = np.squeeze([ea.compute_firing_rate(choice_ts, unit, tpre, tpost, binwidth_ms)[0] for unit in unit_spike_times[region]]) 
             # print(len(psths[region]))
-            psths_mb[region] = np.squeeze([ea.compute_firing_rate(choice_ts.loc[mb_idx], unit, tpre, tpost, binwidth_ms)[0] for unit in unit_spike_times[region]])
-            psths_mf[region] = np.squeeze([ea.compute_firing_rate(choice_ts.loc[mf_idx], unit, tpre, tpost, binwidth_ms)[0] for unit in unit_spike_times[region]])
+            if get_strategy:
+                psths_mb[region] = np.squeeze([ea.compute_firing_rate(choice_ts.loc[mb_idx], unit, tpre, tpost, binwidth_ms)[0] for unit in unit_spike_times[region]])
+                psths_mf[region] = np.squeeze([ea.compute_firing_rate(choice_ts.loc[mf_idx], unit, tpre, tpost, binwidth_ms)[0] for unit in unit_spike_times[region]])
         
-        if do_rem_zstd: [psths, psths_mb, psths_mf] = rem_zstd([psths, psths_mb, psths_mf], regions)
-
+        if get_strategy:
+            if do_rem_zstd: 
+                [psths, psths_mb, psths_mf] = rem_zstd([psths, psths_mb, psths_mf], regions)
+            return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask
+        else:
+            if do_rem_zstd:
+                [psths] = rem_zstd([psths], regions)
+            return psths, mask
     else:
         return NotImplementedError(f"ERROR: not yet implemented for alignment {alignment}")
-    return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask
 
 def rem_zstd(psths_all, regions):
     units_to_rem = get_zstd_units(psths_all, regions)

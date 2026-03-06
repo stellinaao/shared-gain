@@ -86,14 +86,17 @@ def plot_cweights_regs_sess(das, subj_idx, sess_idx, num_latents=8, is_mult=True
     for latents in range(num_latents):
         plot_cweights_regs_latent(das, latents, subj_idx, sess_idx, is_mult, is_msess, ae, abort, do_save, do_show)
     
-def plot_cweights_regs_latent(das, num_latents, subj_idx, sess_idx, is_mult=True, is_msess=False, ae=True, abort=True, do_save=False, do_show=True):
+def plot_cweights_regs_latent(das, num_latents, subj_idx, sess_idx, is_mult=True, is_msess=False, use_das=False, ae=True, abort=True, do_save=False, do_show=True):
     for ax0 in range(num_latents):
         for ax1 in range(num_latents):
-            if ax0 < ax1: plot_cweight_regs(das, ax0, ax1, num_latents, subj_idx, sess_idx, is_mult, is_msess, ae, abort, do_save, do_show)
+            if ax0 < ax1: plot_cweight_regs(das, ax0, ax1, num_latents, subj_idx, sess_idx, is_mult, is_msess, use_das, ae, abort, do_save, do_show)
     
 
-def plot_cweight_regs(das, ax0, ax1, num_latents, subj_idx, sess_idx, is_mult=True, is_msess=False, ae=True, abort=True, do_save=False, do_show=True):
-    das_ = das[subj_idx][sess_idx][num_latents] if is_msess else das[num_latents]
+def plot_cweight_regs(das, ax0, ax1, num_latents, subj_idx, sess_idx, is_mult=True, is_msess=False, use_das=False, ae=True, abort=True, do_save=False, do_show=True):
+    if use_das:
+        das_ = das
+    else:
+        das_ = das[subj_idx][sess_idx][num_latents] if is_msess else das[num_latents]
     model_str = 'affineae' if ae else 'affine'
 
     cids = das_[model_str]['model'].cids

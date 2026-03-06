@@ -3,7 +3,7 @@ from copy import deepcopy
 import os, sys
 
 from NDNT.training.trainer import Trainer
-from sg import spks_utils
+from archive import spks_utils
 from sg import models
 sys.path.insert(0, '/mnt/Data/Repos/')
 sys.path.append("../")
@@ -12,6 +12,7 @@ import numpy as np
 # from sklearn.decomposition import FactorAnalysis
 import pickle
 import matplotlib.pyplot as plt
+import random
 
 # Import torch
 import torch
@@ -33,6 +34,14 @@ Model fitting procedure for the shared gain / offset model
 
 from torch.utils.data import Subset, DataLoader
 
+def seed(self):
+    self.seed(self.seed_val)
+    random.seed(self.seed_val)
+    np.random.seed(self.seed_val)
+    torch.manual_seed(self.seed_val)
+    torch.cuda.manual_seed(self.seed_val)
+    torch.cuda.manual_seed_all(self.seed_val)
+    
 # STELLINA'S FUNCTIONS
 def get_dataset_dm(psths, trial_data, regions, task_vars=['response'], num_tents=2, norm=True, binwidth_ms=25, device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
     # NEURAL DATA
@@ -164,8 +173,8 @@ def plot_r2_comp(results_a, results_b, label_a="", label_b="", title="", save=Tr
     ax.plot(results_b['r2test'], 'o', color='#E5A400', label=label_b)
     ax.axhline(0, color='k', linewidth=0.5, linestyle='--')
     ax.set_ylabel('$r^2$'); ax.set_xlabel("Unit ID")
-    ax.set_title(f"R2, {label_a}: {torch.mean(np.delete(results_a['r2test'], np.where(results_a['r2test']==float('-inf')))):.3f},  {label_b}: {torch.mean(np.delete(results_b['r2test'], np.where(results_b['r2test']==float('-inf')))):.3f}")
-    ax.set_ylim([-1,1])
+    # ax.set_title(f"R2, {label_a}: {torch.mean(np.delete(results_a['r2test'], np.where(results_a['r2test']==float('-inf')))):.3f},  {label_b}: {torch.mean(np.delete(results_b['r2test'], np.where(results_b['r2test']==float('-inf')))):.3f}")
+    ax.set_ylim([-0.25,1])
     ax.legend()
     
     if save:
@@ -610,9 +619,9 @@ def plot_summary(das, block_side,  subj_idx, sess_idx, model_name='affineae_lvm'
 
         # Corr w Strategy
         # axes[1][0].plot(np.array(das['data']['block_side']), '#888888', linestyle="--", label='Block Side')
-        axes[1][0].plot(np.array(das['data']['strategy']), "#A02A2A", linewidth=2, label='Strategy')
+        axes[1][0].plot(np.array(das['data']['strategy']), "#9C9C9C", linewidth=2, label='Strategy')
         if "gain" in model_name or "affine" in model_name: axes[1][0].plot(zgain, 'r', label='Gain Weights')
-        if "offset" in model_name or "affine" in model_name: axes[1][0].plot(zoffset, 'b', label='Offset Weights')
+        if "offset" in model_name or "affine" in model_name: axes[1][0].plot(zoffset, '#463C8B', label='Offset Weights')
         # axes[1][0].plot(np.diff(zoffset), 'r', label='Offset Weights')
         axes[1][0].set_xlim((0, robs.shape[0]))
         axes[1][0].set_xlabel("Trials"); axes[1][0].set_ylabel("Weights")
@@ -649,7 +658,7 @@ def plot_summary(das, block_side,  subj_idx, sess_idx, model_name='affineae_lvm'
         axes[1][1].plot(np.array(block_side), "#264F3A", linestyle="-", linewidth=2, label='Block Side')
         # axes[1][0].plot(np.array(das['data']['strategy']), "#1E2A61", label='Strategy')
         if "gain" in model_name or "affine" in model_name: axes[1][1].plot(zgain, 'r', label='Gain Weights')
-        if "offset" in model_name or "affine" in model_name: axes[1][1].plot(zoffset, 'b', label='Offset Weights')
+        if "offset" in model_name or "affine" in model_name: axes[1][1].plot(zoffset, "#463C8B", label='Offset Weights')
         # axes[1][0].plot(np.diff(zoffset), 'r', label='Offset Weights')
         axes[1][1].set_xlim((0, robs.shape[0]))
         axes[1][1].set_xlabel("Trials"); axes[1][0].set_ylabel("Weights")
@@ -697,17 +706,17 @@ def plot_summary(das, block_side,  subj_idx, sess_idx, model_name='affineae_lvm'
 def get_data_model(psths, trial_data, regions, norm=True, num_tents=2, task_vars=['response']):
     data_gd, data_dict = get_dataset_dm(psths, trial_data, regions, norm=norm, num_tents=num_tents, task_vars=task_vars, binwidth_ms=25)
     
-    train_dl, val_dl, test_dl, (train_inds, val_inds, test_inds) = get_dataloaders(data_gd, batch_size=264, folds=4, use_dropout=True)
+    train_dl, val_dl, test_dl, indices = get_dataloaders(data_gd, batch_size=264, folds=4, use_dropout=True)
     
-    Mtrain = train_dl.dataset[:]['dfs']>0
-    Mtest = val_dl.dataset[:]['dfs']>0
+    # Mtrain = train_dl.dataset[:]['dfs']>0
+    # Mtest = val_dl.dataset[:]['dfs']>0
     
     sample = data_gd[:]
     num_trials, num_tv = sample['tv'].shape
     num_units = sample['robs'].shape[1]
     print("%d Trials, %d Neurons" % (num_trials, num_units))
     
-    return data_gd, train_dl, val_dl, test_dl, train_inds, val_inds, test_inds, Mtrain, Mtest, sample, num_trials, num_tv, num_units
+    return data_gd, train_dl, val_dl, test_dl, indices, num_trials, num_tv, num_units
 
 def get_dataloaders(data_gd, folds=5, batch_size=64, use_dropout=True, seed=1234):
     np.random.seed(seed)

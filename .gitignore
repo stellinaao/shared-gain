@@ -2,6 +2,7 @@ figs/
 logs/
 vars/
 archive/
+bin/
 __pycache_/
 checkpoints/
 src/external/
