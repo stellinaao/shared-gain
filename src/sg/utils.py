@@ -89,6 +89,13 @@ def dict_equiv(d1: Dict[str, int], d2: Dict[str, int], verbose: bool = False):
     return True
 
 
+def compare_models(m1, m2):
+    for (n1, p1), (n2, p2) in zip(m1.named_parameters(), m2.named_parameters()):
+        if not torch.allclose(p1, p2):
+            print(f"Mismatch in {n1}")
+            print("max abs diff:", (p1 - p2).abs().max().item())
+
+
 def list2ndarr(lst):
     arr = np.empty(len(lst), dtype=object)
     for i, sub in enumerate(lst):

@@ -325,6 +325,7 @@ class SharedGain(Encoder):
         tv_dims,
         num_units=None,
         cids=None,
+        num_latent=None,
         num_latent_mult=0,
         num_latent_addt=0,
         num_tents=10,
@@ -386,6 +387,14 @@ class SharedGain(Encoder):
         else:
             latent_input_dims = NCTot
 
+        """ LATENT VAR """
+        self.num_latent = num_latent
+        if self.num_latent is None:
+            self.num_latent_mult = num_latent_mult
+            self.num_latent_addt = num_latent_addt
+        else:
+            self.num_latent_mult = num_latent
+            self.num_latent_addt = num_latent
         """ latent variable gain"""
         if include_gain:
             self.latent_gain = layers.NDNLayer(
