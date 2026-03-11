@@ -114,7 +114,7 @@ def get_dataset_dm(
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
     tvs = OHE().fit_transform(trial_data[task_vars]).todense()
-
+    # print(f"mozza: {trai}, feta: {tvs.shape}")
     # tents
     from external.NDNT.utils.NDNutils import tent_basis_generate
 

@@ -180,10 +180,7 @@ class LVMFamily:
         )
         self.mod_taskvar.drift.weight.data = self.mod_baseline.drift.weight.data.clone()
 
-        print(self.mod_taskvar.drift.weight.data[:10])
         fit_model(self.mod_taskvar, self.train_dl, self.val_dl, use_lbfgs=True)
-
-        print(self.mod_taskvar.drift.weight.data[:10])
 
     def get_cids(self):
         res_taskvar = eval_model(self.mod_taskvar, self.data_gd, self.test_dl.dataset)
