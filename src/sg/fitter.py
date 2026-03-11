@@ -179,7 +179,11 @@ class LVMFamily:
             reg_vals=self.reg,
         )
         self.mod_taskvar.drift.weight.data = self.mod_baseline.drift.weight.data.clone()
+
+        print(self.mod_taskvar.drift.weight.data[:10])
         fit_model(self.mod_taskvar, self.train_dl, self.val_dl, use_lbfgs=True)
+
+        print(self.mod_taskvar.drift.weight.data[:10])
 
     def get_cids(self):
         res_taskvar = eval_model(self.mod_taskvar, self.data_gd, self.test_dl.dataset)
@@ -420,12 +424,14 @@ class LVMFamily:
         # task variables
         self.mod_taskvar.cids = self.cids
         self.mod_taskvar.bias.data = self.mod_taskvar.bias.data[self.cids]
+
         self.mod_taskvar.drift.weight.data = self.mod_taskvar.drift.weight.data[
             :, self.cids
         ]
         self.mod_taskvar.tv.weight.data = self.mod_taskvar.tv.weight.data[:, self.cids]
+
         self.mod_taskvar.drift.bias.data = self.mod_taskvar.drift.bias.data[self.cids]
-        self.mod_taskvar.tv.bias.data = self.mod_taskvar.bias.data[self.cids]
+        self.mod_taskvar.tv.bias.data = self.mod_taskvar.tv.bias.data[self.cids]
 
         self.res_taskvar = eval_model(
             self.mod_taskvar, self.data_gd, self.test_dl.dataset

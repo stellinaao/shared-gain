@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from scipy.stats import spearmanr
+from sg.utils import spearmanr_vec
 
 from sg import data
 
@@ -381,6 +382,67 @@ def plot_cweights_regs_latent(
                     do_save,
                     do_show,
                 )
+
+
+def res_taskvar_corr(family, mode="taskvar", plot_res=True, plot_r2_dist=True):
+    # family.eval()
+
+    robs = family.val_dl.dataset[:]["robs"]
+    rhat = (
+        family.res_taskvar["rhat"] if mode == "taskvar" else family.res_offset["rhat"]
+    )
+    res = robs - rhat
+
+    block_side = family.block_side
+    choice = family.response
+    reward = family.rewarded
+
+    # rob_block_corr = utils.spearmanr_vec(block_side, robs)
+    # rob_choice_corr = utils.spearmanr_vec(choice, robs)
+    # rob_reward_corr = utils.spearmanr_vec(reward, robs)
+    res_block_corr = spearmanr_vec(block_side, res)
+    res_choice_corr = spearmanr_vec(choice, res)
+    res_reward_corr = spearmanr_vec(reward, res)
+
+    if plot_res:
+        plt.figure()
+        plt.imshow(
+            res.T,
+            aspect="auto",
+            interpolation="none",
+            cmap="coolwarm",
+            vmin=-0.2,
+            vmax=0.2,
+        )
+        plt.colorbar(label="Residuals")
+        plt.xlabel("Trials")
+        plt.ylabel("Neurons")
+        plt.tight_layout()
+        plt.show()
+    if plot_r2_dist:
+        plt.figure()
+        plt.hist(res_block_corr, bins=np.arange(-0.45, 0.45, 0.1))
+        plt.xlabel(r"$\rho$")
+        plt.ylabel("Frequency")
+        plt.title("Block")
+        plt.tight_layout()
+        plt.show()
+
+        plt.figure()
+        plt.hist(res_choice_corr, bins=np.arange(-0.45, 0.45, 0.1))
+        plt.xlabel(r"$\rho$")
+        plt.ylabel("Frequency")
+        plt.title("Choice")
+        plt.tight_layout()
+        plt.show()
+
+        plt.figure()
+        plt.hist(res_reward_corr, bins=np.arange(-0.45, 0.45, 0.1))
+        plt.xlabel(r"$\rho$")
+        plt.ylabel("Frequency")
+        plt.title("Reward")
+        plt.tight_layout()
+        plt.show()
 
 
 """def plot_cweight_regs(

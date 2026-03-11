@@ -166,6 +166,7 @@ class SharedLatentGain(Encoder):
         num_units=None,
         num_trials=None,
         cids=None,
+        num_latent=None,
         num_latent_mult=1,
         num_latent_addt=1,
         num_tents=10,
@@ -219,11 +220,20 @@ class SharedLatentGain(Encoder):
         else:
             self.drift = None
 
+        """ LATENT VAR """
+        self.num_latent = num_latent
+        if self.num_latent is None:
+            self.num_latent_mult = num_latent_mult
+            self.num_latent_addt = num_latent_addt
+        else:
+            self.num_latent_mult = num_latent
+            self.num_latent_addt = num_latent
+
         """ neuron gain """
         if include_gain:
             self.gain_mu = layers.NDNLayer(
                 input_dims=[1, 1, 1, num_trials],
-                num_filters=num_latent_mult,
+                num_filters=self.num_latent_mult,
                 NLtype="lin",
                 bias=False,
                 reg_vals=gain_reg_vals,
@@ -247,7 +257,7 @@ class SharedLatentGain(Encoder):
         if include_offset:
             self.offset_mu = layers.NDNLayer(
                 input_dims=[1, 1, 1, num_trials],
-                num_filters=num_latent_addt,
+                num_filters=self.num_latent_addt,
                 NLtype="lin",
                 bias=False,
                 reg_vals=offset_reg_vals,
@@ -325,6 +335,7 @@ class SharedGain(Encoder):
         tv_dims,
         num_units=None,
         cids=None,
+        num_latent=None,
         num_latent_mult=0,
         num_latent_addt=0,
         num_tents=10,
@@ -386,11 +397,19 @@ class SharedGain(Encoder):
         else:
             latent_input_dims = NCTot
 
+        """ LATENT VAR """
+        self.num_latent = num_latent
+        if self.num_latent is None:
+            self.num_latent_mult = num_latent_mult
+            self.num_latent_addt = num_latent_addt
+        else:
+            self.num_latent_mult = num_latent
+            self.num_latent_addt = num_latent
         """ latent variable gain"""
         if include_gain:
             self.latent_gain = layers.NDNLayer(
                 input_dims=[latent_input_dims, 1, 1, 1],
-                num_filters=num_latent_mult,
+                num_filters=self.num_latent_mult,
                 NLtype="lin",
                 norm_type=1,
                 bias=False,
@@ -399,7 +418,7 @@ class SharedGain(Encoder):
             self.latent_gain.weight_scale = 1.0
 
             self.readout_gain = layers.NDNLayer(
-                input_dims=[num_latent_mult, 1, 1, 1],
+                input_dims=[self.num_latent_mult, 1, 1, 1],
                 num_filters=num_units,
                 NLtype="lin",
                 norm_type=0,
@@ -410,14 +429,14 @@ class SharedGain(Encoder):
 
             if latent_noise:
                 self.logvar_g = nn.Parameter(
-                    torch.ones(num_latent_mult, dtype=torch.float32)
+                    torch.ones(self.num_latent_mult, dtype=torch.float32)
                 )
 
         """ latent variable offset"""
         if include_offset:
             self.latent_offset = layers.NDNLayer(
                 input_dims=[latent_input_dims, 1, 1, 1],
-                num_filters=num_latent_addt,
+                num_filters=self.num_latent_addt,
                 NLtype="lin",
                 norm_type=1,
                 bias=False,
@@ -426,7 +445,7 @@ class SharedGain(Encoder):
             self.latent_offset.weight_scale = 1.0
 
             self.readout_offset = layers.NDNLayer(
-                input_dims=[num_latent_addt, 1, 1, 1],
+                input_dims=[self.num_latent_addt, 1, 1, 1],
                 num_filters=num_units,
                 NLtype="lin",
                 norm_type=0,
@@ -437,7 +456,7 @@ class SharedGain(Encoder):
 
             if latent_noise:
                 self.logvar_g = nn.Parameter(
-                    torch.ones(num_latent_addt, dtype=torch.float32)
+                    torch.ones(self.num_latent_addt, dtype=torch.float32)
                 )
 
     def forward(self, input):

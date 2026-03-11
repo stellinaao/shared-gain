@@ -169,7 +169,7 @@ def fit_baseline(train_dl, val_dl, num_tv, num_units, ntents=5):
         num_tv,
         num_units=num_units,
         cids=None,
-        num_latent=1,
+        num_latent=4,
         num_tents=ntents,
         include_tv=False,
         include_gain=False,
@@ -194,10 +194,11 @@ def fit_baseline(train_dl, val_dl, num_tv, num_units, ntents=5):
 # > Task vars & slow drift: Used to identify units driven by task vars
 def fit_tvs(train_dl, val_dl, num_tv, num_units, mod_baseline, ntents=5):
     mod_tv = models.SharedGain(
-        num_tv,
+        tv_dims=num_tv,
         num_units=num_units,
         cids=None,
-        num_latent=4,
+        num_latent_mult=4,
+        num_latent_addt=4,
         num_tents=ntents,
         include_tv=True,
         include_gain=False,
@@ -1166,12 +1167,12 @@ def rsquared(y, yhat, dfs=None):
 
     # if dfs is None:
     #     dfs = torch.ones(y.shape, device=y.device)
-    # ybar = (y).sum(dim=0) / dfs.shape[0] #sum(dim=0) # the average y value
-    # resids = y - yhat # the difference between observed and predicted
-    # residnull = y - ybar # the difference between observed and observed avg
-    # sstot = torch.sum( residnull**2, dim=0) # denom
-    # ssres = torch.sum( resids**2, dim=0) # num
-    # r2 = 1 - ssres/sstot
+    # ybar = (y).sum(dim=0) / dfs.shape[0]  # sum(dim=0) # the average y value
+    # resids = y - yhat  # the difference between observed and predicted
+    # residnull = y - ybar  # the difference between observed and observed avg
+    # sstot = torch.sum(residnull**2, dim=0)  # denom
+    # ssres = torch.sum(resids**2, dim=0)  # num
+    # r2 = 1 - ssres / sstot
 
     # return r2.detach().cpu()
 
@@ -1286,6 +1287,7 @@ def fit_model(
     seed=None,
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
 ):
+    # print("pengha")
     from torch.optim import AdamW
 
     from external.NDNT.training import EarlyStopping, LBFGSTrainer, Trainer
@@ -1936,6 +1938,7 @@ def fit_gain_model(
     include_gain=True,
     include_offset=True,
     max_iter=10,
+    num_latent=None,
     num_latent_mult=1,
     num_latent_addt=1,
     verbose=0,
@@ -1943,7 +1946,9 @@ def fit_gain_model(
     d2ts=[0, 0.001, 0.01, 1],
     verbosity=0,
 ):
-
+    if num_latent is not None:
+        num_latent_mult = num_latent
+        num_latent_addt = num_latent
     if include_gain:
         d2tgs = deepcopy(d2ts)
     else:
