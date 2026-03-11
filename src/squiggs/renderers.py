@@ -35,6 +35,7 @@ class PETHRenderer:
         label_b="",
         do_sem=True,
         relim=True,
+        save_subdir="peth",
     ):
         """
         Parameters
@@ -120,6 +121,8 @@ class PETHRenderer:
         self.times, _, _ = construct_timebins(pres, posts, binwidth_s)
         self.times = np.arange(peth.shape[2])
 
+        self.save_subdir = save_subdir
+
     def __call__(self, idx, fig, axes):
         ax = axes[0]
         ax.clear()
@@ -173,26 +176,37 @@ class PETHRenderer:
 
 
 class FitRenderer:
-    def __init__(self, model=None, x=None, y=None):
+    def __init__(self, model=None, x=None, y=None, save_subdir="model_fits"):
+        from scipy.stats import pearsonr as r
+
         self.model = model
         self.x = x
         self.y = y
-        self.yhat = self.model(self.x)
+        self.yhat = self.model(self.x).detach().numpy()
+        self.rsquared = r(self.y, self.yhat, axis=0).statistic ** 2
 
         self.cids = self.model.cids
 
+        self.save_subdir = save_subdir
+
     def __call__(self, idx, fig, axes):
+        for ax in axes:
+            ax.clear()
+
         ax = axes[0]
         ax.plot(
             self.y[:, self.cids][:, idx], color="#666666", alpha=0.5, label="observed"
         )
         ax.plot(self.yhat[:, idx], color="#5C2392", alpha=0.5, label="predicted")
+
+        # ax.legend()
         ax.set_xlabel("Trials")
         ax.set_ylabel("Spike Counts")
+        ax.set_title(f"$r^2$={self.rsquared[idx]:.3f}")
 
 
 class KernelRenderer:
-    def __init__(self, model=None, dmat=None, bias=None):
+    def __init__(self, model=None, dmat=None, bias=None, subdir="kernel"):
         """
         Parameters
         ----------
@@ -260,6 +274,8 @@ class KernelRenderer:
                     self.cache[tag][f"{reg}_k"][idx] = k
         self.ymin = ymin
         self.ymax = ymax
+
+        self.subdir = subdir
 
     def __call__(self, idx, fig, axes):
         for ax in axes:

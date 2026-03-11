@@ -12,9 +12,9 @@ Python Version: >= 3.10.4
 
 import numpy as np
 from DAMN.damn.alignment import construct_timebins
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
-
+from matplotlib.widgets import Slider, Button
 # from PyQt6.QtWidgets import (
 #     QApplication, QWidget, QVBoxLayout,
 #     QSlider, QLineEdit
@@ -35,11 +35,18 @@ class NeuronViewer:
         title="Neuron Viewer",
     ):
         plt.close("all")
+
         self.num_units = num_units
         self.render_func = render_func
 
+        from utils.paths import FIGURES_DIR
+
+        self.save_dir = FIGURES_DIR / self.render_func.save_subdir
+        self.save_dir.mkdir(parents=True, exist_ok=True)
+        mpl.rcParams["keymap.save"] = []
+
         if ncols == 1 and nrows == 1:
-            self.fig, self.axes = plt.subplots(figsize=(2, 2))
+            self.fig, self.axes = plt.subplots(figsize=(3, 3))
             self.axes = [self.axes]
         else:
             self.fig, self.axes = plt.subplots(
@@ -69,40 +76,56 @@ class NeuronViewer:
             slider_ax, "Unit", 0, self.num_units - 1, valinit=0, valstep=1
         )
 
-        # self.global_ylim = ymin is not None and ymax is not None
-        # if self.global_ylim:
-        #     padding = 0.05 * (ymax-ymin)
-        #     self.ymin = ymin - padding
-        #     self.ymax = ymax + padding
-        #     self.axes[0].set_ylim(self.ymin, self.ymax)
-
         self.slider.on_changed(self.update)
         self.fig.canvas.mpl_connect("key_press_event", self.on_key)
+        self.fig.canvas.mpl_connect("key_release_event", self.on_key_release)
+
+        self._scroll_dir = 0
+
+        self.timer = self.fig.canvas.new_timer(interval=120)
+        self.timer.add_callback(self._scroll_step)
+
+        # button
+        button_ax = plt.axes([0.85, 0.05, 0.1, 0.04])
+        self.save_button = Button(button_ax, "Save")
+        self.save_button.on_clicked(self.save_fig)
 
     def update(self, val):
         idx = int(self.slider.val)
         self.render_func(idx, self.fig, self.axes)
-        # if self.global_ylim:
-        #     self.axes[0].set_ylim(self.ymin, self.ymax)
-        # else:
-        #     ymin =
-        #     ymax =
-        #     padding = 0.05 * (ymax-ymin)
-        #     self.axes[0].set_ylim(ymin-padding, ymax+padding)
-        #     # self.axes[0].relim()
-        #     # self.axes[0].autoscale_view()
         self.fig.canvas.draw_idle()
 
     def on_key(self, event):
-        step = 1
-        if event.key == "right":
-            idx = self.slider.val + step
-            if idx > self.num_units - 1:
-                return
+        if event.key == "right" or event.key == "l":
+            self._scroll_dir = 1
+            self.timer.start()
+
+        elif event.key == "left" or event.key == "h":
+            self._scroll_dir = -1
+            self.timer.start()
+
+        elif event.key == "s":
+            self.save_fig(None)
+
+    def on_key_release(self, event):
+        if event.key in ["left", "right", "l", "h"]:
+            self._scroll_dir = 0
+            self.timer.stop()
+
+    def _scroll_step(self):
+        if self._scroll_dir == 0:
+            return
+
+        idx = int(self.slider.val) + self._scroll_dir
+
+        if 0 <= idx < self.num_units:
             self.slider.set_val(idx)
-        elif event.key == "left":
-            idx = self.slider.val - step
-            self.slider.set_val(idx)
+
+    def save_fig(self, event):
+        idx = int(self.slider.val)
+        filename = self.save_dir / f"unit_{idx:03d}.png"
+        self.fig.savefig(filename, dpi=300, bbox_inches="tight")
+        print(f"Saved {filename}")
 
 
 """

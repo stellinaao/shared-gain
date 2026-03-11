@@ -1,7 +1,6 @@
 README.md
 setup.py
 src/sg/__init__.py
-src/sg/constants.py
 src/sg/data.py
 src/sg/eval_models.py
 src/sg/fit_models.py
