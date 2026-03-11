@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from scipy.stats import spearmanr
-from utils import spearmanr_vec
+from sg.utils import spearmanr_vec
 
 from sg import data
 

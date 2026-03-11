@@ -213,14 +213,11 @@ def fit_tvs(train_dl, val_dl, num_tv, num_units, mod_baseline, ntents=5):
     #  act_func='lin')
 
     mod_tv.drift.weight.data = mod_baseline.drift.weight.data.clone()
-    return mod_tv
-    print(mod_tv.drift.weight.data[:10])
 
     print("Fitting task variable model...", end="")
     fit_model(mod_tv, train_dl, val_dl, verbose=0, use_lbfgs=True)
     print("done")
 
-    print(mod_tv.drift.weight.data[:10])
     return mod_tv
 
 
@@ -1157,27 +1154,27 @@ def get_dataloaders(data_gd, folds=5, batch_size=64, use_dropout=True, seed=1234
 
 
 def rsquared(y, yhat, dfs=None):
-    # if dfs is None:
-    #     dfs = torch.ones(y.shape, device=y.device)
-    # ybar = (y * dfs).sum(dim=0) / dfs.sum(dim=0)  # the average y value
-    # resids = y - yhat  # the difference between observed and predicted
-    # residnull = y - ybar  # the difference between observed and observed avg
-    # sstot = torch.sum(residnull**2 * dfs, dim=0)  # denom
-    # ssres = torch.sum(resids**2 * dfs, dim=0)  # num
-    # r2 = 1 - ssres / sstot
-
-    # return r2.detach().cpu()
-
     if dfs is None:
         dfs = torch.ones(y.shape, device=y.device)
-    ybar = (y).sum(dim=0) / dfs.shape[0]  # sum(dim=0) # the average y value
+    ybar = (y * dfs).sum(dim=0) / dfs.sum(dim=0)  # the average y value
     resids = y - yhat  # the difference between observed and predicted
     residnull = y - ybar  # the difference between observed and observed avg
-    sstot = torch.sum(residnull**2, dim=0)  # denom
-    ssres = torch.sum(resids**2, dim=0)  # num
+    sstot = torch.sum(residnull**2 * dfs, dim=0)  # denom
+    ssres = torch.sum(resids**2 * dfs, dim=0)  # num
     r2 = 1 - ssres / sstot
 
     return r2.detach().cpu()
+
+    # if dfs is None:
+    #     dfs = torch.ones(y.shape, device=y.device)
+    # ybar = (y).sum(dim=0) / dfs.shape[0]  # sum(dim=0) # the average y value
+    # resids = y - yhat  # the difference between observed and predicted
+    # residnull = y - ybar  # the difference between observed and observed avg
+    # sstot = torch.sum(residnull**2, dim=0)  # denom
+    # ssres = torch.sum(resids**2, dim=0)  # num
+    # r2 = 1 - ssres / sstot
+
+    # return r2.detach().cpu()
 
 
 def censored_lstsq(A, B, M):
@@ -1290,7 +1287,7 @@ def fit_model(
     seed=None,
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
 ):
-    print("pengha")
+    # print("pengha")
     from torch.optim import AdamW
 
     from external.NDNT.training import EarlyStopping, LBFGSTrainer, Trainer
