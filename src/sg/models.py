@@ -363,7 +363,7 @@ class SharedGain(Encoder):
         if include_tv:
             self.tv = layers.NDNLayer(
                 input_dims=[tv_dims, 1, 1, 1],
-                num_filters=num_units,
+                num_filters=num_units,  # sets output_dims as one of its potentially many jobs
                 pos_constraint=True,
                 NLtype=tv_act_func,
                 norm_type=0,
@@ -459,6 +459,7 @@ class SharedGain(Encoder):
                     torch.ones(self.num_latent_addt, dtype=torch.float32)
                 )
 
+    # the gold nugget
     def forward(self, input):
         x = 0
         if self.tv is not None:
@@ -472,14 +473,18 @@ class SharedGain(Encoder):
                 robs = robs * input["latentdfs"][:, self.cids]
 
         if hasattr(self, "latent_gain"):
-            zg = self.latent_gain(robs)
+            zg = self.latent_gain(
+                robs
+            )  # TODO: understand robs when tents_as_inputs is T/F
             if hasattr(self, "logvar_g") and self.training:
                 std = torch.exp(0.5 * self.logvar_g)
                 eps = torch.randn_like(zg)
                 zg = eps * std + zg  # adding noise
 
             g = self.readout_gain(zg)
-            x = x * self.relu(1 + g)
+            x = x * self.relu(
+                1 + g
+            )  # relu in the gain op to multiply by positives only
 
         if hasattr(self, "latent_offset"):
             zh = self.latent_offset(robs)
@@ -488,7 +493,9 @@ class SharedGain(Encoder):
                 eps = torch.randn_like(zh)
                 zh = eps * std + zh
             h = self.readout_offset(zh)
-            x = x + h
+            x = (
+                x + h
+            )  # but no relu in the addt op because we can subtract as well as add
 
         if self.drift is not None:
             x = x + self.drift(input["tents"])

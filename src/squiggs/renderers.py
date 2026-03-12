@@ -185,8 +185,6 @@ class FitRenderer:
         self.yhat = self.model(self.x).detach().numpy()
         self.rsquared = r(self.y, self.yhat, axis=0).statistic ** 2
 
-        self.cids = self.model.cids
-
         self.save_subdir = save_subdir
 
     def __call__(self, idx, fig, axes):
@@ -194,9 +192,7 @@ class FitRenderer:
             ax.clear()
 
         ax = axes[0]
-        ax.plot(
-            self.y[:, self.cids][:, idx], color="#666666", alpha=0.5, label="observed"
-        )
+        ax.plot(self.y[:, idx], color="#666666", alpha=0.5, label="observed")
         ax.plot(self.yhat[:, idx], color="#5C2392", alpha=0.5, label="predicted")
 
         # ax.legend()
