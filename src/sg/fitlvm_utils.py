@@ -1153,28 +1153,28 @@ def get_dataloaders(data_gd, folds=5, batch_size=64, use_dropout=True, seed=1234
     return train_dl, val_dl, test_dl, (train_inds, val_inds, test_inds)
 
 
-def rsquared(y, yhat, dfs=None):
+def rsquared(y, yhat, dfs=None, eps=1e-10):
     if dfs is None:
         dfs = torch.ones(y.shape, device=y.device)
     ybar = (y * dfs).sum(dim=0) / dfs.sum(dim=0)  # the average y value
     resids = y - yhat  # the difference between observed and predicted
     residnull = y - ybar  # the difference between observed and observed avg
-    sstot = torch.sum(residnull**2 * dfs, dim=0)  # denom
+    sstot = torch.sum(residnull**2 * dfs, dim=0) + eps  # denom
     ssres = torch.sum(resids**2 * dfs, dim=0)  # num
     r2 = 1 - ssres / sstot
 
     return r2.detach().cpu()
 
-    # if dfs is None:
-    #     dfs = torch.ones(y.shape, device=y.device)
-    # ybar = (y).sum(dim=0) / dfs.shape[0]  # sum(dim=0) # the average y value
-    # resids = y - yhat  # the difference between observed and predicted
-    # residnull = y - ybar  # the difference between observed and observed avg
-    # sstot = torch.sum(residnull**2, dim=0)  # denom
-    # ssres = torch.sum(resids**2, dim=0)  # num
-    # r2 = 1 - ssres / sstot
+    if dfs is None:
+        dfs = torch.ones(y.shape, device=y.device)
+    ybar = (y).sum(dim=0) / dfs.shape[0]  # sum(dim=0) # the average y value
+    resids = y - yhat  # the difference between observed and predicted
+    residnull = y - ybar  # the difference between observed and observed avg
+    sstot = torch.sum(residnull**2, dim=0)  # denom
+    ssres = torch.sum(resids**2, dim=0)  # num
+    r2 = 1 - ssres / sstot
 
-    # return r2.detach().cpu()
+    return r2.detach().cpu()
 
 
 def censored_lstsq(A, B, M):
@@ -1288,6 +1288,7 @@ def fit_model(
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
 ):
     # print("pengha")
+    print("hullo")
     from torch.optim import AdamW
 
     from external.NDNT.training import EarlyStopping, LBFGSTrainer, Trainer
@@ -1601,7 +1602,9 @@ def fit_autoencoder(
         model.latent_offset.weight.requires_grad = True
         model.readout_offset.weight.requires_grad = True
 
-    fit_model(model, train_dl, train_dl, use_lbfgs=True, verbose=0, seed=seed)
+    fit_model(
+        model, train_dl, train_dl, use_lbfgs=True, verbose=0, seed=seed
+    )  # FLAGGING
 
     r2 = model_rsquared(model, vdata)
     l1 = r2.mean().item()
@@ -1680,6 +1683,7 @@ def fit_latents(
     fix_readout_weights=False,
     verbosity=0,
 ):
+    print(f"hello, {max_iter}")
     """
     fit latent variable model given an initialization
     model: the model to be fit

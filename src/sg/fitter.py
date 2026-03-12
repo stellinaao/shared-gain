@@ -10,6 +10,7 @@ from sg.fitlvm_utils import (
     fit_gain_model,
     fit_model,
     get_data_model,
+    check_stable_lowd,
 )
 from sg.models import SharedGain
 
@@ -76,12 +77,17 @@ class LVMFamily:
         self.refit = kwargs.pop("refit", False)
         self.max_iter = kwargs.pop("max_iter", 10) if self.refit else 0
 
+        if len(kwargs) > 0:
+            extra_kwargs = ", ".join('"%s' % k for k in list(kwargs.keys()))
+            raise ValueError("Extra arguments %s" % extra_kwargs)
+
     def fit_all(self):
         self.get_data()
         self.fit_baseline()
         self.fit_taskvar()
 
         self.get_cids()
+        self.update_cids()
 
         self.fit_ae_gain()
         self.fit_ae_offset()
@@ -162,6 +168,8 @@ class LVMFamily:
     def fit_taskvar(self):
         self.tv_reg = {"l2": 0.001}
         self.reg = {"l2": 0.001}
+        if self.verbosity > 0:
+            print(self.tv_actv_fn, self.nonlinearity)
         self.mod_taskvar = SharedGain(
             tv_dims=self.num_tv,
             num_units=self.num_units,
@@ -184,14 +192,26 @@ class LVMFamily:
 
     def get_cids(self):
         res_taskvar = eval_model(self.mod_taskvar, self.data_gd, self.test_dl.dataset)
-        # self.cids_tv  = np.where(res_taskvar['r2test']>0)[0]
-        # self.cids_pca = check_stable_lowd(self.data_gd,
-        #                                   self.train_dl.dataset[:]['dfs']>0,
-        #                                   self.val_dl.dataset[:]['dfs']>0,
-        #                                   self.num_units,
-        #                                   rank=4)
-        # self.cids = np.union1d(self.cids_tv, self.cids_pca)
-        self.cids = np.arange(len(res_taskvar["r2test"]))
+        self.cids_tv = np.where(res_taskvar["r2test"] > 0)[0]
+        self.cids_pca = check_stable_lowd(
+            self.data_gd,
+            self.train_dl.dataset[:]["dfs"] > 0,
+            self.val_dl.dataset[:]["dfs"] > 0,
+            self.num_units,
+            rank=4,
+        )
+        # it was this stinker that kept letting things through
+        self.cids = np.intersect1d(
+            self.cids_tv, self.cids_pca
+        )  # changed from union to intersection
+        # self.cids = np.arange(len(res_taskvar["r2test"]))
+
+    def update_cids(self):
+        self.data_gd[:]["robs"] = self.data_gd[:]["robs"][:, self.cids]
+        self.sample["robs"] = self.sample["robs"][:, self.cids]
+        self.robs = self.robs[:, self.cids]
+
+        self.num_units = len(self.cids)
 
     def fit_ae_gain(self):
         self.tv_reg = {"l2": 1}
@@ -240,6 +260,7 @@ class LVMFamily:
             self.val_dl,
             min_iter=0,
             max_iter=self.max_iter,
+            verbosity=self.verbosity,
         )
 
     def fit_ae_offset(self):
@@ -287,6 +308,7 @@ class LVMFamily:
             self.val_dl,
             min_iter=0,
             max_iter=self.max_iter,
+            verbosity=self.verbosity,
         )
 
     def fit_ae_affine(self):
@@ -348,6 +370,7 @@ class LVMFamily:
             self.val_dl,
             min_iter=0,
             max_iter=self.max_iter,
+            verbosity=self.verbosity,
         )
 
     def ae2lvm(self):

@@ -4,7 +4,7 @@ import torch
 from scipy.stats import spearmanr
 from sg.utils import spearmanr_vec
 
-from sg import data
+from utils import data
 
 
 def plot_summary(family, model, potato=None, mode="offset", metric="spearman"):
