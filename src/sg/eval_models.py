@@ -107,6 +107,68 @@ def get_num_latents(das, subj_idx, sess_idx, is_msess=True, ae=True, do_plot=Fal
     return np.where(d < 0.01)[0][0]
 
 
+# Unit R2s
+def plot_r2_comp(
+    results_a,
+    results_b,
+    label_a="",
+    label_b="",
+    title="",
+    mode="unity",
+    save=False,
+    fpath=None,
+):
+    fig, ax = plt.subplots(figsize=(4, 4))
+
+    if mode == "overlay":
+        ax.plot(results_a["r2test"], "o", color="#666666", label=label_a)
+        ax.plot(results_b["r2test"], "o", color="#E5A400", label=label_b)
+        ax.axhline(0, color="k", linewidth=0.5, linestyle="--")
+        ax.set_ylabel("$r^2$")
+        ax.set_xlabel("Unit ID")
+        # ax.set_title(f"R2, {label_a}: {torch.mean(np.delete(results_a['r2test'], np.where(results_a['r2test']==float('-inf')))):.3f},  {label_b}: {torch.mean(np.delete(results_b['r2test'], np.where(results_b['r2test']==float('-inf')))):.3f}")
+        ax.set_ylim([-0.25, 1])
+    elif mode == "unity":
+        mn = torch.min(results_a["r2test"].min(), results_b["r2test"].min())
+        mx = torch.max(results_a["r2test"].max(), results_b["r2test"].max())
+        ax.scatter(results_a["r2test"], results_b["r2test"], color="#E5A400")
+        ax.plot((mn, mx), (mn, mx), linestyle="--", color="#444444", label="unity")
+        ax.set_xlabel(label_a)
+        ax.set_ylabel(label_b)
+        ax.set_xlim([mn - 0.05, mx + 0.05]), ax.set_ylim([mn - 0.05, mx + 0.05])
+    else:
+        raise ValueError("valid arguments for mode are 'unity' and 'overlay.'")
+
+    if save:
+        plt.savefig(fpath)
+
+    ax.legend()
+    fig.suptitle(title)
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_r2(results_a, label_a="", title="", save=True, fpath=None):
+    fig, ax = plt.subplots(figsize=(4, 4))
+    ax.plot(results_a["r2test"], "o", color="#666666", label=label_a)
+    ax.axhline(0, color="k", linewidth=0.5, linestyle="--")
+    ax.set_ylabel("$r^2$")
+    ax.set_xlabel("Unit ID")
+    ax.set_title(
+        f"R2, {label_a}: {torch.mean(np.delete(results_a['r2test'], np.where(results_a['r2test'] == float('-inf')))):.3f}"
+    )
+    ax.set_ylim([-1, 1])
+    ax.legend()
+
+    if save:
+        plt.savefig(fpath)
+
+    fig.suptitle(title)
+    fig.tight_layout()
+    plt.show()
+
+
+# Session R2s
 def plot_r2_latents_summary(das, subj_idx, ae=True):
     model_str = "affineae" if ae else "affine"
 
