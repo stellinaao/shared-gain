@@ -307,6 +307,10 @@ def plot_latents(das, num_latents, ae=True, mult=True):
 def plot_cweights_reg_hist(
     family, model, n_latents, mode="offset", do_save=False, fname=""
 ):
+    """
+    histogram, i don't really like this vis often
+    """
+
     coupling = (
         model.readout_gain.weight.data[:].T
         if mode == "gain"
@@ -478,6 +482,30 @@ def plot_cweights_regs_latent(
                     do_save,
                     do_show,
                 )
+
+
+def plot_cweights_mult(family):
+    M = family.n_latents_mult
+    if not family.no_mult:
+        if M == 1:
+            plot_cweights_reg_hist(
+                family,
+                family.mod_affine,
+                n_latents=M,
+                mode="gain",
+            )
+        else:
+            for ax0 in range(M):
+                for ax1 in range(M):
+                    if ax1 > ax0:
+                        _ = plot_cweight_regs(
+                            family,
+                            family.mod_affine,
+                            ax0=ax0,
+                            ax1=ax1,
+                            num_latents=M,
+                            mode="gain",
+                        )
 
 
 def plot_latent_corr(model, mode="gain"):

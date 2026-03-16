@@ -1,6 +1,7 @@
 import sys
 from copy import deepcopy
 
+
 # from archive import spks_utils
 from sg import models
 
@@ -47,12 +48,12 @@ def get_dataset_dm(
     binwidth_ms=25,
     sanity_check=0,
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-    tuber=None,
     verbosity=0,
 ):
     # NEURAL DATA
     # robs
     if sanity_check == 2:
+        print("scaling by mfr")
         print("multiplying poor dms by 2sin+0.5cos+2.5")
         print("also multiplying M2 by an ungodly function")
         t = psths["DMS"].shape[1]
@@ -70,24 +71,27 @@ def get_dataset_dm(
             + 2
         )
 
-        robs = (
-            np.concatenate(
-                [
-                    (
-                        potato * np.sum(psths[region] * (25 / 1000), axis=2)
-                        if region == "DMS"
-                        else (
-                            tuber * np.sum(psths[region] * (25 / 1000), axis=2)
-                            if region == "M2"
-                            else np.sum(psths[region] * (25 / 1000), axis=2)
-                        )
-                        # else np.sum(psths[region] * (25 / 1000), axis=2)
-                    )
-                    for region in regions
-                ]
-            ).T
-            ** 0.5
-        )
+        robs_ = {}
+        # no zscore
+        # all that matters is that all neurons in dms and m2 get multiplied to the same degree
+        # robs_['DMS']  = zscore(np.sum(psths['DMS'] * (25 / 1000), axis=2))
+        # robs_['DMS']  = [(1/np.mean(cell))*potato*cell for cell in robs_['DMS']]
+        # robs_['M2']   = zscore(np.sum(psths['M2'] * (25 / 1000), axis=2))
+        # robs_['M2']  = [(1/np.mean(cell))*tuber*cell for cell in robs_['M2']]
+        # robs_['ACC']  = zscore(np.sum(psths['ACC']*(25/1000), axis=2))
+        # robs_['DLS']  = zscore(np.sum(psths['DLS']*(25/1000), axis=2))
+
+        robs_["DMS"] = np.sum(psths["DMS"] * (25 / 1000), axis=2)
+        robs_["DMS"] = [(np.mean(cell)) * potato * cell for cell in robs_["DMS"]]
+        robs_["M2"] = np.sum(psths["M2"] * (25 / 1000), axis=2)
+        robs_["M2"] = [(np.mean(cell)) * tuber * cell for cell in robs_["M2"]]
+        robs_["ACC"] = np.sum(psths["ACC"] * (25 / 1000), axis=2)
+        robs_["DLS"] = np.sum(psths["DLS"] * (25 / 1000), axis=2)
+
+        # no sqrt to account for the zscoring
+        robs = np.concatenate([robs_[region] for region in regions]).T  # ** 0.5
+        print(robs.shape)
+
     else:
         robs = (
             np.concatenate(
@@ -1064,7 +1068,6 @@ def get_data_model(
         task_vars=task_vars,
         binwidth_ms=25,
         sanity_check=sanity_check,
-        tuber=tuber,
     )
 
     train_dl, val_dl, test_dl, indices = get_dataloaders(
