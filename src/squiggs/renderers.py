@@ -129,7 +129,6 @@ class PETHRenderer:
         if self.mode == "grand":
             mean = self.all_means[idx]
             std = self.all_stds[idx]
-            print("BEAUTEOUS")
             ax.plot(self.times, mean, color=self.color)
             ax.fill_between(
                 self.times, mean - std, mean + std, alpha=0.3, color=self.color

@@ -25,8 +25,8 @@ session_data = session_data_all[subj_idx][sess_idx]
 regions = regions_all[subj_idx][sess_idx]
 trial_data["block_side"] = np.where(trial_data["block_side"] == "left", 1, -1)
 
-m_latents = np.linspace(1, 10, 10)
-a_latents = np.linspace(1, 10, 10)
+m_latents = np.linspace(0, 5, 6, dtype=int)
+a_latents = np.linspace(0, 5, 6, dtype=int)
 
 for m in m_latents:
     for a in a_latents:
@@ -42,8 +42,35 @@ for m in m_latents:
             regions=regions,
             n_latents_mult=int(m),
             n_latents_addt=int(a),
+            norm_activity=True,
         )
         family.fit_all()
 
-        with open(f"../vars/families/family-m{int(m)}a{int(a)}.pkl", "wb") as f:
+        with open(
+            f"../vars/families/0312-lm/all/family-m{int(m)}a{int(a)}.pkl", "wb"
+        ) as f:
             pickle.dump(family, f)
+
+for reg in regions:
+    for m in m_latents:
+        for a in a_latents:
+            if m == 0 and a == 0:
+                continue
+            print(
+                f"Fitting for {reg}, {int(m)} multiplicative latents and {int(a)} additive latents"
+            )
+            family = LVMFamily(
+                trial_data=trial_data,
+                spike_times={reg: unit_spike_times[reg]},
+                session_data=session_data,
+                regions=[reg],
+                n_latents_mult=int(m),
+                n_latents_addt=int(a),
+                norm_activity=True,
+            )
+            family.fit_all()
+
+            with open(
+                f"../vars/families/0312-lm/{reg}/family-m{int(m)}a{int(a)}.pkl", "wb"
+            ) as f:
+                pickle.dump(family, f)

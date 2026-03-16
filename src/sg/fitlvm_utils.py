@@ -47,24 +47,41 @@ def get_dataset_dm(
     binwidth_ms=25,
     sanity_check=0,
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+    tuber=None,
     verbosity=0,
 ):
     # NEURAL DATA
     # robs
     if sanity_check == 2:
         print("multiplying poor dms by 2sin+0.5cos+2.5")
+        print("also multiplying M2 by an ungodly function")
+        t = psths["DMS"].shape[1]
+        phase = np.pi / 3
+        phi = np.sqrt(2)
+
+        potato = 2 * np.sin(np.arange(t)) + 0.5 * np.cos(np.arange(t)) + 2.5
+
+        tuber = (
+            np.sin(phi * np.arange(t) / 2 + phase) ** 2
+            + 2
+            * (0.7 * (np.cos(np.arange(t) / 2 + phase + (np.pi / 2)) + 1) ** 0.75)
+            * 0.5
+            * np.sin(np.arange(t) / 2) ** 3
+            + 2
+        )
+
         robs = (
             np.concatenate(
                 [
                     (
-                        (
-                            2 * np.sin(np.arange(psths["DMS"].shape[1]))
-                            + 0.5 * np.cos(np.arange(psths["DMS"].shape[1]))
-                            + 2.5
-                        )
-                        * np.sum(psths[region] * (25 / 1000), axis=2)
+                        potato * np.sum(psths[region] * (25 / 1000), axis=2)
                         if region == "DMS"
-                        else np.sum(psths[region] * (25 / 1000), axis=2)
+                        else (
+                            tuber * np.sum(psths[region] * (25 / 1000), axis=2)
+                            if region == "M2"
+                            else np.sum(psths[region] * (25 / 1000), axis=2)
+                        )
+                        # else np.sum(psths[region] * (25 / 1000), axis=2)
                     )
                     for region in regions
                 ]
@@ -1036,6 +1053,7 @@ def get_data_model(
     task_vars=["response"],
     verbosity=0,
     sanity_check=0,
+    tuber=None,
 ):
     data_gd, data_dict = get_dataset_dm(
         psths,
@@ -1046,6 +1064,7 @@ def get_data_model(
         task_vars=task_vars,
         binwidth_ms=25,
         sanity_check=sanity_check,
+        tuber=tuber,
     )
 
     train_dl, val_dl, test_dl, indices = get_dataloaders(
@@ -1288,7 +1307,7 @@ def fit_model(
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
 ):
     # print("pengha")
-    print("hullo")
+    # print("hullo")
     from torch.optim import AdamW
 
     from external.NDNT.training import EarlyStopping, LBFGSTrainer, Trainer
@@ -1683,7 +1702,7 @@ def fit_latents(
     fix_readout_weights=False,
     verbosity=0,
 ):
-    print(f"hello, {max_iter}")
+    # print(f"hello, {max_iter}")
     """
     fit latent variable model given an initialization
     model: the model to be fit

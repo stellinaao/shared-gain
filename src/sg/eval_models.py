@@ -4,10 +4,18 @@ import torch
 from scipy.stats import spearmanr
 from sg.utils import spearmanr_vec
 
-from utils import data
+from sg import data
 
 
-def plot_summary(family, model, potato=None, mode="offset", metric="spearman"):
+def plot_summary(
+    family,
+    model,
+    potato=None,
+    mode="offset",
+    metric="spearman",
+    save_fig=False,
+    fname="",
+):
     do_gain = mode == "gain" or mode == "affine"
     do_offset = mode == "offset" or mode == "affine"
     n_latents = (
@@ -21,7 +29,7 @@ def plot_summary(family, model, potato=None, mode="offset", metric="spearman"):
     )
 
     for latent_idx, ax in enumerate(axes.flat):
-        ax.plot(np.array(potato), "#9C9C9C", linewidth=2, label="Strategy")
+        ax.plot(np.array(potato), "#9C9C9C", linewidth=2, label="Block")
         if do_gain:
             zgain = model.gain_mu.get_weights()[:, latent_idx]
             zweight = (
@@ -80,6 +88,15 @@ def plot_summary(family, model, potato=None, mode="offset", metric="spearman"):
         ax.set_title(title)
 
     fig.tight_layout()
+    if save_fig:
+        from utils.paths import FIGURES_DIR
+
+        save_dir = FIGURES_DIR / "latents"
+        fpath = save_dir / fname
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(fpath, dpi=300, bbox_inches="tight")
+
+    fig.show()
 
 
 def get_num_latents(das, subj_idx, sess_idx, is_msess=True, ae=True, do_plot=False):
@@ -285,7 +302,9 @@ def plot_latents(das, num_latents, ae=True, mult=True):
     plt.legend()
 
 
-def plot_cweights_reg_hist(family, model, n_latents, mode="offset"):
+def plot_cweights_reg_hist(
+    family, model, n_latents, mode="offset", do_save=False, fname=""
+):
     coupling = (
         model.readout_gain.weight.data[:].T
         if mode == "gain"
@@ -296,17 +315,19 @@ def plot_cweights_reg_hist(family, model, n_latents, mode="offset"):
     reg_keys = family.sample["reg_keys"]
 
     fig, axes = plt.subplots(
-        ncols=n_latents, nrows=1, figsize=(1.5 * n_latents, 1.5), squeeze=False
+        ncols=n_latents, nrows=1, figsize=(2.5 * n_latents, 2.5), squeeze=False
     )
 
     for latent_idx, ax in enumerate(axes.flat):
         for region_idx, reg in enumerate(regs):
             idxs = np.where(reg_keys == region_idx)[0]
-            coupling_reg = coupling[idxs][latent_idx]
+            # print(len(idxs))
+            coupling_reg = coupling[idxs, latent_idx]
+            # print(len(coupling_reg))
             ax.hist(
                 coupling_reg,
                 color=data.colors_region[reg],
-                bins=np.linspace(-2.5, 2.5, 21),
+                bins=np.linspace(-12, 12, 25),
                 alpha=0.5,
                 label=reg,
             )
@@ -314,7 +335,14 @@ def plot_cweights_reg_hist(family, model, n_latents, mode="offset"):
         ax.set_xlabel("Coupling Weight")
         ax.set_ylabel("Frequency")
         ax.set_title(f"Latent {latent_idx + 1}")
-    fig.tight_layout()
+        fig.tight_layout()
+        if do_save:
+            from utils.paths import FIGURES_DIR
+
+            save_dir = FIGURES_DIR / "cweights"
+            fpath = save_dir / fname
+            fpath.parent.mkdir(parents=True, exist_ok=True)
+            fig.savefig(fpath, dpi=300, bbox_inches="tight")
 
 
 def plot_cweight_regs(
@@ -329,6 +357,7 @@ def plot_cweight_regs(
     ae=True,
     abort=True,
     do_save=False,
+    fname="",
     do_show=True,
 ):
     coupling = (
@@ -356,6 +385,7 @@ def plot_cweight_regs(
 
     for i, reg in enumerate(regs):
         idxs = np.where(reg_keys == i)[0]
+        idxs = idxs
         coupling_reg = coupling[idxs]
         ax.plot(
             coupling_reg[:, ax0],
@@ -378,10 +408,12 @@ def plot_cweight_regs(
     ax.legend()
     fig.tight_layout()
     if do_save:
-        raise NotImplementedError("Check the filepath.")
-        # fig.savefig(
-        #     f"figs/cweights/{data.subject_ids[subj_idx]}-{data.session_ids[subj_idx][sess_idx]}_{num_latents}latents-ax{ax0 + 1}-ax{ax1 + 1}.png"
-        # )
+        from utils.paths import FIGURES_DIR
+
+        save_dir = FIGURES_DIR / "cweights"
+        fpath = save_dir / fname
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(fpath, dpi=300, bbox_inches="tight")
     if do_show:
         fig.show()
 
@@ -449,7 +481,7 @@ def plot_cweights_regs_latent(
 def res_taskvar_corr(family, mode="taskvar", plot_res=True, plot_r2_dist=True):
     # family.eval()
 
-    robs = family.val_dl.dataset[:]["robs"]
+    robs = family.robs  # val_dl.dataset[:]["robs"]
     rhat = (
         family.res_taskvar["rhat"] if mode == "taskvar" else family.res_offset["rhat"]
     )
