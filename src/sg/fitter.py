@@ -72,6 +72,12 @@ class LVMFamily:
 
         self.n_latents_mult = kwargs.pop("n_latents_mult", 1)
         self.n_latents_addt = kwargs.pop("n_latents_addt", 1)
+
+        self.no_mult = self.n_latents_mult == 0
+        self.no_addt = self.n_latents_addt == 0
+        if self.no_mult and self.no_addt:
+            print("WOWZA. someone is feeling nihilistic. try again.")
+
         self.add_latent_noise = kwargs.pop("add_latent_noise", False)
 
         self.refit = kwargs.pop("refit", False)
@@ -89,9 +95,19 @@ class LVMFamily:
         self.get_cids()
         self.update_cids()
 
-        self.fit_ae_gain()
-        self.fit_ae_offset()
-        self.fit_ae_affine()
+        if not self.no_mult:
+            self.fit_ae_gain()
+        if not self.no_addt:
+            self.fit_ae_offset()
+        if not self.no_mult and not self.no_addt:
+            self.fit_ae_affine()
+        elif self.no_mult:
+            self.mod_ae_affine = self.mod_ae_offset
+        elif self.no_addt:
+            self.mod_ae_affine = self.mod_ae_gain
+        else:
+            print("BOOHOO something is catastrophically wrong")
+            return
 
         self.ae2lvm()
 
@@ -210,6 +226,8 @@ class LVMFamily:
         self.data_gd[:]["robs"] = self.data_gd[:]["robs"][:, self.cids]
         self.sample["robs"] = self.sample["robs"][:, self.cids]
         self.robs = self.robs[:, self.cids]
+
+        self.sample["reg_keys"] = self.sample["reg_keys"][self.cids]
 
         self.num_units = len(self.cids)
 
@@ -374,59 +392,68 @@ class LVMFamily:
         )
 
     def ae2lvm(self):
-        self.mod_gain = fit_gain_model(
-            tv_dims=self.num_tv,
-            mod1=self.mod_ae_gain,
-            num_units=self.num_units,
-            num_trials=self.num_trials,
-            cids=self.cids,
-            num_latent_mult=self.n_latents_mult,
-            num_latent_addt=self.n_latents_addt,
-            ntents=self.n_splines,
-            include_gain=True,
-            include_offset=False,
-            l2s=[self.reg["l2"]],
-            d2ts=self.d2ts,
-            train_dl=self.train_dl,
-            val_dl=self.val_dl,
-            max_iter=self.max_iter,
-        )
+        if not self.no_mult:
+            self.mod_gain = fit_gain_model(
+                tv_dims=self.num_tv,
+                mod1=self.mod_ae_gain,
+                num_units=self.num_units,
+                num_trials=self.num_trials,
+                cids=self.cids,
+                num_latent_mult=self.n_latents_mult,
+                num_latent_addt=self.n_latents_addt,
+                ntents=self.n_splines,
+                include_gain=True,
+                include_offset=False,
+                l2s=[self.reg["l2"]],
+                d2ts=self.d2ts,
+                train_dl=self.train_dl,
+                val_dl=self.val_dl,
+                max_iter=self.max_iter,
+            )
 
-        self.mod_offset = fit_gain_model(
-            tv_dims=self.num_tv,
-            mod1=self.mod_ae_offset,
-            num_units=self.num_units,
-            num_trials=self.num_trials,
-            cids=self.cids,
-            num_latent_mult=self.n_latents_mult,
-            num_latent_addt=self.n_latents_addt,
-            ntents=self.n_splines,
-            include_gain=False,
-            include_offset=True,
-            l2s=[self.reg["l2"]],
-            d2ts=self.d2ts,
-            train_dl=self.train_dl,
-            val_dl=self.val_dl,
-            max_iter=self.max_iter,
-        )
+        if not self.no_addt:
+            self.mod_offset = fit_gain_model(
+                tv_dims=self.num_tv,
+                mod1=self.mod_ae_offset,
+                num_units=self.num_units,
+                num_trials=self.num_trials,
+                cids=self.cids,
+                num_latent_mult=self.n_latents_mult,
+                num_latent_addt=self.n_latents_addt,
+                ntents=self.n_splines,
+                include_gain=False,
+                include_offset=True,
+                l2s=[self.reg["l2"]],
+                d2ts=self.d2ts,
+                train_dl=self.train_dl,
+                val_dl=self.val_dl,
+                max_iter=self.max_iter,
+            )
 
-        self.mod_affine = fit_gain_model(
-            tv_dims=self.num_tv,
-            mod1=self.mod_ae_affine,
-            num_units=self.num_units,
-            num_trials=self.num_trials,
-            cids=self.cids,
-            num_latent_mult=self.n_latents_mult,
-            num_latent_addt=self.n_latents_addt,
-            ntents=self.n_splines,
-            include_gain=True,
-            include_offset=True,
-            l2s=[self.reg["l2"]],
-            d2ts=self.d2ts,
-            train_dl=self.train_dl,
-            val_dl=self.val_dl,
-            max_iter=self.max_iter,
-        )
+        if not self.no_mult and not self.no_addt:
+            self.mod_affine = fit_gain_model(
+                tv_dims=self.num_tv,
+                mod1=self.mod_ae_affine,
+                num_units=self.num_units,
+                num_trials=self.num_trials,
+                cids=self.cids,
+                num_latent_mult=self.n_latents_mult,
+                num_latent_addt=self.n_latents_addt,
+                ntents=self.n_splines,
+                include_gain=True,
+                include_offset=True,
+                l2s=[self.reg["l2"]],
+                d2ts=self.d2ts,
+                train_dl=self.train_dl,
+                val_dl=self.val_dl,
+                max_iter=self.max_iter,
+            )
+        elif self.no_mult:
+            self.mod_affine = self.mod_offset
+        elif self.no_addt:
+            self.mod_affine = self.mod_gain
+        else:
+            print("KABOOM. The world exploded because you made a non sequitur.")
 
     def eval(self):
         # baseline
@@ -458,10 +485,14 @@ class LVMFamily:
         )
 
         # lvms
-        self.res_gain = eval_model(self.mod_gain, self.data_gd, self.test_dl.dataset)
-        self.res_offset = eval_model(
-            self.mod_offset, self.data_gd, self.test_dl.dataset
-        )
+        if not self.no_mult:
+            self.res_gain = eval_model(
+                self.mod_gain, self.data_gd, self.test_dl.dataset
+            )
+        if not self.no_addt:
+            self.res_offset = eval_model(
+                self.mod_offset, self.data_gd, self.test_dl.dataset
+            )
         self.res_affine = eval_model(
             self.mod_affine, self.data_gd, self.test_dl.dataset
         )
