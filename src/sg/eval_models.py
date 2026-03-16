@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import pickle
+from pathlib import Path
 from scipy.stats import spearmanr
 from sg.utils import spearmanr_vec
 
@@ -478,10 +480,266 @@ def plot_cweights_regs_latent(
                 )
 
 
-def res_taskvar_corr(family, mode="taskvar", plot_res=True, plot_r2_dist=True):
-    # family.eval()
+def plot_latent_corr(model, mode="gain"):
+    is_gain = mode == "gain" or mode == "affine"
+    is_offset = mode == "offset" or mode == "affine"
 
-    robs = family.robs  # val_dl.dataset[:]["robs"]
+    if not is_gain and not is_offset:
+        raise ValueError("valid arguments for mode are gain, offset, and affine")
+
+    X = []
+    if is_gain:
+        X.extend(model.gain_mu.get_weights().T)
+    if is_offset:
+        X.extend(model.offset_mu.get_weights().T)
+    X = np.array(X)
+
+    X = X - X.mean(axis=1, keepdims=True)
+    X = X / X.std(axis=1, keepdims=True)
+
+    corr = (X @ X.T) / X.shape[1]
+
+    plt.figure()
+    plt.imshow(corr, vmin=-1, vmax=1, cmap="PRGn")
+    plt.xticks(np.arange(corr.shape[0]), np.arange(corr.shape[0]) + 1)
+    plt.yticks(np.arange(corr.shape[0]), np.arange(corr.shape[0]) + 1)
+    plt.xlabel("Latents")
+    plt.ylabel("Latents")
+    plt.colorbar(label=r"$r$")
+    plt.tight_layout()
+    plt.show()
+
+
+def get_best_model(r2s, folder):
+    """
+    families = {}
+    for folder in folders:
+        families[folder] = get_best_model(folder)
+    """
+
+    m, a = np.where(r2s[folder] == np.max(r2s[folder]))
+    m = m[0]
+    a = a[0]
+
+    if m == 0 and a == 0:
+        return
+        # NOT IMPLEMENTED FOR NOW
+        return None
+    else:
+        with open(f"../vars/families/0312-lm/{folder}/family-m{m}a{a}.pkl", "rb") as f:
+            family = pickle.load(f)
+            family.eval()
+    return family
+
+
+def plot_strategy(families, folder):
+    """
+    folders = ["all", "ACC", "DMS", "M2", "DLS"]
+    r2s = {}
+    for f in folders:
+        r2s[f] = get_latent_r(folder=f)
+    """
+
+    family_ = families[folder]
+
+    if family_ is None:
+        return
+
+    mx_latents = max(family_.n_latents_mult, family_.n_latents_addt)
+    if family_.no_mult or family_.no_addt:
+        fig, axes = plt.subplots(
+            nrows=1, ncols=mx_latents, figsize=(1.5 * mx_latents, 1.5), squeeze=False
+        )
+    else:
+        fig, axes = plt.subplots(
+            nrows=2, ncols=mx_latents, figsize=(1.5 * mx_latents, 2.5)
+        )
+
+    if not family_.no_mult:
+        for m in range(family_.n_latents_mult):
+            ax = axes[0, m]
+            mf = family_.mod_affine.gain_mu.get_weights()[(family_.strategy == 0), 0]
+            mb = family_.mod_affine.gain_mu.get_weights()[(family_.strategy == 1), 0]
+            ax.hist(
+                mf, bins=np.linspace(-3, 3, 17), alpha=0.5, color="#222FA9", label="MF"
+            )
+            ax.hist(
+                mb, bins=np.linspace(-3, 3, 17), alpha=0.5, color="#E1A714", label="MB"
+            )
+            ax.set_title(f"M. Latent {m + 1}")
+            ax.legend()
+    if not family_.no_addt:
+        idx = 1 if not family_.no_mult else 0
+        for a in range(family_.n_latents_addt):
+            ax = axes[idx, a]
+            mf = family_.mod_affine.offset_mu.get_weights()[(family_.strategy == 0), 0]
+            mb = family_.mod_affine.offset_mu.get_weights()[(family_.strategy == 1), 0]
+            ax.hist(
+                mf, bins=np.linspace(-3, 3, 17), alpha=0.5, color="#222FA9", label="MF"
+            )
+            ax.hist(
+                mb, bins=np.linspace(-3, 3, 17), alpha=0.5, color="#E1A714", label="MB"
+            )
+            ax.set_title(f"A. Latent {a + 1}")
+            ax.legend()
+    fig.tight_layout()
+
+    from utils.paths import FIGURES_DIR
+
+    save_dir = FIGURES_DIR / "strategy_latent"
+    fname = Path("0312-lm") / f"strategy_latent_{folder}.png"
+    fpath = save_dir / fname
+    fpath.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(fpath, dpi=300, bbox_inches="tight")
+
+
+def plot_r2s_line(r2s, folder):
+    r2 = r2s[folder]
+
+    fig, axes = plt.subplots(nrows=2, ncols=6, figsize=(8, 2))
+
+    for m in range(6):
+        r2_slice = r2[m]
+        ax = axes[0, m]
+        ax.plot(r2_slice)
+        ax.set_xticks(np.arange(6))
+        ax.set_xlabel("# A. Latents")
+        ax.set_ylabel("$r$")
+        ax.set_title(f"{m} M. Latents")
+
+    for a in range(6):
+        r2_slice = r2[:, a]
+        ax = axes[1, a]
+        ax.plot(r2_slice)
+        ax.set_xticks(np.arange(6))
+        ax.set_xlabel("# M. Latents")
+        ax.set_ylabel("$r$")
+        ax.set_title(f"{a} A. Latents")
+    fig.tight_layout()
+
+    from utils.paths import FIGURES_DIR
+
+    save_dir = FIGURES_DIR / "r2s_latents"
+    fname = Path("0312-lm") / f"corr-line_{folder}.png"
+    fpath = save_dir / fname
+    fpath.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(fpath, dpi=300, bbox_inches="tight")
+
+
+def everything(family, folder):
+    if family is None:
+        return
+    if not family.no_mult:
+        plot_summary(
+            family,
+            model=family.mod_affine,
+            potato=family.strategy,
+            mode="gain",
+            save_fig=True,
+            fname=Path("0312-lm") / folder / "m-latents.png",
+        )
+    if not family.no_addt:
+        plot_summary(
+            family,
+            model=family.mod_affine,
+            potato=family.strategy,
+            mode="offset",
+            save_fig=True,
+            fname=Path("0312-lm") / folder / "a-latents.png",
+        )
+
+    M = family.n_latents_mult
+    if not family.no_mult:
+        if M == 1:
+            plot_cweights_reg_hist(
+                family,
+                family.mod_affine,
+                n_latents=M,
+                mode="gain",
+                do_save=True,
+                fname=Path("0312-lm") / folder / "cweights-m0.png",
+            )
+        else:
+            for ax0 in range(M):
+                for ax1 in range(M):
+                    if ax1 > ax0:
+                        _ = plot_cweight_regs(
+                            family,
+                            family.mod_affine,
+                            ax0=ax0,
+                            ax1=ax1,
+                            num_latents=M,
+                            mode="gain",
+                            do_save=True,
+                            fname=Path("0312-lm")
+                            / folder
+                            / f"cweights-m{ax0}m{ax1}.png",
+                        )
+    A = family.n_latents_addt
+    if not family.no_addt:
+        if A == 1:
+            plot_cweights_reg_hist(
+                family,
+                family.mod_affine,
+                n_latents=A,
+                mode="offset",
+                do_save=True,
+                fname=Path("0312-lm") / folder / "cweights-a0.png",
+            )
+        else:
+            for ax0 in range(A):
+                for ax1 in range(A):
+                    if ax1 > ax0:
+                        _ = plot_cweight_regs(
+                            family,
+                            family.mod_affine,
+                            ax0=ax0,
+                            ax1=ax1,
+                            num_latents=A,
+                            mode="offset",
+                            do_save=True,
+                            fname=Path("0312-lm")
+                            / folder
+                            / f"cweights-a{ax0}a{ax1}.png",
+                        )
+
+    model = family.mod_affine
+    if family.no_mult:
+        X = model.offset_mu.get_weights().T
+    elif family.no_addt:
+        X = model.gain_mu.get_weights().T
+    else:
+        X = np.concatenate(
+            (model.gain_mu.get_weights().T, model.offset_mu.get_weights().T)
+        )
+
+    X = X - X.mean(axis=1, keepdims=True)
+    X = X / X.std(axis=1, keepdims=True)
+
+    corr = (X @ X.T) / X.shape[1]
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(corr, vmin=-1, vmax=1, cmap="PRGn")
+    ax.set_xticks(np.arange(corr.shape[0]), np.arange(corr.shape[0]) + 1)
+    ax.set_yticks(np.arange(corr.shape[0]), np.arange(corr.shape[0]) + 1)
+    ax.set_xlabel("Latents")
+    ax.set_ylabel("Latents")
+    ax.set_title(f"{M} mult latents and {A} addt latents")
+    fig.colorbar(im, label=r"$r$")
+    fig.tight_layout()
+    fig.show()
+
+    from utils.paths import FIGURES_DIR
+
+    save_dir = FIGURES_DIR / "latent_corr"
+    fname = Path("0312-lm") / folder / "latent_corr.png"
+    fpath = save_dir / fname
+    fpath.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(fpath, dpi=300, bbox_inches="tight")
+
+
+def res_taskvar_corr(family, mode="taskvar", plot_res=True, plot_r2_dist=True):
+    robs = family.robs
     rhat = (
         family.res_taskvar["rhat"] if mode == "taskvar" else family.res_offset["rhat"]
     )
