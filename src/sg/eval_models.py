@@ -6,6 +6,10 @@ from pathlib import Path
 from scipy.stats import spearmanr
 from sg.utils import spearmanr_vec
 
+from sg.fitlvm_utils import eval_model
+
+from copy import deepcopy
+
 from sg import data
 
 
@@ -97,8 +101,6 @@ def plot_summary(
         fpath = save_dir / fname
         fpath.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(fpath, dpi=300, bbox_inches="tight")
-
-    fig.show()
 
 
 def get_num_latents(das, subj_idx, sess_idx, is_msess=True, ae=True, do_plot=False):
@@ -304,7 +306,7 @@ def plot_latents(das, num_latents, ae=True, mult=True):
     plt.legend()
 
 
-def plot_cweights_reg_hist(
+def plot_cweights_regions_hist(
     family, model, n_latents, mode="offset", do_save=False, fname=""
 ):
     """
@@ -351,7 +353,7 @@ def plot_cweights_reg_hist(
             fig.savefig(fpath, dpi=300, bbox_inches="tight")
 
 
-def plot_cweight_regs(
+def plot_cweight_regions(
     family,
     model,
     ax0,
@@ -424,7 +426,7 @@ def plot_cweight_regs(
         fig.show()
 
 
-def plot_cweights_regs_sess(
+def plot_cweights_regions_sess(
     das,
     subj_idx,
     sess_idx,
@@ -437,7 +439,7 @@ def plot_cweights_regs_sess(
     do_show=True,
 ):
     for latents in range(num_latents):
-        plot_cweights_regs_latent(
+        plot_cweights_regions_latent(
             das,
             latents,
             subj_idx,
@@ -451,7 +453,7 @@ def plot_cweights_regs_sess(
         )
 
 
-def plot_cweights_regs_latent(
+def plot_cweights_regions_latent(
     das,
     num_latents,
     subj_idx,
@@ -467,7 +469,7 @@ def plot_cweights_regs_latent(
     for ax0 in range(num_latents):
         for ax1 in range(num_latents):
             if ax0 < ax1:
-                plot_cweight_regs(
+                plot_cweight_regions(
                     das,
                     ax0,
                     ax1,
@@ -488,7 +490,7 @@ def plot_cweights_mult(family):
     M = family.n_latents_mult
     if not family.no_mult:
         if M == 1:
-            plot_cweights_reg_hist(
+            plot_cweights_regions_hist(
                 family,
                 family.mod_affine,
                 n_latents=M,
@@ -498,13 +500,14 @@ def plot_cweights_mult(family):
             for ax0 in range(M):
                 for ax1 in range(M):
                     if ax1 > ax0:
-                        _ = plot_cweight_regs(
+                        _ = plot_cweight_regions(
                             family,
                             family.mod_affine,
                             ax0=ax0,
                             ax1=ax1,
                             num_latents=M,
                             mode="gain",
+                            do_show=False,
                         )
 
 
@@ -679,7 +682,7 @@ def everything(family, folder):
     M = family.n_latents_mult
     if not family.no_mult:
         if M == 1:
-            plot_cweights_reg_hist(
+            plot_cweights_regions_hist(
                 family,
                 family.mod_affine,
                 n_latents=M,
@@ -691,7 +694,7 @@ def everything(family, folder):
             for ax0 in range(M):
                 for ax1 in range(M):
                     if ax1 > ax0:
-                        _ = plot_cweight_regs(
+                        _ = plot_cweight_regions(
                             family,
                             family.mod_affine,
                             ax0=ax0,
@@ -706,7 +709,7 @@ def everything(family, folder):
     A = family.n_latents_addt
     if not family.no_addt:
         if A == 1:
-            plot_cweights_reg_hist(
+            plot_cweights_regions_hist(
                 family,
                 family.mod_affine,
                 n_latents=A,
@@ -718,7 +721,7 @@ def everything(family, folder):
             for ax0 in range(A):
                 for ax1 in range(A):
                     if ax1 > ax0:
-                        _ = plot_cweight_regs(
+                        _ = plot_cweight_regions(
                             family,
                             family.mod_affine,
                             ax0=ax0,
@@ -766,12 +769,26 @@ def everything(family, folder):
     fig.savefig(fpath, dpi=300, bbox_inches="tight")
 
 
-def res_taskvar_corr(family, mode="taskvar", plot_res=True, plot_r2_dist=True):
+def get_res(family, mode="taskvar"):
     robs = family.robs
-    rhat = (
-        family.res_taskvar["rhat"] if mode == "taskvar" else family.res_offset["rhat"]
-    )
+    if mode == "taskvar":
+        rhat = family.res_taskvar["rhat"]
+    elif mode == "taskvar_latent":
+        mod_offset = deepcopy(family.mod_offset)
+        mod_offset.readout_offset.weight.data[:] = 0
+        res_offset = eval_model(mod_offset, family.data_gd, family.test_dl.dataset)
+
+        rhat = res_offset["rhat"]
+    elif mode == "latent":
+        rhat = family.res_offset["rhat"]
+    else:
+        raise ValueError("valid modes are taskvar, taskvar_latent, and latent")
     res = robs - rhat
+    return res
+
+
+def res_taskvar_corr(family, mode="taskvar", plot_res=True, plot_r2_dist=True):
+    res = get_res(family, mode)
 
     block_side = family.block_side
     choice = family.response
@@ -823,83 +840,3 @@ def res_taskvar_corr(family, mode="taskvar", plot_res=True, plot_r2_dist=True):
         plt.title("Reward")
         plt.tight_layout()
         plt.show()
-
-
-"""def plot_cweight_regs(
-    das,
-    ax0,
-    ax1,
-    num_latents,
-    subj_idx,
-    sess_idx,
-    is_mult=True,
-    is_msess=False,
-    use_das=False,
-    ae=True,
-    abort=True,
-    do_save=False,
-    do_show=True,
-):
-    if use_das:
-        das_ = das
-    else:
-        das_ = das[subj_idx][sess_idx][num_latents] if is_msess else das[num_latents]
-    model_str = "affineae" if ae else "affine"
-
-    cids = das_[model_str]["model"].cids
-    coupling = (
-        das_[model_str]["model"].readout_gain.weight.data[:].T
-        if is_mult
-        else das["affine"]["model"].readout_offset.weight.data[:].T
-    )
-
-    regs = das_["data"]["regions"]
-    reg_keys = das_["data"]["reg_keys"][cids]
-
-    if abort and all(
-        [
-            all(
-                coupling[np.where(reg_keys == i)[0], ax0]
-                == coupling[np.where(reg_keys == i)[0], ax1]
-            )
-            for i in reg_keys
-        ]
-    ):
-        print(f"Latent {ax0 + 1} and Latent {ax1 + 1} are equal, aborting")
-        return
-
-    fig, ax = plt.subplots(figsize=(3, 3))
-
-    for i, reg in enumerate(regs):
-        idxs = np.where(reg_keys == i)[0]
-        coupling_reg = coupling[idxs]
-        ax.plot(
-            coupling_reg[:, ax0],
-            coupling_reg[:, ax1],
-            data.markers_region[reg],
-            color=data.colors_region[reg],
-            label=reg,
-        )
-        # ax.axhline(torch.mean(coupling_reg), color=colors[i], linewidth=0.3, linestyle='--')
-
-    ax.axhline(0, color="k", linewidth=0.5, linestyle="--")
-    ax.axvline(0, color="k", linewidth=0.5, linestyle="--")
-    ax.set_xlabel(f"Latent {ax0 + 1}")
-    ax.set_ylabel(f"Latent {ax1 + 1}")
-    fig.suptitle(
-        f"{data.subject_ids[subj_idx]}, {data.session_ids[subj_idx][sess_idx]}; Total # Latents: {num_latents}"
-    )
-
-    # ax.set_ylim([-0.5,0.5])
-    # ax.set_xlim([-0.5,0.5])
-
-    ax.legend()
-    fig.tight_layout()
-    if do_save:
-        fig.savefig(
-            f"figs/cweights/{data.subject_ids[subj_idx]}-{data.session_ids[subj_idx][sess_idx]}_{num_latents}latents-ax{ax0 + 1}-ax{ax1 + 1}.png"
-        )
-    if do_show:
-        fig.show()
-    return
-"""

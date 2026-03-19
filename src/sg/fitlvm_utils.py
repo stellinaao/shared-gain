@@ -120,8 +120,8 @@ def get_dataset_dm(
     # print(mad)
 
     # filter for good units
-    # good = np.mean(dfs, axis=0) > .8
-    # if verbosity>0: print("good units %d" %np.sum(good))
+    # good = np.mean(dfs, axis=0) == 1 # at least 80% of the trials were good
+    # print(f"good units {np.sum(good)}/{len(good)}")
     # robs = robs[:,good]
     # dfs = dfs[:,good]
     dfs = np.ones_like(dfs)
@@ -158,6 +158,25 @@ def get_dataset_dm(
     # data_df = pd.DataFrame(data)
 
     return data_gd, data_dict
+
+
+def get_potato_and_tuber(family):
+    phase = np.pi / 3
+    phi = np.sqrt(2)
+    t = family.psths["DMS"].shape[1]
+
+    potato = 2 * np.sin(np.arange(t)) + 0.5 * np.cos(np.arange(t)) + 2.5
+
+    tuber = (
+        np.sin(phi * np.arange(t) / 2 + phase) ** 2
+        + 2
+        * (0.7 * (np.cos(np.arange(t) / 2 + phase + (np.pi / 2)) + 1) ** 0.75)
+        * 0.5
+        * np.sin(np.arange(t) / 2) ** 3
+        + 2
+    )
+
+    return potato, tuber
 
 
 # MODELING
