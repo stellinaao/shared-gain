@@ -3,6 +3,10 @@ import numpy as np
 import torch
 import pickle
 from pathlib import Path
+
+from sklearn.svm import SVC
+from sklearn.model_selection import cross_val_score
+
 from scipy.stats import spearmanr
 from sg.utils import spearmanr_vec
 
@@ -126,6 +130,70 @@ def get_num_latents(das, subj_idx, sess_idx, is_msess=True, ae=True, do_plot=Fal
         plot_r2_latents_diff(das, subj_idx, sess_idx, is_msess, ae)
 
     return np.where(d < 0.01)[0][0]
+
+
+# latent decoding
+def latent_decoding(family, y=None, model="affine", mode="both", cv=20):
+
+    if model == "affine":
+        model = family.mod_affine
+    elif model == "single":
+        if mode == "gain":
+            model = family.mod_gain
+        elif mode == "offset":
+            model = family.mod_offset
+        elif mode == "both":
+            raise ValueError("model cannot be single yet request both gain and offset")
+    else:
+        raise ValueError("accepted values for model are 'affine' and 'single.'")
+
+    do_gain = mode == "gain" or mode == "both"
+    do_offset = mode == "offset" or mode == "both"
+
+    X = []
+    if do_gain:
+        X.append(model.gain_mu.get_weights())
+    if do_offset:
+        X.append(model.offset_mu.get_weights())
+    X = np.hstack(X)
+
+    X_taskvar = np.array([family.response, family.rewarded, family.block_side]).T
+
+    if y is None:
+        y = family.strategy
+
+    # check that dimensions match
+    assert X.shape[0] == y.shape[0] == family.num_trials, (
+        "First dimension of X or y is not equal to the number of trials."
+    )
+    assert X_taskvar.shape[0] == y.shape[0] == family.num_trials, (
+        "First dimension of X_taskvar is not equal to the number of trials."
+    )
+
+    scores = {
+        "latent": cross_val_score(
+            SVC(random_state=1234), X, y, cv=cv, scoring="balanced_accuracy"
+        ),
+        "latent_shuffle": cross_val_score(
+            SVC(random_state=1234),
+            X,
+            y.sample(frac=1),
+            cv=cv,
+            scoring="balanced_accuracy",
+        ),
+        "taskvar": cross_val_score(
+            SVC(random_state=1234), X_taskvar, y, cv=cv, scoring="balanced_accuracy"
+        ),
+        "taskvar_shuffle": cross_val_score(
+            SVC(random_state=1234),
+            X_taskvar,
+            y.sample(frac=1),
+            cv=cv,
+            scoring="balanced_accuracy",
+        ),
+    }
+
+    return scores
 
 
 # Unit R2s
