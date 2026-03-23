@@ -139,6 +139,8 @@ class LVMFamily:
         self.strategy = self.trial_data["is_mb"]
         self.rewarded = self.trial_data["rewarded"]
         self.response = self.trial_data["response"]
+        self.rewarded_prev = self.trial_data["rewarded_prev"]
+        self.response_prev = self.trial_data["response_prev"]
         self.block_side = self.trial_data["block_side"]
 
         (

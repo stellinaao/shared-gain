@@ -133,6 +133,34 @@ def get_num_latents(das, subj_idx, sess_idx, is_msess=True, ae=True, do_plot=Fal
 
 
 # latent decoding
+
+
+def get_latent_decoding_scores(X, X_taskvar, y, cv):
+    scores = {
+        "latent": cross_val_score(
+            SVC(random_state=1234), X, y, cv=cv, scoring="balanced_accuracy"
+        ),
+        "latent_shuffle": cross_val_score(
+            SVC(random_state=1234),
+            X,
+            y.sample(frac=1),
+            cv=cv,
+            scoring="balanced_accuracy",
+        ),
+        "taskvar": cross_val_score(
+            SVC(random_state=1234), X_taskvar, y, cv=cv, scoring="balanced_accuracy"
+        ),
+        "taskvar_shuffle": cross_val_score(
+            SVC(random_state=1234),
+            X_taskvar,
+            y.sample(frac=1),
+            cv=cv,
+            scoring="balanced_accuracy",
+        ),
+    }
+    return scores
+
+
 def latent_decoding(family, y=None, model="affine", mode="both", cv=20):
 
     if model == "affine":
@@ -157,7 +185,15 @@ def latent_decoding(family, y=None, model="affine", mode="both", cv=20):
         X.append(model.offset_mu.get_weights())
     X = np.hstack(X)
 
-    X_taskvar = np.array([family.response, family.rewarded, family.block_side]).T
+    X_taskvar = np.array(
+        [
+            family.response,
+            family.rewarded,
+            family.block_side,
+            family.response_prev,
+            family.rewarded_prev,
+        ]
+    ).T
 
     if y is None:
         y = family.strategy
@@ -170,30 +206,25 @@ def latent_decoding(family, y=None, model="affine", mode="both", cv=20):
         "First dimension of X_taskvar is not equal to the number of trials."
     )
 
+    scores_all = get_latent_decoding_scores(X, X_taskvar, y, cv)
+
     scores = {
-        "latent": cross_val_score(
-            SVC(random_state=1234), X, y, cv=cv, scoring="balanced_accuracy"
-        ),
-        "latent_shuffle": cross_val_score(
-            SVC(random_state=1234),
-            X,
-            y.sample(frac=1),
-            cv=cv,
-            scoring="balanced_accuracy",
-        ),
-        "taskvar": cross_val_score(
-            SVC(random_state=1234), X_taskvar, y, cv=cv, scoring="balanced_accuracy"
-        ),
-        "taskvar_shuffle": cross_val_score(
-            SVC(random_state=1234),
-            X_taskvar,
-            y.sample(frac=1),
-            cv=cv,
-            scoring="balanced_accuracy",
-        ),
+        "all": scores_all,
     }
 
+    n_latents = X.shape[1]
+    for i in range(n_latents):
+        scores[f"l{i}"] = get_latent_decoding_scores(X[:, i, None], X_taskvar, y, cv)
+
     return scores
+
+
+def get_scores_mean(scores):
+    scores_mean = {
+        k_: {k: s.mean().round(3).item() for k, s in scores_.items()}
+        for k_, scores_ in scores.items()
+    }
+    return scores_mean
 
 
 # Unit R2s
