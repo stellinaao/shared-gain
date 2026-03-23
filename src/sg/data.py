@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import shutup
-import spks.event_aligned as ea
 from spks.utils import get_cluster_spike_times, binary_spikes
+from damn.alignment import compute_spike_count
 
 shutup.please()
 
@@ -309,7 +309,9 @@ def get_psths(
             # dimensions will be cells x trials x time
             psths[region] = np.squeeze(
                 [
-                    ea.compute_firing_rate(choice_ts, unit, tpre, tpost, binwidth_ms)[0]
+                    compute_spike_count(
+                        choice_ts, unit, tpre, tpost, binwidth_ms / 1000
+                    )[0]
                     for unit in unit_spike_times[region]
                 ]
             )
@@ -317,16 +319,16 @@ def get_psths(
             if get_strategy:
                 psths_mb[region] = np.squeeze(
                     [
-                        ea.compute_firing_rate(
-                            choice_ts.loc[mb_idx], unit, tpre, tpost, binwidth_ms
+                        compute_spike_count(
+                            choice_ts.loc[mb_idx], unit, tpre, tpost, binwidth_ms / 1000
                         )[0]
                         for unit in unit_spike_times[region]
                     ]
                 )
                 psths_mf[region] = np.squeeze(
                     [
-                        ea.compute_firing_rate(
-                            choice_ts.loc[mf_idx], unit, tpre, tpost, binwidth_ms
+                        compute_spike_count(
+                            choice_ts.loc[mf_idx], unit, tpre, tpost, binwidth_ms / 1000
                         )[0]
                         for unit in unit_spike_times[region]
                     ]
@@ -346,19 +348,6 @@ def get_psths(
         return NotImplementedError(
             f"ERROR: not yet implemented for alignment {alignment}"
         )
-
-
-def rem_zstd(psths_all, regions):
-    units_to_rem = get_zstd_units(psths_all, regions)
-
-    for i in range(len(psths_all)):
-        for region in regions:
-            # print(f"> {len(units_to_rem[region])}")
-            psths_all[i][region] = np.delete(
-                psths_all[i][region], units_to_rem[region], axis=0
-            )
-
-    return psths_all
 
 
 def get_zstd_units(psths_all, regions):
@@ -389,108 +378,97 @@ def get_zstd_units(psths_all, regions):
     return units_to_rem
 
 
-def plot_psths(psths, region, nrows=5, ncols=5, pre=2, binwidth_ms=50):
-    np.random.seed(0)
-    bins_per_sec = 1000 / binwidth_ms
+def rem_zstd(psths_all, regions):
+    units_to_rem = get_zstd_units(psths_all, regions)
 
-    fig, axes = plt.subplots(
-        nrows=5,
-        ncols=5,
-        figsize=(2 * 5, 2 * 5),
-    )
-    idxs = np.random.choice(len(psths[region]), size=nrows * ncols)
+    for i in range(len(psths_all)):
+        for region in regions:
+            # print(f"> {len(units_to_rem[region])}")
+            psths_all[i][region] = np.delete(
+                psths_all[i][region], units_to_rem[region], axis=0
+            )
 
-    for i, ax in enumerate(axes.flat):
-        ax.plot(np.mean(psths[region][idxs[i]], axis=0), c="#333333")
-        ax.axvline(x=(bins_per_sec * pre), c="#6366FF", linestyle="--")
-        tick_positions = ax.get_xticks()
-        tick_labels = [
-            f"{((pos) - (bins_per_sec * pre)) / (bins_per_sec)}"
-            for pos in tick_positions
-        ]
-
-        ax.set_xticks(tick_positions)
-        ax.set_xticklabels(tick_labels)
-        ax.set_xlabel("Time (s)")
-        ax.set_title(f"Unit {idxs[i]}")
-
-        # ax.set_xticklabels([]); ax.set_xticks([], []); ax.set_yticklabels([]); ax.set_yticks([], [])
-    fig.suptitle(f"{region} Sample Unit PSTHs")
-    plt.tight_layout()
+    return psths_all
 
 
-def get_psths_lr(psths, trial_data, region, pre=2, post=2, binsize_ms=50):
-    mask_resp = ~np.isnan(
-        trial_data["response_time"]
-    )  # account for trials where there was no response
-    mask_reward = trial_data["rewarded"]
+# get conditional psths/choice timestamps
+def get_psths_cond(psths, trial_data, trial_mask, mode="both"):
+    if mode == "both":
+        psths_cond = {
+            "left_corr": psths[
+                :,
+                (trial_data[trial_mask]["response"] == 1)
+                & (trial_data[trial_mask]["rewarded"] == 1),
+            ],
+            "right_corr": psths[
+                :,
+                (trial_data[trial_mask]["response"] == -1)
+                & (trial_data[trial_mask]["rewarded"] == 1),
+            ],
+            "left_incorr": psths[
+                :,
+                (trial_data[trial_mask]["response"] == 1)
+                & (trial_data[trial_mask]["rewarded"] == 0),
+            ],
+            "right_incorr": psths[
+                :,
+                (trial_data[trial_mask]["response"] == -1)
+                & (trial_data[trial_mask]["rewarded"] == 0),
+            ],
+        }
+    elif mode == "response":
+        psths_cond = {
+            "left": psths[:, (trial_data[trial_mask]["response"] == 1)],
+            "right": psths[:, (trial_data[trial_mask]["response"] == -1)],
+        }
+    elif mode == "rewarded":
+        psths_cond = {
+            "corr": psths[:, (trial_data[trial_mask]["rewarded"] == 1)],
+            "incorr": psths[:, (trial_data[trial_mask]["rewarded"] == 0)],
+        }
+    else:
+        raise NotImplementedError(
+            "valid arguments for mode are 'response,' 'rewarded,' and 'both.'"
+        )
+    return psths_cond
 
-    mask = (mask_resp) & (mask_reward)
-    idxs = np.where(mask)[0]
 
-    # use idx when querying the trial (and note the symmetry between np.where to get the idx and iloc when using the idx)
-    # but, you want the index of the idx when querying psths, becuase psths has already filtered for idxs only
-    l_idx = [
-        i
-        for i, idx in enumerate(idxs)
-        if trial_data["rewarded_side"].iloc[idx] == "left"
-    ]  # this is correct, just think about it for five minutes
-    r_idx = [
-        i
-        for i, idx in enumerate(idxs)
-        if trial_data["rewarded_side"].iloc[idx] == "right"
-    ]
+def get_choice_ts(trial_data, mode="both"):
+    lc_mask = (trial_data.response == 1) & (trial_data.rewarded)
+    rc_mask = (trial_data.response == -1) & (trial_data.rewarded)
+    li_mask = (trial_data.response == 1) & (~trial_data.rewarded)
+    ri_mask = (trial_data.response == -1) & (~trial_data.rewarded)
 
-    psth = np.mean(psths[region], axis=1)
-    psth_l = np.mean(psths[region][:, l_idx], axis=1)
-    psth_r = np.mean(psths[region][:, r_idx], axis=1)
-
-    psth_std_l = np.std(psths[region][:, l_idx], axis=1)
-    psth_std_r = np.std(psths[region][:, r_idx], axis=1)
-
-    return psth, psth_l, psth_r, psth_std_l, psth_std_r
-
-
-def plot_grand_cond_avg(psths, trial_data, region, pre=2, post=2, binsize_ms=50):
-    mask_resp = ~np.isnan(
-        trial_data["response_time"]
-    )  # account for trials where there was no response
-    mask_reward = trial_data["rewarded"]
-
-    mask = (mask_resp) & (mask_reward)
-    idxs = np.where(mask)[0]
-    l_idx = [
-        i for i, idx in enumerate(idxs) if trial_data["rewarded_side"][idx] == "left"
-    ]
-    r_idx = [
-        i for i, idx in enumerate(idxs) if trial_data["rewarded_side"][idx] == "right"
-    ]
-
-    psth = np.mean(psths, axis=0)
-    psth_l = np.mean(psths[l_idx], axis=0)
-    psth_r = np.mean(psths[r_idx], axis=0)
-
-    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(9, 3))
-    axes[0].plot(psth)
-    axes[0].axvline((pre * 1000 / binsize_ms) + 0.5, c="k", linestyle="--")
-    axes[0].set_xticks(np.linspace(0, len(psth) + 1, 5), np.linspace(-pre, post, 5))
-    axes[0].set_xlabel("Time (s)")
-    axes[0].set_title("Grand Average")
-
-    axes[1].plot(psth_l)
-    axes[1].axvline((pre * 1000 / binsize_ms) + 0.5, c="k", linestyle="--")
-    axes[1].set_xticks(np.linspace(0, len(psth) + 1, 5), np.linspace(-pre, post, 5))
-    axes[1].set_xlabel("Time (s)")
-    axes[1].set_title(f"Left Choice (n={len(l_idx)})")
-
-    axes[2].plot(psth_r)
-    axes[2].axvline((pre * 1000 / binsize_ms) + 0.5, c="k", linestyle="--")
-    axes[2].set_xticks(np.linspace(0, len(psth) + 1, 5), np.linspace(-pre, post, 5))
-    axes[2].set_xlabel("Time (s)")
-    axes[2].set_title(f"Right Choice (n={len(r_idx)})")
-
-    fig.suptitle(f"{region}")
-    plt.show()
+    if mode == "both":
+        choice_ts = {
+            "left_corr": trial_data[lc_mask]["task_start_time"]
+            + trial_data[lc_mask]["response_time"],
+            "right_corr": trial_data[rc_mask]["task_start_time"]
+            + trial_data[rc_mask]["response_time"],
+            "left_incorr": trial_data[li_mask]["task_start_time"]
+            + trial_data[li_mask]["response_time"],
+            "right_incorr": trial_data[ri_mask]["task_start_time"]
+            + trial_data[ri_mask]["response_time"],
+        }
+    elif mode == "response":
+        choice_ts = {
+            "left": trial_data[(lc_mask) or (li_mask)]["task_start_time"]
+            + trial_data[(lc_mask) or (li_mask)]["response_time"],
+            "right": trial_data[(rc_mask) or (ri_mask)]["task_start_time"]
+            + trial_data[(rc_mask) or (ri_mask)]["response_time"],
+        }
+    elif mode == "rewarded":
+        choice_ts = {
+            "corr": trial_data[(lc_mask) or (rc_mask)]["task_start_time"]
+            + trial_data[(lc_mask) or (rc_mask)]["response_time"],
+            "incorr": trial_data[(li_mask) or (ri_mask)]["task_start_time"]
+            + trial_data[(li_mask) or (ri_mask)]["response_time"],
+        }
+    else:
+        raise NotImplementedError(
+            "valid arguments for mode are 'response,' 'rewarded,' and 'both.'"
+        )
+    return choice_ts
 
 
 # BALANCING
