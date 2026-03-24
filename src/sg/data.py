@@ -3,30 +3,29 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import re
+import os
 import shutup
 from spks.utils import get_cluster_spike_times, binary_spikes
 from damn.alignment import compute_spike_count
+from utils.paths import PROJECT_ROOT
 
 shutup.please()
 
 # CONSTANTS
-subject_ids = ["MM012", "MM013"]
+session_pattern = re.compile(r"^\d{8}_\d{6}$")
+subject_ids = np.array(
+    [subj_id for subj_id in os.listdir(PROJECT_ROOT.parent / "data-np")]
+)
 session_ids = [
     [
-        "20231211_172819",
-        "20231218_170114",
-        "20231221_134112",
-        "20231222_145357",
-        "20231225_123125",
-    ],
-    [
-        "20231218_175023",
-        "20231220_142345",
-        "20231222_141517",
-        "20231225_130825",
-        "20231227_132538",
-    ],
+        sess_id
+        for sess_id in os.listdir(PROJECT_ROOT.parent / "data-np" / subj_id)
+        if session_pattern.match(sess_id)
+    ]
+    for subj_id in subject_ids
 ]
+
 probes = ["imec0", "imec1"]
 bin_size = 0.001  # s
 colors_model = {
@@ -122,46 +121,115 @@ def load_subj(subj_idx, thresh=1):
     return trial_data_r, trial_data, session_data, unit_spike_times, regions
 
 
-def load_sess(subj_idx, sess_idx, bin_size=0.001, thresh=1):
-    # load data and set variables needed for aligning spikes to behavioral events
-    _, _, trial_data_r, neural_data, animal_data, session_data = load_data_sess(
-        subj_idx=subj_idx, sess_idx=sess_idx
-    )
-    spike_clusters, spike_times, _, _, _, regions = get_align_vars(
-        neural_data, animal_data
-    )
-    unit_spike_times = get_unit_spike_times(
-        spike_times, spike_clusters, neural_data, regions
-    )
-    regions = np.concatenate(regions)
+def load_sess(
+    subj_id=None,
+    sess_id=None,
+    subj_idx=None,
+    sess_idx=None,
+    bin_size=0.001,
+    thresh=1,
+    mode="new",
+):
+    if mode == "new":
+        if (subj_id is None and subj_idx is None) or (
+            sess_id is None and sess_idx is None
+        ):
+            raise ValueError("wow all nones?! try again bucko.")
+        else:
+            if subj_id is None:
+                subj_id = subject_ids[subj_idx]
+            if sess_id is None:
+                if subj_idx is None:
+                    subj_idx = np.where(subject_ids == subj_id)[0][0]
+                sess_id = session_ids[subj_idx][sess_idx]
+        print(subj_id, sess_id)
+        fpath = PROJECT_ROOT.parent / "data-np" / subj_id / sess_id
+        fpath.exists()
 
-    trial_dur_s = int(
-        np.ceil(
-            np.max(
-                [
-                    max(unit_spike_times_reg)
-                    for reg in regions
-                    for unit_spike_times_reg in unit_spike_times[reg]
-                ]
-            )
+        neural_data = pd.read_pickle(fpath / "neural_data.pkl")
+
+        unit_spike_times = {
+            region: values["spike_times"] for region, values in neural_data.items()
+        }
+        session_data = pd.read_pickle(fpath / "session_data.pkl")
+        trial_data = pd.read_csv(fpath / "trialdata.csv")
+        regions = neural_data.keys()
+
+        trial_data["trial_start_time"] = session_data["events"].iloc[
+            np.where(np.array(session_data["event_labels"]) == "trial_start")[0][0]
+        ]["event_timestamps"]
+        trial_data["block_side"] = np.where(
+            trial_data["current_block_side"] == "left", 1, -1
         )
-    )  # s
-    trial_dur_ms = trial_dur_s * (1 / bin_size)  # ms
 
-    trial_data = add_prev(trial_data_r)
-    trial_data = add_strat(trial_data, session_data)
+        trial_dur_s = int(
+            np.ceil(
+                np.max(
+                    [
+                        max(unit_spike_times_reg)
+                        for reg in regions
+                        for unit_spike_times_reg in unit_spike_times[reg]
+                    ]
+                )
+            )
+        )  # s
+        trial_dur_ms = trial_dur_s * (1 / bin_size)  # ms
 
-    # trial_data_choice = trial_data[~(trial_data['response']==0) & ~(trial_data['response_prev']==0)]
-    # trial_data_choice = trial_data[~(trial_data['response']==0)] # filter for choice made only
+        trial_data = add_prev(trial_data)
+        trial_data = add_strat(trial_data, session_data)
 
-    unit_spike_times_lite = rem_low_fr(
-        unit_spike_times, trial_dur_ms=trial_dur_ms, thresh=thresh
-    )  # remove low fr
+        # trial_data_choice = trial_data[~(trial_data['response']==0) & ~(trial_data['response_prev']==0)]
+        # trial_data_choice = trial_data[~(trial_data['response']==0)] # filter for choice made only
 
-    return trial_data_r, trial_data, session_data, unit_spike_times_lite, regions
+        unit_spike_times = rem_low_fr(
+            unit_spike_times, trial_dur_ms=trial_dur_ms, thresh=thresh
+        )
+
+        return unit_spike_times, trial_data, session_data, regions
+    elif mode == "old":
+        # load data and set variables needed for aligning spikes to behavioral events
+        _, _, trial_data_r, neural_data, animal_data, session_data = load_data_sess(
+            subj_idx=subj_idx, sess_idx=sess_idx
+        )
+        spike_clusters, spike_times, _, _, _, regions = get_align_vars(
+            neural_data, animal_data
+        )
+        unit_spike_times = get_unit_spike_times(
+            spike_times, spike_clusters, neural_data, regions
+        )
+        regions = np.concatenate(regions)
+
+        trial_dur_s = int(
+            np.ceil(
+                np.max(
+                    [
+                        max(unit_spike_times_reg)
+                        for reg in regions
+                        for unit_spike_times_reg in unit_spike_times[reg]
+                    ]
+                )
+            )
+        )  # s
+        trial_dur_ms = trial_dur_s * (1 / bin_size)  # ms
+
+        trial_data = add_prev(trial_data_r)
+        trial_data = add_strat(trial_data, session_data)
+
+        # trial_data_choice = trial_data[~(trial_data['response']==0) & ~(trial_data['response_prev']==0)]
+        # trial_data_choice = trial_data[~(trial_data['response']==0)] # filter for choice made only
+
+        unit_spike_times_lite = rem_low_fr(
+            unit_spike_times, trial_dur_ms=trial_dur_ms, thresh=thresh
+        )  # remove low fr
+
+        return trial_data_r, trial_data, session_data, unit_spike_times_lite, regions
+    else:
+        raise ValueError("valid values for mode are 'old' and 'new.'")
 
 
-def load_data_sess(subj_idx, sess_idx):
+def load_data_sess(
+    subj_id=None, sess_id=None, subj_idx=None, sess_idx=None, mode="new"
+):
     fpath_data = (
         f"../../data-np/{subject_ids[subj_idx]}/{session_ids[subj_idx][sess_idx]}"
     )
@@ -277,7 +345,7 @@ def get_psths(
         ].index  # np.where(mask)[0] if 'response_prev' not in trial_data.columns else np.where(mask)[0] + 1
 
         choice_ts = (
-            trial_data["task_start_time"][mask] + trial_data["response_time"][mask]
+            trial_data["trial_start_time"][mask] + trial_data["response_time"][mask]
         )  # s
 
         if get_strategy:
@@ -441,28 +509,28 @@ def get_choice_ts(trial_data, mode="both"):
 
     if mode == "both":
         choice_ts = {
-            "left_corr": trial_data[lc_mask]["task_start_time"]
+            "left_corr": trial_data[lc_mask]["trial_start_time"]
             + trial_data[lc_mask]["response_time"],
-            "right_corr": trial_data[rc_mask]["task_start_time"]
+            "right_corr": trial_data[rc_mask]["trial_start_time"]
             + trial_data[rc_mask]["response_time"],
-            "left_incorr": trial_data[li_mask]["task_start_time"]
+            "left_incorr": trial_data[li_mask]["trial_start_time"]
             + trial_data[li_mask]["response_time"],
-            "right_incorr": trial_data[ri_mask]["task_start_time"]
+            "right_incorr": trial_data[ri_mask]["trial_start_time"]
             + trial_data[ri_mask]["response_time"],
         }
     elif mode == "response":
         choice_ts = {
-            "left": trial_data[(lc_mask) or (li_mask)]["task_start_time"]
-            + trial_data[(lc_mask) or (li_mask)]["response_time"],
-            "right": trial_data[(rc_mask) or (ri_mask)]["task_start_time"]
-            + trial_data[(rc_mask) or (ri_mask)]["response_time"],
+            "left": trial_data[(lc_mask) | (li_mask)]["trial_start_time"]
+            + trial_data[(lc_mask) | (li_mask)]["response_time"],
+            "right": trial_data[(rc_mask) | (ri_mask)]["trial_start_time"]
+            + trial_data[(rc_mask) | (ri_mask)]["response_time"],
         }
     elif mode == "rewarded":
         choice_ts = {
-            "corr": trial_data[(lc_mask) or (rc_mask)]["task_start_time"]
-            + trial_data[(lc_mask) or (rc_mask)]["response_time"],
-            "incorr": trial_data[(li_mask) or (ri_mask)]["task_start_time"]
-            + trial_data[(li_mask) or (ri_mask)]["response_time"],
+            "corr": trial_data[(lc_mask) | (rc_mask)]["trial_start_time"]
+            + trial_data[(lc_mask) | (rc_mask)]["response_time"],
+            "incorr": trial_data[(li_mask) | (ri_mask)]["trial_start_time"]
+            + trial_data[(li_mask) | (ri_mask)]["response_time"],
         }
     else:
         raise NotImplementedError(
