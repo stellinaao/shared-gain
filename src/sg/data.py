@@ -404,14 +404,14 @@ def get_psths(
 
         if get_strategy:
             if do_rem_zstd:
-                [psths, psths_mb, psths_mf] = rem_zstd(
+                [psths, psths_mb, psths_mf], units_to_rem = rem_zstd(
                     [psths, psths_mb, psths_mf], regions
                 )
-            return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask
+            return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask, units_to_rem
         else:
             if do_rem_zstd:
-                [psths] = rem_zstd([psths], regions)
-            return psths, mask
+                [psths], units_to_rem = rem_zstd([psths], regions)
+            return psths, mask, units_to_rem
     else:
         return NotImplementedError(
             f"ERROR: not yet implemented for alignment {alignment}"
@@ -441,7 +441,9 @@ def get_zstd_units(psths_all, regions):
                 ]
             )
             units_to_rem[region].extend(np.where(noise_stds == 0)[0])
-            # print(f"{region}.2, {len(np.where(noise_stds == 0)[0])}")
+        units_to_rem[region] = np.unique(units_to_rem[region]).astype(
+            dtype=np.int32
+        )  # filter for unique
 
     return units_to_rem
 
@@ -456,7 +458,7 @@ def rem_zstd(psths_all, regions):
                 psths_all[i][region], units_to_rem[region], axis=0
             )
 
-    return psths_all
+    return psths_all, units_to_rem
 
 
 # get conditional psths/choice timestamps
@@ -520,10 +522,10 @@ def get_choice_ts(trial_data, mode="both"):
         }
     elif mode == "response":
         choice_ts = {
-            "left": trial_data[(lc_mask) | (li_mask)]["trial_start_time"]
-            + trial_data[(lc_mask) | (li_mask)]["response_time"],
-            "right": trial_data[(rc_mask) | (ri_mask)]["trial_start_time"]
-            + trial_data[(rc_mask) | (ri_mask)]["response_time"],
+            "left": trial_data[(trial_data.response == 1)]["trial_start_time"]
+            + trial_data[trial_data.response == 1]["response_time"],
+            "right": trial_data[trial_data.response == -1]["trial_start_time"]
+            + trial_data[trial_data.response == -1]["response_time"],
         }
     elif mode == "rewarded":
         choice_ts = {

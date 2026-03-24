@@ -20,7 +20,7 @@ TODO
 """
 
 
-class LVMFamily:
+class Encoder:
     def __init__(
         self,
         trial_data=None,
@@ -29,11 +29,6 @@ class LVMFamily:
         regions=None,
         **kwargs,
     ):
-        """
-        kwargs:
-        - tpre
-        - tpost
-        """
         self.spike_times = spike_times
         self.session_data = session_data
         self.trial_data = trial_data
@@ -68,20 +63,6 @@ class LVMFamily:
         self.tv_reg = kwargs.pop("tv_reg", {"l2": 0.01})
 
         self.reg = kwargs.pop("reg", {"l2": 0.001})
-        self.d2ts = kwargs.pop("d2ts", [0.01])
-
-        self.n_latents_mult = kwargs.pop("n_latents_mult", 1)
-        self.n_latents_addt = kwargs.pop("n_latents_addt", 1)
-
-        self.no_mult = self.n_latents_mult == 0
-        self.no_addt = self.n_latents_addt == 0
-        if self.no_mult and self.no_addt:
-            print("WOWZA. someone is feeling nihilistic. try again.")
-
-        self.add_latent_noise = kwargs.pop("add_latent_noise", False)
-
-        self.refit = kwargs.pop("refit", False)
-        self.max_iter = kwargs.pop("max_iter", 10) if self.refit else 0
 
         if len(kwargs) > 0:
             extra_kwargs = ", ".join('"%s' % k for k in list(kwargs.keys()))
@@ -91,25 +72,8 @@ class LVMFamily:
         self.get_data()
         self.fit_baseline()
         self.fit_taskvar()
-
         self.get_cids()
         self.update_cids()
-
-        if not self.no_mult:
-            self.fit_ae_gain()
-        if not self.no_addt:
-            self.fit_ae_offset()
-        if not self.no_mult and not self.no_addt:
-            self.fit_ae_affine()
-        elif self.no_mult:
-            self.mod_ae_affine = self.mod_ae_offset
-        elif self.no_addt:
-            self.mod_ae_affine = self.mod_ae_gain
-        else:
-            print("BOOHOO something is catastrophically wrong")
-            return
-
-        self.ae2lvm()
 
     def seed(self):
         random.seed(self.seed_val)
@@ -119,7 +83,7 @@ class LVMFamily:
         torch.cuda.manual_seed_all(self.seed_val)
 
     def get_data(self):
-        self.psths, self.trial_mask = get_psths(
+        self.psths, self.trial_mask, self.zstd_units = get_psths(
             self.spike_times,
             self.trial_data,
             self.session_data,
@@ -132,6 +96,15 @@ class LVMFamily:
             prev_filter=False,
             get_strategy=False,
         )
+
+        # update spike_times with the removed units
+        for reg in self.regions:
+            if len(self.zstd_units[reg]) > 0:
+                self.spike_times[reg] = [
+                    st_unit
+                    for i, st_unit in enumerate(self.spike_times[reg])
+                    if i not in set(self.zstd_units[reg])
+                ]
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
         self.trial_data = self.trial_data[self.trial_mask]
@@ -222,9 +195,9 @@ class LVMFamily:
         self.cids = np.intersect1d(
             self.cids_tv, self.cids_pca
         )  # changed from union to intersection
-        # self.cids = np.arange(len(res_taskvar["r2test"]))
 
     def update_cids(self):
+        # housekeeping
         self.data_gd[:]["robs"] = self.data_gd[:]["robs"][:, self.cids]
         self.sample["robs"] = self.sample["robs"][:, self.cids]
         self.robs = self.robs[:, self.cids]
@@ -232,6 +205,87 @@ class LVMFamily:
         self.sample["reg_keys"] = self.sample["reg_keys"][self.cids]
 
         self.num_units = len(self.cids)
+
+        # baseline
+        self.mod_baseline.cids = self.cids
+        self.mod_baseline.bias.data = self.mod_baseline.bias.data[self.cids]
+        self.mod_baseline.drift.weight.data = self.mod_baseline.drift.weight.data[
+            :, self.cids
+        ]
+        self.mod_baseline.drift.bias.data = self.mod_baseline.drift.bias.data[self.cids]
+
+        # task variables
+        self.mod_taskvar.cids = self.cids
+        self.mod_taskvar.bias.data = self.mod_taskvar.bias.data[self.cids]
+
+        self.mod_taskvar.drift.weight.data = self.mod_taskvar.drift.weight.data[
+            :, self.cids
+        ]
+        self.mod_taskvar.tv.weight.data = self.mod_taskvar.tv.weight.data[:, self.cids]
+
+        self.mod_taskvar.drift.bias.data = self.mod_taskvar.drift.bias.data[self.cids]
+        self.mod_taskvar.tv.bias.data = self.mod_taskvar.tv.bias.data[self.cids]
+
+    def eval(self):
+        # baseline
+        self.res_baseline = eval_model(
+            self.mod_baseline, self.data_gd, self.test_dl.dataset
+        )
+
+        # task variables
+        self.res_taskvar = eval_model(
+            self.mod_taskvar, self.data_gd, self.test_dl.dataset
+        )
+
+
+class LVMFamily(Encoder):
+    def __init__(
+        self,
+        trial_data=None,
+        spike_times=None,
+        session_data=None,
+        regions=None,
+        **kwargs,
+    ):
+        """
+        kwargs:
+        """
+
+        self.d2ts = kwargs.pop("d2ts", [0.01])
+
+        self.n_latents_mult = kwargs.pop("n_latents_mult", 1)
+        self.n_latents_addt = kwargs.pop("n_latents_addt", 1)
+
+        self.no_mult = self.n_latents_mult == 0
+        self.no_addt = self.n_latents_addt == 0
+        if self.no_mult and self.no_addt:
+            print("WOWZA. someone is feeling nihilistic. try again.")
+
+        self.add_latent_noise = kwargs.pop("add_latent_noise", False)
+
+        self.refit = kwargs.pop("refit", False)
+        self.max_iter = kwargs.pop("max_iter", 10) if self.refit else 0
+
+        super().__init__(trial_data, spike_times, session_data, regions, **kwargs)
+
+    def fit_all(self):
+        super().fit_all()
+
+        if not self.no_mult:
+            self.fit_ae_gain()
+        if not self.no_addt:
+            self.fit_ae_offset()
+        if not self.no_mult and not self.no_addt:
+            self.fit_ae_affine()
+        elif self.no_mult:
+            self.mod_ae_affine = self.mod_ae_offset
+        elif self.no_addt:
+            self.mod_ae_affine = self.mod_ae_gain
+        else:
+            print("BOOHOO something is catastrophically wrong")
+            return
+
+        self.ae2lvm()
 
     def fit_ae_gain(self):
         self.tv_reg = {"l2": 1}
@@ -255,17 +309,15 @@ class LVMFamily:
         )
 
         if self.n_splines > 1:
-            self.mod_ae_gain.drift.weight.data = self.mod_taskvar.drift.weight.data[
-                :, self.cids
-            ].clone()
+            self.mod_ae_gain.drift.weight.data = (
+                self.mod_taskvar.drift.weight.data.clone()
+            )
             self.mod_ae_gain.bias.requires_grad = False
         else:
             self.mod_ae_gain.bias.requires_grad = True
 
-        self.mod_ae_gain.tv.weight.data = self.mod_taskvar.tv.weight.data[
-            :, self.cids
-        ].clone()
-        self.mod_ae_gain.bias.data = self.mod_taskvar.bias.data[self.cids].clone()
+        self.mod_ae_gain.tv.weight.data = self.mod_taskvar.tv.weight.data.clone()
+        self.mod_ae_gain.bias.data = self.mod_taskvar.bias.data.clone()
         self.mod_ae_gain.tv.weight.requires_grad = False
 
         self.mod_ae_gain.readout_gain.weight_scale = 1.0
@@ -303,17 +355,15 @@ class LVMFamily:
         )
 
         if self.n_splines > 1:
-            self.mod_ae_offset.drift.weight.data = self.mod_taskvar.drift.weight.data[
-                :, self.cids
-            ].clone()
+            self.mod_ae_offset.drift.weight.data = (
+                self.mod_taskvar.drift.weight.data.clone()
+            )
             self.mod_ae_offset.bias.requires_grad = False
         else:
             self.mod_ae_offset.bias.requires_grad = True
 
-        self.mod_ae_offset.tv.weight.data = self.mod_taskvar.tv.weight.data[
-            :, self.cids
-        ].clone()
-        self.mod_ae_offset.bias.data = self.mod_taskvar.bias.data[self.cids].clone()
+        self.mod_ae_offset.tv.weight.data = self.mod_taskvar.tv.weight.data.clone()
+        self.mod_ae_offset.bias.data = self.mod_taskvar.bias.data.clone()
         self.mod_ae_offset.tv.weight.requires_grad = False
 
         self.mod_ae_offset.readout_offset.weight_scale = 1.0
@@ -351,19 +401,17 @@ class LVMFamily:
         )
 
         if self.n_splines > 1:
-            self.mod_ae_affine.drift.weight.data = self.mod_taskvar.drift.weight.data[
-                :, self.cids
-            ].clone()
+            self.mod_ae_affine.drift.weight.data = (
+                self.mod_taskvar.drift.weight.data.clone()
+            )
             self.mod_ae_affine.drift.weight.requires_grad = False
             self.mod_ae_affine.bias.requires_grad = False
         else:
             self.mod_ae_affine.bias.requires_grad = True
 
         # initialize neuron-tv weights with tv model weights
-        self.mod_ae_affine.tv.weight.data = self.mod_taskvar.tv.weight.data[
-            :, self.cids
-        ].clone()
-        self.mod_ae_affine.bias.data = self.mod_taskvar.bias.data[self.cids].clone()
+        self.mod_ae_affine.tv.weight.data = self.mod_taskvar.tv.weight.data.clone()
+        self.mod_ae_affine.bias.data = self.mod_taskvar.bias.data.clone()
         self.mod_ae_affine.tv.weight.requires_grad = False
 
         # intialize coupling weights with gain and offset only ae models
@@ -457,44 +505,33 @@ class LVMFamily:
         else:
             print("KABOOM. The world exploded because you made a non sequitur.")
 
-    def eval(self):
-        # baseline
-        self.mod_baseline.cids = self.cids
-        self.mod_baseline.bias.data = self.mod_baseline.bias.data[self.cids]
-        self.mod_baseline.drift.weight.data = self.mod_baseline.drift.weight.data[
-            :, self.cids
-        ]
-        self.mod_baseline.drift.bias.data = self.mod_baseline.drift.bias.data[self.cids]
-
-        self.res_baseline = eval_model(
-            self.mod_baseline, self.data_gd, self.test_dl.dataset
-        )
-
-        # task variables
-        self.mod_taskvar.cids = self.cids
-        self.mod_taskvar.bias.data = self.mod_taskvar.bias.data[self.cids]
-
-        self.mod_taskvar.drift.weight.data = self.mod_taskvar.drift.weight.data[
-            :, self.cids
-        ]
-        self.mod_taskvar.tv.weight.data = self.mod_taskvar.tv.weight.data[:, self.cids]
-
-        self.mod_taskvar.drift.bias.data = self.mod_taskvar.drift.bias.data[self.cids]
-        self.mod_taskvar.tv.bias.data = self.mod_taskvar.tv.bias.data[self.cids]
-
-        self.res_taskvar = eval_model(
-            self.mod_taskvar, self.data_gd, self.test_dl.dataset
-        )
+    def eval(self, do_taskvar=True, do_lvm=True):
+        if do_taskvar:
+            super().eval()
 
         # lvms
-        if not self.no_mult:
-            self.res_gain = eval_model(
-                self.mod_gain, self.data_gd, self.test_dl.dataset
+        if do_lvm:
+            if not self.no_mult:
+                self.res_gain = eval_model(
+                    self.mod_gain, self.data_gd, self.test_dl.dataset
+                )
+            if not self.no_addt:
+                self.res_offset = eval_model(
+                    self.mod_offset, self.data_gd, self.test_dl.dataset
+                )
+            self.res_affine = eval_model(
+                self.mod_affine, self.data_gd, self.test_dl.dataset
             )
-        if not self.no_addt:
-            self.res_offset = eval_model(
-                self.mod_offset, self.data_gd, self.test_dl.dataset
-            )
-        self.res_affine = eval_model(
-            self.mod_affine, self.data_gd, self.test_dl.dataset
-        )
+
+
+class ScrambledEncoder(Encoder):
+    def __init__(
+        self,
+        trial_data=None,
+        spike_times=None,
+        session_data=None,
+        regions=None,
+        pivot: str = None,
+    ):
+
+        super().__init__(trial_data, spike_times, session_data, regions)
