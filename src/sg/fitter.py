@@ -57,7 +57,7 @@ class Encoder:
                 "response",
                 "rewarded",
                 "block_side",
-                "is_mb",
+                "strategy",
                 "response_prev",
                 "rewarded_prev",
             ],
@@ -116,7 +116,7 @@ class Encoder:
             self.psths["DMS"] *= 20
         self.trial_data = self.trial_data[self.trial_mask]
 
-        self.strategy = self.trial_data["is_mb"]
+        self.strategy = self.trial_data["strategy"]
         self.rewarded = self.trial_data["rewarded"]
         self.response = self.trial_data["response"]
         self.rewarded_prev = self.trial_data["rewarded_prev"]

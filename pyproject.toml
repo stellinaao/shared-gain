@@ -35,6 +35,8 @@ dependencies = [
     "decorator>=5.2.1",
     "distlib>=0.4.0",
     "executing>=2.2.1",
+    "ffmpeg>=1.4",
+    "ffprobe>=0.5",
     "filelock>=3.25.0",
     "fonttools>=4.60.1",
     "frozenlist>=1.8.0",
@@ -142,6 +144,7 @@ dependencies = [
     "virtualenv>=21.1.0",
     "wcwidth>=0.6.0",
     "werkzeug>=3.1.4",
+    "wfield",
     "widgetsnbextension>=4.0.15",
     "yarl>=1.22.0",
 ]
@@ -157,3 +160,4 @@ build-backend = "uv_build"
 damn = { git = "https://github.com/mdmelin/DAMN" }
 spks = { git = "https://github.com/spkware/spks" }
 squiggs = { git = "https://github.com/stellinaao/SQUIGGS" }
+wfield = { git = "https://github.com/stellinaao/wfield" }

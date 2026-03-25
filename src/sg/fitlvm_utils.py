@@ -851,7 +851,7 @@ def get_das(
     # init das
     das = dict()
     das["data"] = {
-        "strategy": trial_data["is_mb"],
+        "strategy": trial_data["strategy"],
         "block_side": np.where(trial_data["block_side"] == "left", 1, -1),
         "rewarded": trial_data["rewarded"],
         "regions": regions,

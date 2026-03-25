@@ -15,12 +15,12 @@ shutup.please()
 # CONSTANTS
 session_pattern = re.compile(r"^\d{8}_\d{6}$")
 subject_ids = np.array(
-    [subj_id for subj_id in os.listdir(PROJECT_ROOT.parent / "data-np")]
+    [subj_id for subj_id in os.listdir(PROJECT_ROOT.parents[0] / "data-np")]
 )
 session_ids = [
     [
         sess_id
-        for sess_id in os.listdir(PROJECT_ROOT.parent / "data-np" / subj_id)
+        for sess_id in os.listdir(PROJECT_ROOT.parents[0] / "data-np" / subj_id)
         if session_pattern.match(sess_id)
     ]
     for subj_id in subject_ids
@@ -306,19 +306,28 @@ def add_prev(trial_data):
 
 
 def add_strat(trial_data, session_data):
-    trial_data["is_mb"] = (
-        trial_data["iblock"].isin(session_data["MBblocks"]).astype(int)
+    trial_data["strategy"] = np.select(
+        [
+            trial_data["iblock"].isin(session_data["MBblocks"]),
+            trial_data["iblock"].isin(session_data["MFblocks"]),
+        ],
+        [1, -1],
+        0,
     )
     return trial_data
 
 
-def get_trial_mask(trial_data, reward_only=False, prev_filter=False):
+def get_trial_mask(trial_data, strategy_only=True, reward_only=False):
     mask_resp = ~np.isnan(
         trial_data["response_time"]
-    )  # only account for trials where there was a response
-    mask_reward = trial_data["rewarded"]
+    )  # always only consider for trials where there was a response
+    mask = mask_resp
 
-    mask = (mask_resp) & (mask_reward) if reward_only else (mask_resp)
+    if reward_only:
+        mask = (mask) & (trial_data["rewarded"])
+
+    if strategy_only:
+        mask = (mask) & (~(trial_data["strategy"] == 0))
 
     return mask
 
