@@ -312,6 +312,17 @@ def add_strat(trial_data, session_data):
     return trial_data
 
 
+def get_trial_mask(trial_data, reward_only=False, prev_filter=False):
+    mask_resp = ~np.isnan(
+        trial_data["response_time"]
+    )  # only account for trials where there was a response
+    mask_reward = trial_data["rewarded"]
+
+    mask = (mask_resp) & (mask_reward) if reward_only else (mask_resp)
+
+    return mask
+
+
 # PSTHS
 def get_psths(
     unit_spike_times,
@@ -339,6 +350,7 @@ def get_psths(
         mask_reward = trial_data["rewarded"]
 
         mask = (mask_resp) & (mask_reward) if reward_only else (mask_resp)
+        assert np.mean(mask) == 1  # the trial data passed in should be clean already
 
         idx = trial_data[
             mask

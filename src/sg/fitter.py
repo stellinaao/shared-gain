@@ -53,10 +53,17 @@ class Encoder:
         # model params
         self.task_vars = kwargs.pop(
             "task_vars",
-            ["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
+            [
+                "response",
+                "rewarded",
+                "block_side",
+                "is_mb",
+                "response_prev",
+                "rewarded_prev",
+            ],
         )
         self.n_splines = kwargs.pop("n_splines", 5)
-        self.norm_activity = kwargs.pop("norm_activity", False)
+        self.norm_activity = kwargs.pop("norm_activity", True)
         self.nonlinearity = kwargs.pop("nonlinearity", "Identity")
 
         self.tv_actv_fn = kwargs.pop("tv_actv_fn", "lin")
@@ -142,8 +149,8 @@ class Encoder:
             tv_dims=self.num_tv,
             num_units=self.num_units,
             cids=None,
-            num_latent_mult=self.n_latents_mult,
-            num_latent_addt=self.n_latents_addt,
+            num_latent_mult=0,
+            num_latent_addt=0,
             num_tents=self.n_splines,
             include_tv=False,
             include_gain=False,
@@ -165,8 +172,8 @@ class Encoder:
             tv_dims=self.num_tv,
             num_units=self.num_units,
             cids=None,
-            num_latent_mult=self.n_latents_mult,
-            num_latent_addt=self.n_latents_addt,
+            num_latent_mult=0,
+            num_latent_addt=0,
             num_tents=self.n_splines,
             include_tv=True,
             include_gain=False,
@@ -524,7 +531,7 @@ class LVMFamily(Encoder):
             )
 
 
-class ScrambledEncoder(Encoder):
+class ScrambledEncoder:
     def __init__(
         self,
         trial_data=None,
@@ -532,6 +539,80 @@ class ScrambledEncoder(Encoder):
         session_data=None,
         regions=None,
         pivot: str = None,
+        **kwargs,
     ):
 
-        super().__init__(trial_data, spike_times, session_data, regions)
+        self.mod_full = Encoder(
+            trial_data=trial_data,
+            spike_times=spike_times,
+            session_data=session_data,
+            regions=regions,
+            **kwargs,
+        )
+
+        self.pivot = pivot
+
+        if pivot not in self.mod_full.task_vars:
+            raise ValueError(f"pivot must be one of {self.mod_full.task_vars}")
+
+        self.trial_data_scramble_d = trial_data.copy(deep=True)
+        self.trial_data_scramble_d[self.pivot] = (
+            self.trial_data_scramble_d[self.pivot].sample(frac=1).to_numpy()
+        )
+
+        self.mod_scramble_d = Encoder(
+            trial_data=self.trial_data_scramble_d,
+            spike_times=spike_times,
+            session_data=session_data,
+            regions=regions,
+            **kwargs,
+        )
+
+        self.trial_data_scramble = trial_data.copy(deep=True)
+        for regressor in self.mod_full.task_vars:
+            if not regressor == self.pivot:
+                self.trial_data_scramble[regressor] = (
+                    self.trial_data_scramble[regressor].sample(frac=1).to_numpy()
+                )
+
+        self.mod_scramble = Encoder(
+            trial_data=self.trial_data_scramble,
+            spike_times=spike_times,
+            session_data=session_data,
+            regions=regions,
+            **kwargs,
+        )
+
+    def fit_all(self):
+        self.fit_full()
+        self.fit_scramble_d()
+        self.fit_scramble()
+
+    def fit_full(self):
+        self.mod_full.fit_all()
+
+    def fit_scramble_d(self):
+        self.mod_scramble_d.fit_all()
+
+    def fit_scramble(self):
+        self.mod_scramble.fit_all()
+
+    def eval_full(self):
+        self.mod_full.eval()
+
+    def eval_scramble_d(self):
+        self.mod_scramble_d.eval()
+
+    def eval_scramble(self):
+        self.mod_scramble.eval()
+
+    def eval_all(self):
+        self.eval_full()
+        self.eval_scramble_d()
+        self.eval_scramble()
+
+        self.r2_full = self.mod_full.res_taskvar["r2test"].mean()
+        self.r2_scramble_d = self.mod_scramble_d.res_taskvar["r2test"].mean()
+
+        self.d_r2 = self.r2_full - self.r2_scramble_d
+        self.r2_scramble = self.mod_scramble.res_taskvar["r2test"].mean()
