@@ -4,6 +4,8 @@ import torch
 import pickle
 from pathlib import Path
 
+from tqdm import tqdm
+
 from sklearn.svm import SVC
 from sklearn.model_selection import cross_val_score
 
@@ -11,6 +13,7 @@ from scipy.stats import spearmanr
 from sg.utils import spearmanr_vec
 
 from sg.fitlvm_utils import eval_model
+from sg.fitter import ScrambledEncoder
 
 from copy import deepcopy
 
@@ -132,7 +135,110 @@ def get_num_latents(das, subj_idx, sess_idx, is_msess=True, ae=True, do_plot=Fal
     return np.where(d < 0.01)[0][0]
 
 
+# encoder
+def monkey_cv_d_r2(
+    trial_data,
+    spike_times,
+    session_data,
+    regions,
+    task_vars=[
+        "response",
+        "rewarded",
+        "block_side",
+        "strategy",
+        "response_prev",
+        "rewarded_prev",
+    ],
+    n_folds=10,
+    verbose=False,
+):
+    scramble_r2s = {}
+
+    for pivot in tqdm(task_vars, position=0, desc="looping through pivots"):
+        if verbose:
+            print(pivot)
+        scramble_r2s[pivot] = []
+        for i in tqdm(range(n_folds), position=1, leave=False, desc="folds"):
+            if verbose:
+                print(i)
+            se = ScrambledEncoder(
+                trial_data, spike_times, session_data, regions, pivot, seed=i
+            )
+            se.fit_all()
+            se.eval_all()
+
+            scramble_r2s[pivot].append(
+                {"se": se, "d_r2": se.d_r2, "r2_scramble": se.r2_scramble}
+            )
+
+    scramble_r2s_summary = {
+        "cv_r2_avg": [
+            np.mean([item["cv_r2"] for item in pivot_item])
+            for regr, pivot_item in scramble_r2s.items()
+        ],
+        "cv_r2_std": [
+            np.std([item["r2_scramble"] for item in pivot_item])
+            for regr, pivot_item in scramble_r2s.items()
+        ],
+        "d_r2_avg": [
+            np.mean([item["d_r2"] for item in pivot_item])
+            for regr, pivot_item in scramble_r2s.items()
+        ],
+        "d_r2_std": [
+            np.std([item["r2_scramble"] for item in pivot_item])
+            for regr, pivot_item in scramble_r2s.items()
+        ],
+    }
+
+    return scramble_r2s, scramble_r2s_summary
+
+
 # latent decoding
+def plot_cv_d_r2(
+    scramble_r2s_summary,
+    task_vars=[
+        "response",
+        "rewarded",
+        "block_side",
+        "strategy",
+        "p_response",
+        "p_rewarded",
+    ],
+):
+
+    fig, axes = plt.subplots(ncols=2, figsize=(5, 3))
+    axes[0].bar(
+        np.arange(len(task_vars)),
+        scramble_r2s_summary["d_r2_avg"],
+    )
+    axes[0].errorbar(
+        np.arange(len(task_vars)),
+        scramble_r2s_summary["d_r2_avg"],
+        scramble_r2s_summary["d_r2_std"],
+        fmt="o",
+        color="k",
+        capsize=2,
+    )
+    axes[0].set_xticks(np.arange(len(task_vars)), task_vars, rotation=45)
+    axes[0].set_ylabel(r"$\delta r^2$")
+
+    axes[1].bar(
+        np.arange(len(task_vars)),
+        scramble_r2s_summary["cv_r2_avg"],
+    )
+    axes[1].errorbar(
+        np.arange(len(task_vars)),
+        scramble_r2s_summary["cv_r2_avg"],
+        scramble_r2s_summary["cv_r2_std"],
+        fmt="o",
+        color="k",
+        capsize=2,
+    )
+    axes[1].set_xticks(np.arange(len(task_vars)), task_vars, rotation=45)
+    axes[1].set_ylabel(r"$\delta r^2$")
+
+    fig.tight_layout()
+    fig.show()
 
 
 def get_latent_decoding_scores(X, X_taskvar, y, cv):

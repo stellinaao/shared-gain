@@ -130,19 +130,17 @@ def load_sess(
     thresh=1,
     mode="new",
 ):
+    if (subj_id is None and subj_idx is None) or (sess_id is None and sess_idx is None):
+        raise ValueError("wow all nones?! try again bucko.")
+    else:
+        if subj_id is None:
+            subj_id = subject_ids[subj_idx]
+        if sess_id is None:
+            if subj_idx is None:
+                subj_idx = np.where(subject_ids == subj_id)[0][0]
+            sess_id = session_ids[subj_idx][sess_idx]
+    print(subj_id, sess_id)
     if mode == "new":
-        if (subj_id is None and subj_idx is None) or (
-            sess_id is None and sess_idx is None
-        ):
-            raise ValueError("wow all nones?! try again bucko.")
-        else:
-            if subj_id is None:
-                subj_id = subject_ids[subj_idx]
-            if sess_id is None:
-                if subj_idx is None:
-                    subj_idx = np.where(subject_ids == subj_id)[0][0]
-                sess_id = session_ids[subj_idx][sess_idx]
-        print(subj_id, sess_id)
         fpath = PROJECT_ROOT.parent / "data-np" / subj_id / sess_id
         fpath.exists()
 
@@ -222,7 +220,7 @@ def load_sess(
             unit_spike_times, trial_dur_ms=trial_dur_ms, thresh=thresh
         )  # remove low fr
 
-        return trial_data_r, trial_data, session_data, unit_spike_times_lite, regions
+        return unit_spike_times_lite, trial_data, session_data, regions
     else:
         raise ValueError("valid values for mode are 'old' and 'new.'")
 
