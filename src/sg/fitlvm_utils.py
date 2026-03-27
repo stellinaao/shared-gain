@@ -1677,9 +1677,10 @@ def fit_autoencoder(
         r2 = model_rsquared(model, vdata)
         l1 = r2.mean().item()
 
-        print("%d) fit task vars: %.4f, %.4f" % (itr, l0, l1))
+        if verbosity > 0:
+            print("%d) fit task vars: %.4f, %.4f" % (itr, l0, l1))
 
-        if itr > min_iter and (l1 - l0) < tol:
+        if verbosity > 0 and itr > min_iter and (l1 - l0) < tol:
             print("breaking because tolerance was hit")
             break
         else:
@@ -1701,9 +1702,10 @@ def fit_autoencoder(
         r2 = model_rsquared(model, vdata)
         l1 = r2.mean().item()
 
-        print("%d) fit latents: %.4f, %.4f" % (itr, l0, l1))
+        if verbosity > 0:
+            print("%d) fit latents: %.4f, %.4f" % (itr, l0, l1))
 
-        if itr > min_iter and (l1 - l0) < tol:
+        if verbosity > 0 and itr > min_iter and (l1 - l0) < tol:
             print("breaking because tolerance was hit")
             break
         else:
@@ -1807,11 +1809,12 @@ def fit_latents(
         fit_model(model, train_dl, train_dl, use_lbfgs=True, verbose=0, seed=seed)
         r2 = model_rsquared(model, vdata)
         l1 = r2.mean().item()
-        print("BROCCOLI")
+        # print("BROCCOLI")
 
-        print("%d) fit stim: %.4f, %.4f" % (itr, l0, l1))
+        if verbosity > 0:
+            print("%d) fit stim: %.4f, %.4f" % (itr, l0, l1))
 
-        if itr > min_iter and (l1 - l0) < tol:
+        if verbosity > 0 and itr > min_iter and (l1 - l0) < tol:
             print("breaking because tolerance was hit")
             break
         else:
@@ -1837,9 +1840,10 @@ def fit_latents(
         r2 = model_rsquared(model, vdata)
         l1 = r2.mean().item()
 
-        print("%d) fit latents: %.4f, %.4f" % (itr, l0, l1))
+        if verbosity > 0:
+            print("%d) fit latents: %.4f, %.4f" % (itr, l0, l1))
 
-        if itr > min_iter and (l1 - l0) < tol:
+        if verbosity > 0 and itr > min_iter and (l1 - l0) < tol:
             print("breaking because tolerance was hit")
             break
         else:
@@ -2078,10 +2082,11 @@ def fit_gain_model(
                 # print(model.gain_mu.reg.vals)
                 losses.append(loss)
                 models.append(model)
-                print(
-                    "Fit run %.3f,%.3f: %.4f, train loss = %.4f"
-                    % (d2tg, d2th, loss, train_loss)
-                )
+                if verbosity > 0:
+                    print(
+                        "Fit run %.3f,%.3f: %.4f, train loss = %.4f"
+                        % (d2tg, d2th, loss, train_loss)
+                    )
 
     id = np.argmax(np.asarray(losses))
     mod2 = deepcopy(models[id])

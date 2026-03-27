@@ -173,7 +173,7 @@ def monkey_cv_d_r2(
 
     scramble_r2s_summary = {
         "cv_r2_avg": [
-            np.mean([item["cv_r2"] for item in pivot_item])
+            np.mean([item["r2_scramble"] for item in pivot_item])
             for regr, pivot_item in scramble_r2s.items()
         ],
         "cv_r2_std": [
@@ -185,7 +185,7 @@ def monkey_cv_d_r2(
             for regr, pivot_item in scramble_r2s.items()
         ],
         "d_r2_std": [
-            np.std([item["r2_scramble"] for item in pivot_item])
+            np.std([item["d_r2"] for item in pivot_item])
             for regr, pivot_item in scramble_r2s.items()
         ],
     }
@@ -220,7 +220,7 @@ def plot_cv_d_r2(
         capsize=2,
     )
     axes[0].set_xticks(np.arange(len(task_vars)), task_vars, rotation=45)
-    axes[0].set_ylabel(r"$\delta r^2$")
+    axes[0].set_ylabel(r"$\Delta r^2$")
 
     axes[1].bar(
         np.arange(len(task_vars)),
@@ -235,10 +235,9 @@ def plot_cv_d_r2(
         capsize=2,
     )
     axes[1].set_xticks(np.arange(len(task_vars)), task_vars, rotation=45)
-    axes[1].set_ylabel(r"$\delta r^2$")
+    axes[1].set_ylabel(r"cv $r^2$")
 
     fig.tight_layout()
-    fig.show()
 
 
 def get_latent_decoding_scores(X, X_taskvar, y, cv):

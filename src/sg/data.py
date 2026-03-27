@@ -176,6 +176,10 @@ def load_sess(
         trial_data = add_prev(trial_data)
         trial_data = add_strat(trial_data, session_data)
 
+        # trial_data["trial_start_time"] = trial_data["task_start_time"]
+        trial_mask = get_trial_mask(trial_data)
+        trial_data = trial_data[trial_mask]
+
         # trial_data_choice = trial_data[~(trial_data['response']==0) & ~(trial_data['response_prev']==0)]
         # trial_data_choice = trial_data[~(trial_data['response']==0)] # filter for choice made only
 
@@ -220,6 +224,10 @@ def load_sess(
             unit_spike_times, trial_dur_ms=trial_dur_ms, thresh=thresh
         )  # remove low fr
 
+        trial_data["trial_start_time"] = trial_data["task_start_time"]
+        trial_mask = get_trial_mask(trial_data)
+        trial_data = trial_data[trial_mask]
+
         return unit_spike_times_lite, trial_data, session_data, regions
     else:
         raise ValueError("valid values for mode are 'old' and 'new.'")
@@ -229,7 +237,8 @@ def load_data_sess(
     subj_id=None, sess_id=None, subj_idx=None, sess_idx=None, mode="new"
 ):
     fpath_data = (
-        f"../../data-np/{subject_ids[subj_idx]}/{session_ids[subj_idx][sess_idx]}"
+        PROJECT_ROOT.parents[0]
+        / f"data-np/{subject_ids[subj_idx]}/{session_ids[subj_idx][sess_idx]}"
     )
 
     riglog = np.load(
