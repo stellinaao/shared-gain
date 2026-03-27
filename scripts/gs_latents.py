@@ -13,7 +13,7 @@ modes = ["old", "old", "new", "new"]
 m_latents = np.linspace(0, 5, 6, dtype=int)
 a_latents = np.linspace(0, 5, 6, dtype=int)
 
-for i in range(4):
+for i in [2, 3]:  # range(4):
     subj_id = subj_ids[i]
     sess_idx = sess_idxs[i]
     mode = modes[i]
@@ -21,6 +21,7 @@ for i in range(4):
     unit_spike_times, trial_data, session_data, regions = load_sess(
         subj_id=subj_id, sess_idx=sess_idx, mode=mode
     )
+    # print(type(unit_spike_times), type(trial_data), type(session_data), type(regions))
 
     for m in m_latents:
         for a in a_latents:
@@ -49,6 +50,7 @@ for i in range(4):
             save_path.parent.mkdir(parents=True, exist_ok=True)
 
             with open(save_path, "wb") as f:
+                # print(type(family))
                 pickle.dump(family, f)
 
     for reg in regions:

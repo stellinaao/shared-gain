@@ -745,6 +745,101 @@ def plot_latent_corr(model, mode="gain"):
     plt.show()
 
 
+def get_latent_r(
+    trial_data,
+    spike_times,
+    session_data,
+    regions,
+    n_m=5,
+    subj_id=None,
+    sess_idx=None,
+    folder="all",
+    do_plot=False,
+):
+    import numpy as np
+    from sg.fitter import LVMFamily
+    from utils.paths import PROJECT_ROOT
+
+    m_latents = np.arange(n_m + 1)  # 10, 10)
+    a_latents = np.arange(5 + 1)  # 10, 10)
+
+    if folder == "all":
+        family = LVMFamily(
+            trial_data=trial_data,
+            spike_times=spike_times,
+            session_data=session_data,
+            regions=regions,
+            n_latents_mult=0,
+            n_latents_addt=3,
+            sanity_check=0,
+            task_vars=[
+                "response",
+                "rewarded",
+                "block_side",
+                "response_prev",
+                "rewarded_prev",
+            ],
+            refit=False,
+            norm_activity=True,
+        )
+        family.fit_all()
+        family.eval()
+    elif folder in regions:
+        family = LVMFamily(
+            trial_data=trial_data,
+            spike_times={folder: spike_times[folder]},
+            session_data=session_data,
+            regions=[folder],
+            n_latents_mult=0,
+            n_latents_addt=3,
+            sanity_check=0,
+            task_vars=[
+                "response",
+                "rewarded",
+                "block_side",
+                "response_prev",
+                "rewarded_prev",
+            ],
+            refit=False,
+            norm_activity=True,
+        )
+        family.fit_all()
+        family.eval()
+
+    r2s = np.zeros((len(m_latents), len(a_latents)))
+    for i, m in enumerate(m_latents):
+        for j, a in enumerate(a_latents):
+            if m == 0 and a == 0:
+                r2s[i, j] = family.res_taskvar["r2test"].mean()
+            else:
+                with open(
+                    PROJECT_ROOT.parents[0]
+                    / f"vars/families/{subj_id}/{sess_idx}/{folder}/family-m{int(m)}a{int(a)}.pkl",
+                    "rb",
+                ) as f:
+                    family_ = pickle.load(f)
+                    family_.eval()
+                    r2s[i, j] = family_.res_affine["r2test"].mean()
+
+    if do_plot:
+        import matplotlib.pyplot as plt
+
+        plt.style.use(["nature"])
+        plt.rcParams["figure.dpi"] = 200
+
+        plt.figure()
+        plt.imshow(r2s, vmin=max(0, np.min(r2s)), origin="lower", interpolation=None)
+        plt.xlabel("N. Additive Latents")
+        plt.ylabel("N. Multiplicative Latents")
+        plt.xticks(np.arange(len(a_latents)))
+        plt.yticks(np.arange(len(a_latents)))
+        plt.colorbar()
+        plt.tight_layout()
+        plt.show()
+
+    return r2s
+
+
 def get_best_model(r2s, folder):
     """
     families = {}
