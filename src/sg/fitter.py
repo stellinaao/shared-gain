@@ -3,7 +3,7 @@ import random
 import numpy as np
 import torch
 
-from sg.data import get_psths
+from core.data import get_psths
 from sg.fitlvm_utils import (
     eval_model,
     fit_autoencoder,

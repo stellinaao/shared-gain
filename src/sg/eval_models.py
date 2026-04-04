@@ -10,14 +10,14 @@ from sklearn.svm import SVC
 from sklearn.model_selection import cross_val_score
 
 from scipy.stats import spearmanr
-from sg.utils import spearmanr_vec
+from core.utils import spearmanr_vec
 
 from sg.fitlvm_utils import eval_model
 from sg.fitter import ScrambledEncoder
 
 from copy import deepcopy
 
-from sg import data
+from core import data
 
 
 def plot_summary(
