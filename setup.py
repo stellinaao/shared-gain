@@ -18,6 +18,6 @@ setup(
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     include_package_data=True,
-    url="https://github.com/stellinaao/df-rnns",
+    url="https://github.com/stellinaao/shared-gain",
     version="0.0.1",
 )
