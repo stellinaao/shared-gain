@@ -4,7 +4,7 @@ import numpy as np
 from sg.fitter import LVMFamily
 from utils.paths import PROJECT_ROOT
 
-from sg.data import load_sess
+from core.data import load_sess
 
 subj_ids = ["MM012", "MM012", "MR82", "MR83"]
 sess_idxs = [4, 5, 5, 5]
