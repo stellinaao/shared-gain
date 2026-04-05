@@ -20,19 +20,17 @@ import os
 import shutup
 from spks.utils import get_cluster_spike_times, binary_spikes
 from damn.alignment import compute_spike_count
-from utils.paths import PROJECT_ROOT
+from utils.paths import DATA_DIR
 
 shutup.please()
 
 # CONSTANTS
 session_pattern = re.compile(r"^\d{8}_\d{6}$")
-subject_ids = np.array(
-    [subj_id for subj_id in os.listdir(PROJECT_ROOT.parents[0] / "data-np")]
-)
+subject_ids = np.array([subj_id for subj_id in os.listdir(DATA_DIR)])
 session_ids = [
     [
         sess_id
-        for sess_id in os.listdir(PROJECT_ROOT.parents[0] / "data-np" / subj_id)
+        for sess_id in os.listdir(DATA_DIR / subj_id)
         if session_pattern.match(sess_id)
     ]
     for subj_id in subject_ids
@@ -85,7 +83,7 @@ def load_sess(
     mode:       'old' to load data from the old cohort (MM012 & MM013), 'new' to load data from the new cohort (MR82, MR83, MR85)
     """
 
-    bin_size = 0.001
+    bin_size = 0.001  # 1 ms, or 0.001 s
 
     if (subj_id is None and subj_idx is None) or (sess_id is None and sess_idx is None):
         raise ValueError("wow all nones?! try again bucko.")
@@ -98,7 +96,7 @@ def load_sess(
             sess_id = session_ids[subj_idx][sess_idx]
     print(subj_id, sess_id)
     if mode == "new":
-        fpath = PROJECT_ROOT.parent / "data-np" / subj_id / sess_id
+        fpath = DATA_DIR / subj_id / sess_id
         fpath.exists()
 
         neural_data = pd.read_pickle(fpath / "neural_data.pkl")
@@ -244,10 +242,7 @@ def load_subj(subj_idx, thresh=1):
 def load_data_sess(
     subj_id=None, sess_id=None, subj_idx=None, sess_idx=None, mode="new"
 ):
-    fpath_data = (
-        PROJECT_ROOT.parents[0]
-        / f"data-np/{subject_ids[subj_idx]}/{session_ids[subj_idx][sess_idx]}"
-    )
+    fpath_data = DATA_DIR / subject_ids[subj_idx] / session_ids[subj_idx][sess_idx]
 
     riglog = np.load(
         f"{fpath_data}/riglog.npy", allow_pickle="TRUE"
