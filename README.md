@@ -1,12 +1,18 @@
 # Dynamic Foraging NPX Analysis
-various analyses for neural data recorded during dynamic foraging
+This repo contains various analyses for neural data recorded during dynamic foraging. 
 
-### Requirements
+## Requirements
 `uv` - automatically manages all dependencies
 
-### Installation
+## Installation
 ```
 git clone https://github.com/churchlandlab/dynamic_foraging_np_analysis.git
 cd dynamic_foraging_np_analysis
 uv sync
+```
+
+For collaborators:
+```
+pre-commit install
+pre-commit run --all-files
 ```
