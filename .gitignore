@@ -1,3 +1,5 @@
+.venv
+.ruff_cache
 figs/
 logs/
 vars/
@@ -7,3 +9,6 @@ __pycache_/
 checkpoints/
 src/external/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
