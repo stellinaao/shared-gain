@@ -26,3 +26,34 @@ To keep code clean and consistent across collaborators, please utilize the pre-c
 pre-commit install
 pre-commit run --all-files
 ```
+
+If the hooks modified a file, just make sure to git add and commit again.
+
+## File Annotations
+Please add the following to the head of scripts and notebooks.
+
+```
+"""
+filename.py
+
+Description of script.
+
+Author: Fname Lname
+Created: yyyy-mm-dd
+Last Modified: yyyy-mm-dd
+Python Version: 3.11.14
+"""
+```
+
+e.g.,
+
+```
+sandbox.ipynb
+
+A sandbox to play around with new analyses.
+
+Author: Stellina X. Ao
+Created: 2026-03-05
+Last Modified: 2026-03-23
+Python Version: 3.11.14
+```

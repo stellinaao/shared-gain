@@ -1,3 +1,15 @@
+"""
+gs_latents.py
+
+Functions to load and process neural and behavioral data
+collected from the dynamic foraging task.
+
+Author: Stellina X. Ao
+Created: 2026-03-26 # definitely created before, but lost the record
+Last Modified: 2026-03-26
+Python Version: 3.11.14
+"""
+
 import pickle
 
 import numpy as np

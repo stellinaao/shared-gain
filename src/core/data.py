@@ -1,3 +1,15 @@
+"""
+data.py
+
+Functions to load and process neural and behavioral data
+collected from the dynamic foraging task.
+
+Author: Stellina X. Ao
+Created: 2025-12-18
+Last Modified: 2026-04-05
+Python Version: 3.11.14
+"""
+
 import pickle
 
 import matplotlib.pyplot as plt
@@ -47,55 +59,7 @@ markers_region = {"ACC": "v", "DMS": "^", "M2": "x", "DLS": "*", "M1": "."}
 
 
 # LOAD DATA
-def load_data(thresh=1):
-    trial_data_r = []
-    trial_data = []
-    session_data = []
-    unit_spike_times = []
-    regions = []
-
-    for subj_idx in range(len(subject_ids)):
-        print(f"Subject: {subject_ids[subj_idx]}")
-        (
-            trial_data_r_subj,
-            trial_data_subj,
-            session_data_subj,
-            unit_spike_times_subj,
-            regions_subj,
-        ) = load_subj(subj_idx, thresh=thresh)
-
-        trial_data_r.append(trial_data_r_subj)
-        trial_data.append(trial_data_subj)
-        session_data.append(session_data_subj)
-        unit_spike_times.append(unit_spike_times_subj)
-        regions.append(regions_subj)
-
-    return trial_data_r, trial_data, session_data, unit_spike_times, regions
-
-
-def load_subj(subj_idx, thresh=1):
-    trial_data_r = []
-    trial_data = []
-    session_data = []
-    unit_spike_times = []
-    regions = []
-
-    for sess_idx in range(len(session_ids[subj_idx])):
-        print(f"> Session: {session_ids[subj_idx][sess_idx]}")
-        (
-            trial_data_r_sess,
-            trial_data_sess,
-            session_data_sess,
-            unit_spike_times_lite_sess,
-            regions_sess,
-        ) = load_sess(subj_idx, sess_idx, thresh=thresh)
-        trial_data_r.append(trial_data_r_sess)
-        trial_data.append(trial_data_sess)
-        session_data.append(session_data_sess)
-        unit_spike_times.append(unit_spike_times_lite_sess)
-        regions.append(regions_sess)
-
-    return trial_data_r, trial_data, session_data, unit_spike_times, regions
+"""PLEASE USE THIS FUNCTION!!!"""
 
 
 def load_sess(
@@ -103,10 +67,26 @@ def load_sess(
     sess_id=None,
     subj_idx=None,
     sess_idx=None,
-    bin_size=0.001,
     thresh=1,
     mode="new",
 ):
+    """
+    subj_id:    the actual id of the subject, e.g., MM012, MR83
+    sess_id:    the actual id of the session, e.g., 20231211_172819
+
+    ! THE FOLLOWING TWO ARE NOT RECOMMENDED FOR REPRODUCIBLE CODE ACROSS
+    ! INDIVIDUALS BECAUSE OF DIFFERENCES IN THE DATA FILES PRESENT IN
+    ! THEIR DATA FOLDERS
+
+    subj_idx:   the index of the subject, e.g., 0 for the first subject in your data folder
+    sess_idx:   the index of the session, e.g., -1 for the last session
+
+    thresh:     the minimum firing rate to keep, defaults to 1 Hz
+    mode:       'old' to load data from the old cohort (MM012 & MM013), 'new' to load data from the new cohort (MR82, MR83, MR85)
+    """
+
+    bin_size = 0.001
+
     if (subj_id is None and subj_idx is None) or (sess_id is None and sess_idx is None):
         raise ValueError("wow all nones?! try again bucko.")
     else:
@@ -208,6 +188,57 @@ def load_sess(
         return unit_spike_times_lite, trial_data, session_data, regions
     else:
         raise ValueError("valid values for mode are 'old' and 'new.'")
+
+
+def load_data(thresh=1):
+    trial_data_r = []
+    trial_data = []
+    session_data = []
+    unit_spike_times = []
+    regions = []
+
+    for subj_idx in range(len(subject_ids)):
+        print(f"Subject: {subject_ids[subj_idx]}")
+        (
+            trial_data_r_subj,
+            trial_data_subj,
+            session_data_subj,
+            unit_spike_times_subj,
+            regions_subj,
+        ) = load_subj(subj_idx, thresh=thresh)
+
+        trial_data_r.append(trial_data_r_subj)
+        trial_data.append(trial_data_subj)
+        session_data.append(session_data_subj)
+        unit_spike_times.append(unit_spike_times_subj)
+        regions.append(regions_subj)
+
+    return trial_data_r, trial_data, session_data, unit_spike_times, regions
+
+
+def load_subj(subj_idx, thresh=1):
+    trial_data_r = []
+    trial_data = []
+    session_data = []
+    unit_spike_times = []
+    regions = []
+
+    for sess_idx in range(len(session_ids[subj_idx])):
+        print(f"> Session: {session_ids[subj_idx][sess_idx]}")
+        (
+            trial_data_r_sess,
+            trial_data_sess,
+            session_data_sess,
+            unit_spike_times_lite_sess,
+            regions_sess,
+        ) = load_sess(subj_idx, sess_idx, thresh=thresh)
+        trial_data_r.append(trial_data_r_sess)
+        trial_data.append(trial_data_sess)
+        session_data.append(session_data_sess)
+        unit_spike_times.append(unit_spike_times_lite_sess)
+        regions.append(regions_sess)
+
+    return trial_data_r, trial_data, session_data, unit_spike_times, regions
 
 
 def load_data_sess(

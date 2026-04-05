@@ -1,3 +1,14 @@
+"""
+utils.py
+
+General-purpose utilities.
+
+Author: Stellina X. Ao
+Created: 2025-12-18
+Last Modified: 2026-01-12
+Python Version: 3.11.14
+"""
+
 from typing import Dict
 
 import numpy as np

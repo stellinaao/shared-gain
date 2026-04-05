@@ -1,3 +1,14 @@
+"""
+fitlvm_utils.py
+
+Utilities for fitting an LVM.
+
+Author: Stellina X. Ao, modified from Liska, Rowley 2019
+Created: 2026-02-09
+Last Modified: 2026-03-26
+Python Version: 3.11.14
+"""
+
 import sys
 from copy import deepcopy
 
