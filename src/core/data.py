@@ -12,13 +12,12 @@ Python Version: 3.11.14
 
 import pickle
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import re
 import os
 import shutup
-from spks.utils import get_cluster_spike_times, binary_spikes
+from spks.utils import get_cluster_spike_times
 from damn.alignment import compute_spike_count
 from utils.paths import DATA_DIR
 
@@ -342,6 +341,15 @@ def get_trial_mask(trial_data, strategy_only=True, reward_only=False):
     return mask
 
 
+# PR
+def get_pr(psths, regions, num_units):
+    pr = (
+        np.array([psths[reg].sum(axis=0).sum(axis=1) for reg in regions]).sum(0)
+        / num_units
+    )
+    return pr
+
+
 # PSTHS
 def get_psths(
     unit_spike_times,
@@ -602,41 +610,7 @@ def balance_strategy(trial_data, mb_idx, mf_idx):
     return mb_idx, mf_idx
 
 
-# PLOTTING
-def plot_fr_regs(unit_spike_times, regions, bin_size=0.001):
-    trial_dur_s = int(
-        np.ceil(
-            np.max(
-                [
-                    max(unit_spike_times_reg)
-                    for reg in regions
-                    for unit_spike_times_reg in unit_spike_times[reg]
-                ]
-            )
-        )
-    )  # s
-    trial_dur_ms = trial_dur_s * (1 / bin_size)
-
-    frs = [
-        [get_mfr(spike_times, trial_dur_ms) for spike_times in unit_spike_times[reg]]
-        for reg in regions
-    ]
-    fig, axes = plt.subplots(ncols=2, nrows=2)
-    for i, ax in enumerate(axes.flat):
-        ax.hist(frs[i])
-        ax.set_title(regions[i])
-        ax.set_xlabel("Mean Firing Rate (Hz)")
-    fig.tight_layout()
-    fig.show()
-
-
 # UTILS
-def time2train(spike_times, num_ms):
-    spike_train = np.zeros(num_ms)
-    spike_train[np.round(spike_times * 1000).astype(int)] = 1
-    return spike_train
-
-
 def rem_low_fr(unit_spike_times, trial_dur_ms, thresh=1):
     unit_spike_times_lite = {}
     for region in unit_spike_times:
@@ -658,35 +632,5 @@ def rem_low_fr_reg(unit_spike_times_reg, trial_dur_ms, thresh=1):
     return unit_spike_times_reg
 
 
-def half_gaussian_kernel(size=21, sigma=3, side="right"):
-    x = np.linspace(-size // 2, size // 2, size)
-    g = np.exp(-(x**2) / (2 * sigma**2))
-    if side == "right":
-        g[x < 0] = 0
-    elif side == "left":
-        g[x > 0] = 0
-    return g / g.sum()
-
-
-def get_fr(spike_times, binsize_ms=1):
-    """
-    returns fr in ms (each val is binsize_ms ms)
-    """
-
-    edges = np.arange(0, max(spike_times), binsize_ms / 1000)
-    [fr] = binary_spikes(
-        [spike_times], edges, kernel=half_gaussian_kernel(side="left")
-    ) / (binsize_ms / 1000)
-    return fr
-
-
 def get_mfr(spike_times, trial_dur_ms):
     return 1000 * len(spike_times) / trial_dur_ms
-
-
-def s2ms(sec):
-    return int(np.ceil(sec * 1000))
-
-
-def ms2s(ms):
-    return int(np.ceil(ms / 1000))
