@@ -342,6 +342,15 @@ def get_trial_mask(trial_data, strategy_only=True, reward_only=False):
     return mask
 
 
+# PR
+def get_pr(psths, regions, num_units):
+    pr = (
+        np.array([psths[reg].sum(axis=0).sum(axis=1) for reg in regions]).sum(0)
+        / num_units
+    )
+    return pr
+
+
 # PSTHS
 def get_psths(
     unit_spike_times,
