@@ -36,6 +36,7 @@ def plot_summary(
     model,
     potato=None,
     mode="offset",
+    label="block",
     metric="spearman",
     save_fig=False,
     fname="",
@@ -53,7 +54,7 @@ def plot_summary(
     )
 
     for latent_idx, ax in enumerate(axes.flat):
-        ax.plot(np.array(potato), "#9C9C9C", linewidth=2, label="Block")
+        ax.plot(np.array(potato), "#9C9C9C", linewidth=2, label=label)
         if do_gain:
             zgain = model.gain_mu.get_weights()[:, latent_idx]
             zweight = (
