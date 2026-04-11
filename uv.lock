@@ -692,7 +692,7 @@ wheels = [
 [[package]]
 name = "damn"
 version = "0.0.0"
-source = { git = "https://github.com/mdmelin/DAMN.git?branch=main#4ade72b8925f8539904d16c73bb2ad69abd4b306" }
+source = { git = "https://github.com/mdmelin/DAMN.git#664d8f883671eb994f8df09ee540caf9da903f6b" }
 dependencies = [
     { name = "numpy" },
 ]
@@ -744,296 +744,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/43/fa/6d96a0978d19e17b68d634497769987b16c8f4cd0a7a05048bec693caa6b/decorator-5.2.1.tar.gz", hash = "sha256:65f266143752f734b0a7cc83c46f4618af75b8c5911b00ccb61d0ac9b6da0360", size = 56711, upload-time = "2025-02-24T04:41:34.073Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4e/8c/f3147f5c4b73e7550fe5f9352eaa956ae838d5c51eb58e7a25b9f3e2643b/decorator-5.2.1-py3-none-any.whl", hash = "sha256:d316bb415a2d9e2d2b3abcc4084c6502fc09240e292cd76a76afc106a1c8e04a", size = 9190, upload-time = "2025-02-24T04:41:32.565Z" },
-]
-
-[[package]]
-name = "dfna"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "absl-py" },
-    { name = "aiohappyeyeballs" },
-    { name = "aiohttp" },
-    { name = "aiosignal" },
-    { name = "antlr4-python3-runtime" },
-    { name = "asttokens" },
-    { name = "async-timeout" },
-    { name = "attrs" },
-    { name = "autograd" },
-    { name = "backcall" },
-    { name = "blosc2" },
-    { name = "certifi" },
-    { name = "cfgv" },
-    { name = "charset-normalizer" },
-    { name = "click" },
-    { name = "colorama" },
-    { name = "comm" },
-    { name = "contourpy" },
-    { name = "cowpy" },
-    { name = "cycler" },
-    { name = "cython" },
-    { name = "damn" },
-    { name = "dateparser" },
-    { name = "debugpy" },
-    { name = "decorator" },
-    { name = "distlib" },
-    { name = "executing" },
-    { name = "ffmpeg" },
-    { name = "ffprobe" },
-    { name = "filelock" },
-    { name = "fonttools" },
-    { name = "frozenlist" },
-    { name = "fsspec" },
-    { name = "git-filter-repo" },
-    { name = "grpcio" },
-    { name = "h5py" },
-    { name = "hmmlearn" },
-    { name = "identify" },
-    { name = "idna" },
-    { name = "imageio" },
-    { name = "intel-openmp" },
-    { name = "ipykernel" },
-    { name = "ipympl" },
-    { name = "ipython", version = "9.10.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "ipython", version = "9.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "ipython-pygments-lexers" },
-    { name = "ipywidgets" },
-    { name = "jedi" },
-    { name = "jinja2" },
-    { name = "joblib" },
-    { name = "jupyter-client" },
-    { name = "jupyter-core" },
-    { name = "jupyterlab-widgets" },
-    { name = "kiwisolver" },
-    { name = "lightning-utilities" },
-    { name = "llvmlite" },
-    { name = "markdown" },
-    { name = "markupsafe" },
-    { name = "mat73" },
-    { name = "matplotlib" },
-    { name = "matplotlib-inline" },
-    { name = "mkl" },
-    { name = "mpmath" },
-    { name = "msgpack" },
-    { name = "mtscomp" },
-    { name = "multidict" },
-    { name = "mypy-extensions" },
-    { name = "natsort" },
-    { name = "ndindex" },
-    { name = "ndnt" },
-    { name = "nest-asyncio" },
-    { name = "networkx" },
-    { name = "nodeenv" },
-    { name = "numba" },
-    { name = "numexpr" },
-    { name = "numpy" },
-    { name = "omegaconf" },
-    { name = "packaging" },
-    { name = "pandas" },
-    { name = "parso" },
-    { name = "pathlib" },
-    { name = "pathspec" },
-    { name = "pickleshare" },
-    { name = "pillow" },
-    { name = "platformdirs" },
-    { name = "pre-commit" },
-    { name = "prompt-toolkit" },
-    { name = "propcache" },
-    { name = "protobuf" },
-    { name = "psutil" },
-    { name = "pure-eval" },
-    { name = "py-cpuinfo" },
-    { name = "pygments" },
-    { name = "pyparsing" },
-    { name = "pyqt6" },
-    { name = "pyqt6-qt6" },
-    { name = "pyqt6-sip" },
-    { name = "python-dateutil" },
-    { name = "python-discovery" },
-    { name = "pytokens" },
-    { name = "pytorch-lightning" },
-    { name = "pytz" },
-    { name = "pywin32" },
-    { name = "pyyaml" },
-    { name = "pyzmq" },
-    { name = "regex" },
-    { name = "requests" },
-    { name = "ruff" },
-    { name = "scienceplots" },
-    { name = "scikit-learn" },
-    { name = "scipy" },
-    { name = "seaborn" },
-    { name = "shutup" },
-    { name = "six" },
-    { name = "spks" },
-    { name = "squiggs" },
-    { name = "stack-data" },
-    { name = "sympy" },
-    { name = "tables" },
-    { name = "tbb" },
-    { name = "tensorboard" },
-    { name = "tensorboard-data-server" },
-    { name = "threadpoolctl" },
-    { name = "torch" },
-    { name = "torchaudio" },
-    { name = "torchmetrics" },
-    { name = "torchvision" },
-    { name = "tornado" },
-    { name = "tqdm" },
-    { name = "traitlets" },
-    { name = "typing-extensions" },
-    { name = "tzdata" },
-    { name = "tzlocal" },
-    { name = "urllib3" },
-    { name = "virtualenv" },
-    { name = "wcwidth" },
-    { name = "werkzeug" },
-    { name = "wfield" },
-    { name = "widgetsnbextension" },
-    { name = "yarl" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "absl-py", specifier = ">=2.3.1" },
-    { name = "aiohappyeyeballs", specifier = ">=2.6.1" },
-    { name = "aiohttp", specifier = ">=3.13.2" },
-    { name = "aiosignal", specifier = ">=1.4.0" },
-    { name = "antlr4-python3-runtime", specifier = ">=4.9.3" },
-    { name = "asttokens", specifier = ">=3.0.1" },
-    { name = "async-timeout", specifier = ">=5.0.1" },
-    { name = "attrs", specifier = ">=25.4.0" },
-    { name = "autograd", specifier = ">=1.8.0" },
-    { name = "backcall", specifier = ">=0.2.0" },
-    { name = "blosc2", specifier = ">=4.0.0" },
-    { name = "certifi", specifier = ">=2026.2.25" },
-    { name = "cfgv", specifier = ">=3.5.0" },
-    { name = "charset-normalizer", specifier = ">=3.4.4" },
-    { name = "click", specifier = ">=8.3.1" },
-    { name = "colorama", specifier = ">=0.4.6" },
-    { name = "comm", specifier = ">=0.2.3" },
-    { name = "contourpy", specifier = ">=1.3.2" },
-    { name = "cowpy", specifier = ">=1.1.5" },
-    { name = "cycler", specifier = ">=0.12.1" },
-    { name = "cython", specifier = ">=3.2.4" },
-    { name = "damn", git = "https://github.com/mdmelin/DAMN" },
-    { name = "dateparser", specifier = ">=1.2.1" },
-    { name = "debugpy", specifier = ">=1.8.20" },
-    { name = "decorator", specifier = ">=5.2.1" },
-    { name = "distlib", specifier = ">=0.4.0" },
-    { name = "executing", specifier = ">=2.2.1" },
-    { name = "ffmpeg", specifier = ">=1.4" },
-    { name = "ffprobe", specifier = ">=0.5" },
-    { name = "filelock", specifier = ">=3.25.0" },
-    { name = "fonttools", specifier = ">=4.60.1" },
-    { name = "frozenlist", specifier = ">=1.8.0" },
-    { name = "fsspec", specifier = ">=2025.10.0" },
-    { name = "git-filter-repo", specifier = ">=2.47.0" },
-    { name = "grpcio", specifier = ">=1.76.0" },
-    { name = "h5py", specifier = ">=3.13.0" },
-    { name = "hmmlearn", specifier = ">=0.3.3" },
-    { name = "identify", specifier = ">=2.6.17" },
-    { name = "idna", specifier = ">=3.11" },
-    { name = "imageio", specifier = ">=2.37.2" },
-    { name = "intel-openmp", specifier = ">=2021.4.0" },
-    { name = "ipykernel", specifier = ">=7.2.0" },
-    { name = "ipympl", specifier = ">=0.10.0" },
-    { name = "ipython", specifier = ">=8.12.3" },
-    { name = "ipython-pygments-lexers", specifier = ">=1.1.1" },
-    { name = "ipywidgets", specifier = ">=8.1.5" },
-    { name = "jedi", specifier = ">=0.19.2" },
-    { name = "jinja2", specifier = ">=3.1.6" },
-    { name = "joblib", specifier = ">=1.4.2" },
-    { name = "jupyter-client", specifier = ">=8.8.0" },
-    { name = "jupyter-core", specifier = ">=5.9.1" },
-    { name = "jupyterlab-widgets", specifier = ">=3.0.16" },
-    { name = "kiwisolver", specifier = ">=1.4.9" },
-    { name = "lightning-utilities", specifier = ">=0.15.2" },
-    { name = "llvmlite", specifier = ">=0.46.0" },
-    { name = "markdown", specifier = ">=3.10" },
-    { name = "markupsafe", specifier = ">=3.0.3" },
-    { name = "mat73", specifier = ">=0.65" },
-    { name = "matplotlib", specifier = ">=3.10.0" },
-    { name = "matplotlib-inline", specifier = ">=0.2.1" },
-    { name = "mkl", specifier = ">=2021.4.0" },
-    { name = "mpmath", specifier = ">=1.3.0" },
-    { name = "msgpack", specifier = ">=1.1.2" },
-    { name = "mtscomp", specifier = ">=1.0.2" },
-    { name = "multidict", specifier = ">=6.7.0" },
-    { name = "mypy-extensions", specifier = ">=1.1.0" },
-    { name = "natsort", specifier = ">=8.4.0" },
-    { name = "ndindex", specifier = ">=1.10.1" },
-    { name = "ndnt", specifier = ">=1.3.1" },
-    { name = "nest-asyncio", specifier = ">=1.6.0" },
-    { name = "networkx", specifier = ">=3.4.2" },
-    { name = "nodeenv", specifier = ">=1.10.0" },
-    { name = "numba", specifier = ">=0.64.0" },
-    { name = "numexpr", specifier = ">=2.14.1" },
-    { name = "numpy", specifier = ">=2.4.2" },
-    { name = "omegaconf", specifier = ">=2.3.0" },
-    { name = "packaging", specifier = ">=26.0" },
-    { name = "pandas", specifier = ">=3.0.1" },
-    { name = "parso", specifier = ">=0.8.6" },
-    { name = "pathlib", specifier = ">=1.0.1" },
-    { name = "pathspec", specifier = ">=0.9.0" },
-    { name = "pickleshare", specifier = ">=0.7.5" },
-    { name = "pillow", specifier = ">=12.0.0" },
-    { name = "platformdirs", specifier = ">=4.9.4" },
-    { name = "pre-commit", specifier = ">=4.5.1" },
-    { name = "prompt-toolkit", specifier = ">=3.0.52" },
-    { name = "propcache", specifier = ">=0.4.1" },
-    { name = "protobuf", specifier = ">=6.33.2" },
-    { name = "psutil", specifier = ">=7.2.2" },
-    { name = "pure-eval", specifier = ">=0.2.3" },
-    { name = "py-cpuinfo", specifier = ">=9.0.0" },
-    { name = "pygments", specifier = ">=2.19.2" },
-    { name = "pyparsing", specifier = ">=3.2.5" },
-    { name = "pyqt6", specifier = ">=6.10.2" },
-    { name = "pyqt6-qt6", specifier = ">=6.10.2" },
-    { name = "pyqt6-sip", specifier = ">=13.11.0" },
-    { name = "python-dateutil", specifier = ">=2.9.0.post0" },
-    { name = "python-discovery", specifier = ">=1.1.1" },
-    { name = "pytokens", specifier = ">=0.4.1" },
-    { name = "pytorch-lightning", specifier = ">=2.5.0.post0" },
-    { name = "pytz", specifier = ">=2025.2" },
-    { name = "pywin32", specifier = ">=311" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "pyzmq", specifier = ">=27.1.0" },
-    { name = "regex", specifier = ">=2025.11.3" },
-    { name = "requests", specifier = ">=2.32.5" },
-    { name = "ruff", specifier = ">=0.15.5" },
-    { name = "scienceplots", specifier = ">=2.1.1" },
-    { name = "scikit-learn", specifier = ">=1.6.1" },
-    { name = "scipy", specifier = ">=1.17.1" },
-    { name = "seaborn", specifier = ">=0.13.2" },
-    { name = "shutup", specifier = ">=0.3.0" },
-    { name = "six", specifier = ">=1.17.0" },
-    { name = "spks", git = "https://github.com/spkware/spks" },
-    { name = "squiggs", git = "https://github.com/stellinaao/SQUIGGS" },
-    { name = "stack-data", specifier = ">=0.6.3" },
-    { name = "sympy", specifier = ">=1.14.0" },
-    { name = "tables", specifier = ">=3.10.1" },
-    { name = "tbb", specifier = ">=2021.13.1" },
-    { name = "tensorboard", specifier = ">=2.20.0" },
-    { name = "tensorboard-data-server", specifier = ">=0.7.2" },
-    { name = "threadpoolctl", specifier = ">=3.6.0" },
-    { name = "torch", specifier = ">=2.9.1" },
-    { name = "torchaudio", specifier = ">=2.9.1" },
-    { name = "torchmetrics", specifier = ">=1.8.2" },
-    { name = "torchvision", specifier = ">=0.24.1" },
-    { name = "tornado", specifier = ">=6.5.5" },
-    { name = "tqdm", specifier = ">=4.67.3" },
-    { name = "traitlets", specifier = ">=5.14.3" },
-    { name = "typing-extensions", specifier = ">=4.15.0" },
-    { name = "tzdata", specifier = ">=2025.2" },
-    { name = "tzlocal", specifier = ">=5.3.1" },
-    { name = "urllib3", specifier = ">=2.6.3" },
-    { name = "virtualenv", specifier = ">=21.1.0" },
-    { name = "wcwidth", specifier = ">=0.6.0" },
-    { name = "werkzeug", specifier = ">=3.1.4" },
-    { name = "wfield", git = "https://github.com/stellinaao/wfield" },
-    { name = "widgetsnbextension", specifier = ">=4.0.15" },
-    { name = "yarl", specifier = ">=1.22.0" },
 ]
 
 [[package]]
@@ -1411,30 +1121,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b1/84/93bcd1300216ea50811cee96873b84a1bebf8d0489ffaf7f2a3756bab866/imageio-2.37.3.tar.gz", hash = "sha256:bbb37efbfc4c400fcd534b367b91fcd66d5da639aaa138034431a1c5e0a41451", size = 389673, upload-time = "2026-03-09T11:31:12.573Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/49/fa/391e437a34e55095173dca5f24070d89cbc233ff85bf1c29c93248c6588d/imageio-2.37.3-py3-none-any.whl", hash = "sha256:46f5bb8522cd421c0f5ae104d8268f569d856b29eb1a13b92829d1970f32c9f0", size = 317646, upload-time = "2026-03-09T11:31:10.771Z" },
-]
-
-[[package]]
-name = "intel-cmplr-lib-ur"
-version = "2025.3.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "umf" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/82/ca/9e27494641de36448c4783a1ff67f55b546733beb39fb8abe72960b756a4/intel_cmplr_lib_ur-2025.3.3-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:a18ceadd336ad2f82f47977214ddc94568c5a33e262ee3b9d1b3631b7897b669", size = 30765500, upload-time = "2026-03-24T15:11:44.973Z" },
-    { url = "https://files.pythonhosted.org/packages/3f/0f/f195caa3add546c47414ed62ba508bdbb6486d56a8f7371449cd554d041a/intel_cmplr_lib_ur-2025.3.3-py2.py3-none-win_amd64.whl", hash = "sha256:6f019c5563aaa231d7f618b400cfb4a8a5eac18bbb5084b1ebb1361696b6c7dd", size = 1253494, upload-time = "2026-03-24T15:11:09.948Z" },
-]
-
-[[package]]
-name = "intel-openmp"
-version = "2025.3.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "intel-cmplr-lib-ur" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3f/12/5e07caf359d5bedd67b40e84e2faec6b5a3ad5da27ce151860fe6b270935/intel_openmp-2025.3.3-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:0b20a49b041afc8c1ec9b5746f006c2aa1d2475a9fe6d29ed551dba7cb84d9ab", size = 74335293, upload-time = "2026-03-24T15:11:36.732Z" },
-    { url = "https://files.pythonhosted.org/packages/55/79/ec688efdcd29fd5ab299fd8a76f2bfdcb1466d308a6482b3f0b51dfb34e2/intel_openmp-2025.3.3-py2.py3-none-win_amd64.whl", hash = "sha256:20a0f9306a9eb7f56065e7e912ae359d64bfeebc37513464f92840fa3c0d0c4b", size = 32085026, upload-time = "2026-03-24T15:11:02.086Z" },
 ]
 
 [[package]]
@@ -1974,20 +1660,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c7/74/97e72a36efd4ae2bccb3463284300f8953f199b5ffbc04cbbb0ec78f74b1/matplotlib_inline-0.2.1.tar.gz", hash = "sha256:e1ee949c340d771fc39e241ea75683deb94762c8fa5f2927ec57c83c4dffa9fe", size = 8110, upload-time = "2025-10-23T09:00:22.126Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/af/33/ee4519fa02ed11a94aef9559552f3b17bb863f2ecfe1a35dc7f548cde231/matplotlib_inline-0.2.1-py3-none-any.whl", hash = "sha256:d56ce5156ba6085e00a9d54fead6ed29a9c47e215cd1bba2e976ef39f5710a76", size = 9516, upload-time = "2025-10-23T09:00:20.675Z" },
-]
-
-[[package]]
-name = "mkl"
-version = "2025.3.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "intel-openmp" },
-    { name = "onemkl-license" },
-    { name = "tbb" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b3/ee/76755ca0ec9626835e0d024c369b968f24eadce2106a7884404720670623/mkl-2025.3.1-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:db31e59fa368dd4fa45b494351f4b7e0e6204b08d7db27836118c4e1370eb011", size = 195022933, upload-time = "2026-01-22T05:35:09.804Z" },
-    { url = "https://files.pythonhosted.org/packages/99/c2/97c8df6e8c0663903ab7b0fe4d9529e6a75ffeeeef7b1727bc14996d389b/mkl-2025.3.1-py2.py3-none-win_amd64.whl", hash = "sha256:74084f58784c4cde1dc3284bdf3a19df30fbfe11416567e4ba6419d3bd9ce33e", size = 155530417, upload-time = "2026-01-22T05:31:57.796Z" },
 ]
 
 [[package]]
@@ -2624,15 +2296,6 @@ wheels = [
 ]
 
 [[package]]
-name = "onemkl-license"
-version = "2025.3.1"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3e/1d/7acbedb07bf4c71cc499527c25a3ef60bf83ed41b8918e986ed7a4573bd4/onemkl_license-2025.3.1-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:b6263a01bf29c04ea683eab1712eb6b74c2b8b722722f46fd90784ed8778c093", size = 58934, upload-time = "2026-01-22T05:36:11.789Z" },
-    { url = "https://files.pythonhosted.org/packages/1b/7f/732bd62f4ce4ddcbf97003efa856fcafc99c29e6b05deb0c1bb9cb85bdc4/onemkl_license-2025.3.1-py2.py3-none-win_amd64.whl", hash = "sha256:9fa45b274f05a61797f9ec3166b136124250ec7c9c91dedb87f3a926bfed9a54", size = 58959, upload-time = "2026-01-22T05:32:16.865Z" },
-]
-
-[[package]]
 name = "opencv-python-headless"
 version = "4.13.0.92"
 source = { registry = "https://pypi.org/simple" }
@@ -3255,25 +2918,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pywin32"
-version = "311"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7c/af/449a6a91e5d6db51420875c54f6aff7c97a86a3b13a0b4f1a5c13b988de3/pywin32-311-cp311-cp311-win32.whl", hash = "sha256:184eb5e436dea364dcd3d2316d577d625c0351bf237c4e9a5fabbcfa5a58b151", size = 8697031, upload-time = "2025-07-14T20:13:13.266Z" },
-    { url = "https://files.pythonhosted.org/packages/51/8f/9bb81dd5bb77d22243d33c8397f09377056d5c687aa6d4042bea7fbf8364/pywin32-311-cp311-cp311-win_amd64.whl", hash = "sha256:3ce80b34b22b17ccbd937a6e78e7225d80c52f5ab9940fe0506a1a16f3dab503", size = 9508308, upload-time = "2025-07-14T20:13:15.147Z" },
-    { url = "https://files.pythonhosted.org/packages/44/7b/9c2ab54f74a138c491aba1b1cd0795ba61f144c711daea84a88b63dc0f6c/pywin32-311-cp311-cp311-win_arm64.whl", hash = "sha256:a733f1388e1a842abb67ffa8e7aad0e70ac519e09b0f6a784e65a136ec7cefd2", size = 8703930, upload-time = "2025-07-14T20:13:16.945Z" },
-    { url = "https://files.pythonhosted.org/packages/e7/ab/01ea1943d4eba0f850c3c61e78e8dd59757ff815ff3ccd0a84de5f541f42/pywin32-311-cp312-cp312-win32.whl", hash = "sha256:750ec6e621af2b948540032557b10a2d43b0cee2ae9758c54154d711cc852d31", size = 8706543, upload-time = "2025-07-14T20:13:20.765Z" },
-    { url = "https://files.pythonhosted.org/packages/d1/a8/a0e8d07d4d051ec7502cd58b291ec98dcc0c3fff027caad0470b72cfcc2f/pywin32-311-cp312-cp312-win_amd64.whl", hash = "sha256:b8c095edad5c211ff31c05223658e71bf7116daa0ecf3ad85f3201ea3190d067", size = 9495040, upload-time = "2025-07-14T20:13:22.543Z" },
-    { url = "https://files.pythonhosted.org/packages/ba/3a/2ae996277b4b50f17d61f0603efd8253cb2d79cc7ae159468007b586396d/pywin32-311-cp312-cp312-win_arm64.whl", hash = "sha256:e286f46a9a39c4a18b319c28f59b61de793654af2f395c102b4f819e584b5852", size = 8710102, upload-time = "2025-07-14T20:13:24.682Z" },
-    { url = "https://files.pythonhosted.org/packages/a5/be/3fd5de0979fcb3994bfee0d65ed8ca9506a8a1260651b86174f6a86f52b3/pywin32-311-cp313-cp313-win32.whl", hash = "sha256:f95ba5a847cba10dd8c4d8fefa9f2a6cf283b8b88ed6178fa8a6c1ab16054d0d", size = 8705700, upload-time = "2025-07-14T20:13:26.471Z" },
-    { url = "https://files.pythonhosted.org/packages/e3/28/e0a1909523c6890208295a29e05c2adb2126364e289826c0a8bc7297bd5c/pywin32-311-cp313-cp313-win_amd64.whl", hash = "sha256:718a38f7e5b058e76aee1c56ddd06908116d35147e133427e59a3983f703a20d", size = 9494700, upload-time = "2025-07-14T20:13:28.243Z" },
-    { url = "https://files.pythonhosted.org/packages/04/bf/90339ac0f55726dce7d794e6d79a18a91265bdf3aa70b6b9ca52f35e022a/pywin32-311-cp313-cp313-win_arm64.whl", hash = "sha256:7b4075d959648406202d92a2310cb990fea19b535c7f4a78d3f5e10b926eeb8a", size = 8709318, upload-time = "2025-07-14T20:13:30.348Z" },
-    { url = "https://files.pythonhosted.org/packages/c9/31/097f2e132c4f16d99a22bfb777e0fd88bd8e1c634304e102f313af69ace5/pywin32-311-cp314-cp314-win32.whl", hash = "sha256:b7a2c10b93f8986666d0c803ee19b5990885872a7de910fc460f9b0c2fbf92ee", size = 8840714, upload-time = "2025-07-14T20:13:32.449Z" },
-    { url = "https://files.pythonhosted.org/packages/90/4b/07c77d8ba0e01349358082713400435347df8426208171ce297da32c313d/pywin32-311-cp314-cp314-win_amd64.whl", hash = "sha256:3aca44c046bd2ed8c90de9cb8427f581c479e594e99b5c0bb19b29c10fd6cb87", size = 9656800, upload-time = "2025-07-14T20:13:34.312Z" },
-    { url = "https://files.pythonhosted.org/packages/c0/d2/21af5c535501a7233e734b8af901574572da66fcc254cb35d0609c9080dd/pywin32-311-cp314-cp314-win_arm64.whl", hash = "sha256:a508e2d9025764a8270f93111a970e1d0fbfc33f4153b388bb649b7eec4f9b42", size = 8932540, upload-time = "2025-07-14T20:13:36.379Z" },
-]
-
-[[package]]
 name = "pyyaml"
 version = "6.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3779,6 +3423,288 @@ wheels = [
 ]
 
 [[package]]
+name = "shared-gain"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "absl-py" },
+    { name = "aiohappyeyeballs" },
+    { name = "aiohttp" },
+    { name = "aiosignal" },
+    { name = "antlr4-python3-runtime" },
+    { name = "asttokens" },
+    { name = "async-timeout" },
+    { name = "attrs" },
+    { name = "autograd" },
+    { name = "backcall" },
+    { name = "blosc2" },
+    { name = "certifi" },
+    { name = "cfgv" },
+    { name = "charset-normalizer" },
+    { name = "click" },
+    { name = "colorama" },
+    { name = "comm" },
+    { name = "contourpy" },
+    { name = "cowpy" },
+    { name = "cycler" },
+    { name = "cython" },
+    { name = "damn" },
+    { name = "dateparser" },
+    { name = "debugpy" },
+    { name = "decorator" },
+    { name = "distlib" },
+    { name = "executing" },
+    { name = "ffmpeg" },
+    { name = "ffprobe" },
+    { name = "filelock" },
+    { name = "fonttools" },
+    { name = "frozenlist" },
+    { name = "fsspec" },
+    { name = "git-filter-repo" },
+    { name = "grpcio" },
+    { name = "h5py" },
+    { name = "hmmlearn" },
+    { name = "identify" },
+    { name = "idna" },
+    { name = "imageio" },
+    { name = "ipykernel" },
+    { name = "ipympl" },
+    { name = "ipython", version = "9.10.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "ipython", version = "9.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "ipython-pygments-lexers" },
+    { name = "ipywidgets" },
+    { name = "jedi" },
+    { name = "jinja2" },
+    { name = "joblib" },
+    { name = "jupyter-client" },
+    { name = "jupyter-core" },
+    { name = "jupyterlab-widgets" },
+    { name = "kiwisolver" },
+    { name = "lightning-utilities" },
+    { name = "llvmlite" },
+    { name = "markdown" },
+    { name = "markupsafe" },
+    { name = "mat73" },
+    { name = "matplotlib" },
+    { name = "matplotlib-inline" },
+    { name = "mpmath" },
+    { name = "msgpack" },
+    { name = "mtscomp" },
+    { name = "multidict" },
+    { name = "mypy-extensions" },
+    { name = "natsort" },
+    { name = "ndindex" },
+    { name = "ndnt" },
+    { name = "nest-asyncio" },
+    { name = "networkx" },
+    { name = "nodeenv" },
+    { name = "numba" },
+    { name = "numexpr" },
+    { name = "numpy" },
+    { name = "omegaconf" },
+    { name = "packaging" },
+    { name = "pandas" },
+    { name = "parso" },
+    { name = "pathlib" },
+    { name = "pathspec" },
+    { name = "pickleshare" },
+    { name = "pillow" },
+    { name = "platformdirs" },
+    { name = "pre-commit" },
+    { name = "prompt-toolkit" },
+    { name = "propcache" },
+    { name = "protobuf" },
+    { name = "psutil" },
+    { name = "pure-eval" },
+    { name = "py-cpuinfo" },
+    { name = "pygments" },
+    { name = "pyparsing" },
+    { name = "pyqt6" },
+    { name = "pyqt6-qt6" },
+    { name = "pyqt6-sip" },
+    { name = "python-dateutil" },
+    { name = "python-discovery" },
+    { name = "pytokens" },
+    { name = "pytorch-lightning" },
+    { name = "pytz" },
+    { name = "pyyaml" },
+    { name = "pyzmq" },
+    { name = "regex" },
+    { name = "requests" },
+    { name = "ruff" },
+    { name = "scienceplots" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "seaborn" },
+    { name = "shutup" },
+    { name = "six" },
+    { name = "spks" },
+    { name = "squiggs" },
+    { name = "stack-data" },
+    { name = "sympy" },
+    { name = "tables" },
+    { name = "tensorboard" },
+    { name = "tensorboard-data-server" },
+    { name = "threadpoolctl" },
+    { name = "torch" },
+    { name = "torchaudio" },
+    { name = "torchmetrics" },
+    { name = "torchvision" },
+    { name = "tornado" },
+    { name = "tqdm" },
+    { name = "traitlets" },
+    { name = "typing-extensions" },
+    { name = "tzdata" },
+    { name = "tzlocal" },
+    { name = "urllib3" },
+    { name = "virtualenv" },
+    { name = "wcwidth" },
+    { name = "werkzeug" },
+    { name = "wfield" },
+    { name = "widgetsnbextension" },
+    { name = "yarl" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "absl-py", specifier = ">=2.3.1" },
+    { name = "aiohappyeyeballs", specifier = ">=2.6.1" },
+    { name = "aiohttp", specifier = ">=3.13.2" },
+    { name = "aiosignal", specifier = ">=1.4.0" },
+    { name = "antlr4-python3-runtime", specifier = ">=4.9.3" },
+    { name = "asttokens", specifier = ">=3.0.1" },
+    { name = "async-timeout", specifier = ">=5.0.1" },
+    { name = "attrs", specifier = ">=25.4.0" },
+    { name = "autograd", specifier = ">=1.8.0" },
+    { name = "backcall", specifier = ">=0.2.0" },
+    { name = "blosc2", specifier = ">=4.0.0" },
+    { name = "certifi", specifier = ">=2026.2.25" },
+    { name = "cfgv", specifier = ">=3.5.0" },
+    { name = "charset-normalizer", specifier = ">=3.4.4" },
+    { name = "click", specifier = ">=8.3.1" },
+    { name = "colorama", specifier = ">=0.4.6" },
+    { name = "comm", specifier = ">=0.2.3" },
+    { name = "contourpy", specifier = ">=1.3.2" },
+    { name = "cowpy", specifier = ">=1.1.5" },
+    { name = "cycler", specifier = ">=0.12.1" },
+    { name = "cython", specifier = ">=3.2.4" },
+    { name = "damn", git = "https://github.com/mdmelin/DAMN" },
+    { name = "dateparser", specifier = ">=1.2.1" },
+    { name = "debugpy", specifier = ">=1.8.20" },
+    { name = "decorator", specifier = ">=5.2.1" },
+    { name = "distlib", specifier = ">=0.4.0" },
+    { name = "executing", specifier = ">=2.2.1" },
+    { name = "ffmpeg", specifier = ">=1.4" },
+    { name = "ffprobe", specifier = ">=0.5" },
+    { name = "filelock", specifier = ">=3.25.0" },
+    { name = "fonttools", specifier = ">=4.60.1" },
+    { name = "frozenlist", specifier = ">=1.8.0" },
+    { name = "fsspec", specifier = ">=2025.10.0" },
+    { name = "git-filter-repo", specifier = ">=2.47.0" },
+    { name = "grpcio", specifier = ">=1.76.0" },
+    { name = "h5py", specifier = ">=3.13.0" },
+    { name = "hmmlearn", specifier = ">=0.3.3" },
+    { name = "identify", specifier = ">=2.6.17" },
+    { name = "idna", specifier = ">=3.11" },
+    { name = "imageio", specifier = ">=2.37.2" },
+    { name = "ipykernel", specifier = ">=7.2.0" },
+    { name = "ipympl", specifier = ">=0.10.0" },
+    { name = "ipython", specifier = ">=8.12.3" },
+    { name = "ipython-pygments-lexers", specifier = ">=1.1.1" },
+    { name = "ipywidgets", specifier = ">=8.1.5" },
+    { name = "jedi", specifier = ">=0.19.2" },
+    { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "joblib", specifier = ">=1.4.2" },
+    { name = "jupyter-client", specifier = ">=8.8.0" },
+    { name = "jupyter-core", specifier = ">=5.9.1" },
+    { name = "jupyterlab-widgets", specifier = ">=3.0.16" },
+    { name = "kiwisolver", specifier = ">=1.4.9" },
+    { name = "lightning-utilities", specifier = ">=0.15.2" },
+    { name = "llvmlite", specifier = ">=0.46.0" },
+    { name = "markdown", specifier = ">=3.10" },
+    { name = "markupsafe", specifier = ">=3.0.3" },
+    { name = "mat73", specifier = ">=0.65" },
+    { name = "matplotlib", specifier = ">=3.10.0" },
+    { name = "matplotlib-inline", specifier = ">=0.2.1" },
+    { name = "mpmath", specifier = ">=1.3.0" },
+    { name = "msgpack", specifier = ">=1.1.2" },
+    { name = "mtscomp", specifier = ">=1.0.2" },
+    { name = "multidict", specifier = ">=6.7.0" },
+    { name = "mypy-extensions", specifier = ">=1.1.0" },
+    { name = "natsort", specifier = ">=8.4.0" },
+    { name = "ndindex", specifier = ">=1.10.1" },
+    { name = "ndnt", specifier = ">=1.3.1" },
+    { name = "nest-asyncio", specifier = ">=1.6.0" },
+    { name = "networkx", specifier = ">=3.4.2" },
+    { name = "nodeenv", specifier = ">=1.10.0" },
+    { name = "numba", specifier = ">=0.64.0" },
+    { name = "numexpr", specifier = ">=2.14.1" },
+    { name = "numpy", specifier = ">=2.4.2" },
+    { name = "omegaconf", specifier = ">=2.3.0" },
+    { name = "packaging", specifier = ">=26.0" },
+    { name = "pandas", specifier = ">=3.0.1" },
+    { name = "parso", specifier = ">=0.8.6" },
+    { name = "pathlib", specifier = ">=1.0.1" },
+    { name = "pathspec", specifier = ">=0.9.0" },
+    { name = "pickleshare", specifier = ">=0.7.5" },
+    { name = "pillow", specifier = ">=12.0.0" },
+    { name = "platformdirs", specifier = ">=4.9.4" },
+    { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "prompt-toolkit", specifier = ">=3.0.52" },
+    { name = "propcache", specifier = ">=0.4.1" },
+    { name = "protobuf", specifier = ">=6.33.2" },
+    { name = "psutil", specifier = ">=7.2.2" },
+    { name = "pure-eval", specifier = ">=0.2.3" },
+    { name = "py-cpuinfo", specifier = ">=9.0.0" },
+    { name = "pygments", specifier = ">=2.19.2" },
+    { name = "pyparsing", specifier = ">=3.2.5" },
+    { name = "pyqt6", specifier = ">=6.10.2" },
+    { name = "pyqt6-qt6", specifier = ">=6.10.2" },
+    { name = "pyqt6-sip", specifier = ">=13.11.0" },
+    { name = "python-dateutil", specifier = ">=2.9.0.post0" },
+    { name = "python-discovery", specifier = ">=1.1.1" },
+    { name = "pytokens", specifier = ">=0.4.1" },
+    { name = "pytorch-lightning", specifier = ">=2.5.0.post0" },
+    { name = "pytz", specifier = ">=2025.2" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "pyzmq", specifier = ">=27.1.0" },
+    { name = "regex", specifier = ">=2025.11.3" },
+    { name = "requests", specifier = ">=2.32.5" },
+    { name = "ruff", specifier = ">=0.15.5" },
+    { name = "scienceplots", specifier = ">=2.1.1" },
+    { name = "scikit-learn", specifier = ">=1.6.1" },
+    { name = "scipy", specifier = ">=1.17.1" },
+    { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "shutup", specifier = ">=0.3.0" },
+    { name = "six", specifier = ">=1.17.0" },
+    { name = "spks", git = "https://github.com/spkware/spks" },
+    { name = "squiggs", git = "https://github.com/stellinaao/SQUIGGS" },
+    { name = "stack-data", specifier = ">=0.6.3" },
+    { name = "sympy", specifier = ">=1.14.0" },
+    { name = "tables", specifier = ">=3.10.1" },
+    { name = "tensorboard", specifier = ">=2.20.0" },
+    { name = "tensorboard-data-server", specifier = ">=0.7.2" },
+    { name = "threadpoolctl", specifier = ">=3.6.0" },
+    { name = "torch", specifier = ">=2.9.1" },
+    { name = "torchaudio", specifier = ">=2.9.1" },
+    { name = "torchmetrics", specifier = ">=1.8.2" },
+    { name = "torchvision", specifier = ">=0.24.1" },
+    { name = "tornado", specifier = ">=6.5.5" },
+    { name = "tqdm", specifier = ">=4.67.3" },
+    { name = "traitlets", specifier = ">=5.14.3" },
+    { name = "typing-extensions", specifier = ">=4.15.0" },
+    { name = "tzdata", specifier = ">=2025.2" },
+    { name = "tzlocal", specifier = ">=5.3.1" },
+    { name = "urllib3", specifier = ">=2.6.3" },
+    { name = "virtualenv", specifier = ">=21.1.0" },
+    { name = "wcwidth", specifier = ">=0.6.0" },
+    { name = "werkzeug", specifier = ">=3.1.4" },
+    { name = "wfield", git = "https://github.com/stellinaao/wfield" },
+    { name = "widgetsnbextension", specifier = ">=4.0.15" },
+    { name = "yarl", specifier = ">=1.22.0" },
+]
+
+[[package]]
 name = "shutup"
 version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3813,7 +3739,7 @@ source = { git = "https://github.com/spkware/spks#451691a558650c80696a6871377f33
 [[package]]
 name = "squiggs"
 version = "0.1.0"
-source = { git = "https://github.com/stellinaao/SQUIGGS#c3a5b47533077311cf7c4d01ac54d896ec3cec44" }
+source = { git = "https://github.com/stellinaao/SQUIGGS#74c83aa09374f3d35986019503a6c654e53fa22e" }
 dependencies = [
     { name = "damn" },
     { name = "matplotlib" },
@@ -3873,27 +3799,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/59/3c/f4a694aa744d2b14d536e172c28dd70c84445f4787083a82d6d44a39e39f/tables-3.11.1-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:3a9c35f87fcb6a48c79fbc4e3ab15ca8f6053c4ce13063d6ca2ec36cbb58f40f", size = 7014135, upload-time = "2026-03-01T11:43:22.359Z" },
     { url = "https://files.pythonhosted.org/packages/45/82/94d4320d6c0fe5bd55230eec90cd142d58cda37b7cce00a318ac2a6abd93/tables-3.11.1-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:4cf3218b76ba78d156d6ee75c19fb757d50682f6c7b4905370441afbfc9d77f3", size = 7349293, upload-time = "2026-03-01T11:43:27.569Z" },
     { url = "https://files.pythonhosted.org/packages/f7/02/a0f61a602ce2f2be8cc2e6146cc51acdaa8a1bb9b823b3863e70d3e0505d/tables-3.11.1-cp314-cp314t-win_amd64.whl", hash = "sha256:a6f7a3b82dbf0ae0f30de635ca88bb42dd87938b0950369d0ee4289c52ae6de2", size = 6854713, upload-time = "2026-03-01T11:43:31.934Z" },
-]
-
-[[package]]
-name = "tbb"
-version = "2022.3.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "tcmlib" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/08/59/8d381a2cfe8d36c4f4ff9f94769ff2809bfc16014d888360b0e24c7e5c6b/tbb-2022.3.1-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:534c089eca6bcf148408684c156229d5f09c01d323b685b15739f41985b529d7", size = 4178630, upload-time = "2026-01-22T05:30:20.589Z" },
-    { url = "https://files.pythonhosted.org/packages/68/ef/d01ec56a854949efc727c8cac8941325a2020f345a786e64ca6ad3a05611/tbb-2022.3.1-py3-none-win_amd64.whl", hash = "sha256:8187e4c50a77c75c51ca9395febddd3a67d88dcb4cc537947d68d244925710f7", size = 422729, upload-time = "2026-01-22T05:30:51.916Z" },
-]
-
-[[package]]
-name = "tcmlib"
-version = "1.4.1"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/a4/38e8b5a27b66ab286168ba6c449771ed71d71ec76524e7f12401474a5151/tcmlib-1.4.1-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:0d5bd98db48d31bec7fedba5c23599bf9ae43c7016d4c3946d25242d320cee89", size = 2731276, upload-time = "2025-10-22T17:57:02.392Z" },
-    { url = "https://files.pythonhosted.org/packages/eb/4d/2b1d55dba475f602197e284b9a5e5460139a9c5ef2bfb63c8d2a1fafc163/tcmlib-1.4.1-py2.py3-none-win_amd64.whl", hash = "sha256:5202a1fd8541182fbd4ef72848784e4bf94340152d7ddff33d401d30930fa53c", size = 370347, upload-time = "2025-10-22T18:00:36.37Z" },
 ]
 
 [[package]]
@@ -4161,18 +4066,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8b/2e/c14812d3d4d9cd1773c6be938f89e5735a1f11a9f184ac3639b93cef35d5/tzlocal-5.3.1.tar.gz", hash = "sha256:cceffc7edecefea1f595541dbd6e990cb1ea3d19bf01b2809f362a03dd7921fd", size = 30761, upload-time = "2025-03-05T21:17:41.549Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c2/14/e2a54fabd4f08cd7af1c07030603c3356b74da07f7cc056e600436edfa17/tzlocal-5.3.1-py3-none-any.whl", hash = "sha256:eb1a66c3ef5847adf7a834f1be0800581b683b5608e74f86ecbcef8ab91bb85d", size = 18026, upload-time = "2025-03-05T21:17:39.857Z" },
-]
-
-[[package]]
-name = "umf"
-version = "1.0.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "tcmlib" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4c/b9/fe8c54eab5a3fdfdff1839d9299d90bfce5c467186b5c9ff9fd95d55ad64/umf-1.0.3-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:c89c0974daed30a1cac77fb7ce5ff9140d178e286bb2dd91b751486d5d0a65b0", size = 359879, upload-time = "2026-01-22T05:32:44.433Z" },
-    { url = "https://files.pythonhosted.org/packages/97/49/23b714e4ca9655f04d5b958ca8b4ef8361e10743581a637f141755b9f4fb/umf-1.0.3-py2.py3-none-win_amd64.whl", hash = "sha256:2182a623433329bd53863ac3b15a4af253d0eda62c603dc7c4e2bdce78658270", size = 249098, upload-time = "2026-01-22T05:33:19.278Z" },
 ]
 
 [[package]]
