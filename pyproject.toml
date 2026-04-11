@@ -154,6 +154,6 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 damn = { git = "https://github.com/mdmelin/DAMN" }
-spks = { git = "https://github.com/spkware/spks" }
 squiggs = { git = "https://github.com/stellinaao/SQUIGGS" }
 wfield = { git = "https://github.com/stellinaao/wfield" }
+spks = { git = "https://github.com/stellinaao/spks.git" }

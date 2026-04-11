@@ -3734,7 +3734,7 @@ wheels = [
 [[package]]
 name = "spks"
 version = "0.0b0"
-source = { git = "https://github.com/spkware/spks#451691a558650c80696a6871377f33986f3abb2f" }
+source = { git = "https://github.com/stellinaao/spks.git#5d499e911cf0704189ee00a94e61f10353c20c37" }
 
 [[package]]
 name = "squiggs"
