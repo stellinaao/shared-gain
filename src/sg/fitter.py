@@ -1,3 +1,14 @@
+"""
+fitter.py
+
+Encoders and LVMs
+
+Author: Stellina X. Ao
+Created: 2026-03-26
+Last Modified: 2026-04-03
+Python Version: 3.11.14
+"""
+
 import random
 
 import numpy as np

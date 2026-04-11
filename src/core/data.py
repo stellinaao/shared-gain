@@ -1,26 +1,35 @@
+"""
+data.py
+
+Functions to load and process neural and behavioral data
+collected from the dynamic foraging task.
+
+Author: Stellina X. Ao
+Created: 2025-12-18
+Last Modified: 2026-04-05
+Python Version: 3.11.14
+"""
+
 import pickle
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import re
 import os
 import shutup
-from spks.utils import get_cluster_spike_times, binary_spikes
+from spks.utils import get_cluster_spike_times
 from damn.alignment import compute_spike_count
-from utils.paths import PROJECT_ROOT
+from utils.paths import DATA_DIR
 
 shutup.please()
 
 # CONSTANTS
 session_pattern = re.compile(r"^\d{8}_\d{6}$")
-subject_ids = np.array(
-    [subj_id for subj_id in os.listdir(PROJECT_ROOT.parents[0] / "data-np")]
-)
+subject_ids = np.array([subj_id for subj_id in os.listdir(DATA_DIR)])
 session_ids = [
     [
         sess_id
-        for sess_id in os.listdir(PROJECT_ROOT.parents[0] / "data-np" / subj_id)
+        for sess_id in os.listdir(DATA_DIR / subj_id)
         if session_pattern.match(sess_id)
     ]
     for subj_id in subject_ids
@@ -47,55 +56,7 @@ markers_region = {"ACC": "v", "DMS": "^", "M2": "x", "DLS": "*", "M1": "."}
 
 
 # LOAD DATA
-def load_data(thresh=1):
-    trial_data_r = []
-    trial_data = []
-    session_data = []
-    unit_spike_times = []
-    regions = []
-
-    for subj_idx in range(len(subject_ids)):
-        print(f"Subject: {subject_ids[subj_idx]}")
-        (
-            trial_data_r_subj,
-            trial_data_subj,
-            session_data_subj,
-            unit_spike_times_subj,
-            regions_subj,
-        ) = load_subj(subj_idx, thresh=thresh)
-
-        trial_data_r.append(trial_data_r_subj)
-        trial_data.append(trial_data_subj)
-        session_data.append(session_data_subj)
-        unit_spike_times.append(unit_spike_times_subj)
-        regions.append(regions_subj)
-
-    return trial_data_r, trial_data, session_data, unit_spike_times, regions
-
-
-def load_subj(subj_idx, thresh=1):
-    trial_data_r = []
-    trial_data = []
-    session_data = []
-    unit_spike_times = []
-    regions = []
-
-    for sess_idx in range(len(session_ids[subj_idx])):
-        print(f"> Session: {session_ids[subj_idx][sess_idx]}")
-        (
-            trial_data_r_sess,
-            trial_data_sess,
-            session_data_sess,
-            unit_spike_times_lite_sess,
-            regions_sess,
-        ) = load_sess(subj_idx, sess_idx, thresh=thresh)
-        trial_data_r.append(trial_data_r_sess)
-        trial_data.append(trial_data_sess)
-        session_data.append(session_data_sess)
-        unit_spike_times.append(unit_spike_times_lite_sess)
-        regions.append(regions_sess)
-
-    return trial_data_r, trial_data, session_data, unit_spike_times, regions
+"""PLEASE USE THIS FUNCTION!!!"""
 
 
 def load_sess(
@@ -103,10 +64,26 @@ def load_sess(
     sess_id=None,
     subj_idx=None,
     sess_idx=None,
-    bin_size=0.001,
     thresh=1,
     mode="new",
 ):
+    """
+    subj_id:    the actual id of the subject, e.g., MM012, MR83
+    sess_id:    the actual id of the session, e.g., 20231211_172819
+
+    ! THE FOLLOWING TWO ARE NOT RECOMMENDED FOR REPRODUCIBLE CODE ACROSS
+    ! INDIVIDUALS BECAUSE OF DIFFERENCES IN THE DATA FILES PRESENT IN
+    ! THEIR DATA FOLDERS
+
+    subj_idx:   the index of the subject, e.g., 0 for the first subject in your data folder
+    sess_idx:   the index of the session, e.g., -1 for the last session
+
+    thresh:     the minimum firing rate to keep, defaults to 1 Hz
+    mode:       'old' to load data from the old cohort (MM012 & MM013), 'new' to load data from the new cohort (MR82, MR83, MR85)
+    """
+
+    bin_size = 0.001  # 1 ms, or 0.001 s
+
     if (subj_id is None and subj_idx is None) or (sess_id is None and sess_idx is None):
         raise ValueError("wow all nones?! try again bucko.")
     else:
@@ -118,7 +95,7 @@ def load_sess(
             sess_id = session_ids[subj_idx][sess_idx]
     print(subj_id, sess_id)
     if mode == "new":
-        fpath = PROJECT_ROOT.parent / "data-np" / subj_id / sess_id
+        fpath = DATA_DIR / subj_id / sess_id
         fpath.exists()
 
         neural_data = pd.read_pickle(fpath / "neural_data.pkl")
@@ -210,13 +187,61 @@ def load_sess(
         raise ValueError("valid values for mode are 'old' and 'new.'")
 
 
+def load_data(thresh=1):
+    trial_data_r = []
+    trial_data = []
+    session_data = []
+    unit_spike_times = []
+    regions = []
+
+    for subj_idx in range(len(subject_ids)):
+        print(f"Subject: {subject_ids[subj_idx]}")
+        (
+            trial_data_r_subj,
+            trial_data_subj,
+            session_data_subj,
+            unit_spike_times_subj,
+            regions_subj,
+        ) = load_subj(subj_idx, thresh=thresh)
+
+        trial_data_r.append(trial_data_r_subj)
+        trial_data.append(trial_data_subj)
+        session_data.append(session_data_subj)
+        unit_spike_times.append(unit_spike_times_subj)
+        regions.append(regions_subj)
+
+    return trial_data_r, trial_data, session_data, unit_spike_times, regions
+
+
+def load_subj(subj_idx, thresh=1):
+    trial_data_r = []
+    trial_data = []
+    session_data = []
+    unit_spike_times = []
+    regions = []
+
+    for sess_idx in range(len(session_ids[subj_idx])):
+        print(f"> Session: {session_ids[subj_idx][sess_idx]}")
+        (
+            trial_data_r_sess,
+            trial_data_sess,
+            session_data_sess,
+            unit_spike_times_lite_sess,
+            regions_sess,
+        ) = load_sess(subj_idx, sess_idx, thresh=thresh)
+        trial_data_r.append(trial_data_r_sess)
+        trial_data.append(trial_data_sess)
+        session_data.append(session_data_sess)
+        unit_spike_times.append(unit_spike_times_lite_sess)
+        regions.append(regions_sess)
+
+    return trial_data_r, trial_data, session_data, unit_spike_times, regions
+
+
 def load_data_sess(
     subj_id=None, sess_id=None, subj_idx=None, sess_idx=None, mode="new"
 ):
-    fpath_data = (
-        PROJECT_ROOT.parents[0]
-        / f"data-np/{subject_ids[subj_idx]}/{session_ids[subj_idx][sess_idx]}"
-    )
+    fpath_data = DATA_DIR / subject_ids[subj_idx] / session_ids[subj_idx][sess_idx]
 
     riglog = np.load(
         f"{fpath_data}/riglog.npy", allow_pickle="TRUE"
@@ -314,6 +339,15 @@ def get_trial_mask(trial_data, strategy_only=True, reward_only=False):
         mask = (mask) & (~(trial_data["strategy"] == 0))
 
     return mask
+
+
+# PR
+def get_pr(psths, regions, num_units):
+    pr = (
+        np.array([psths[reg].sum(axis=0).sum(axis=1) for reg in regions]).sum(0)
+        / num_units
+    )
+    return pr
 
 
 # PSTHS
@@ -576,41 +610,7 @@ def balance_strategy(trial_data, mb_idx, mf_idx):
     return mb_idx, mf_idx
 
 
-# PLOTTING
-def plot_fr_regs(unit_spike_times, regions, bin_size=0.001):
-    trial_dur_s = int(
-        np.ceil(
-            np.max(
-                [
-                    max(unit_spike_times_reg)
-                    for reg in regions
-                    for unit_spike_times_reg in unit_spike_times[reg]
-                ]
-            )
-        )
-    )  # s
-    trial_dur_ms = trial_dur_s * (1 / bin_size)
-
-    frs = [
-        [get_mfr(spike_times, trial_dur_ms) for spike_times in unit_spike_times[reg]]
-        for reg in regions
-    ]
-    fig, axes = plt.subplots(ncols=2, nrows=2)
-    for i, ax in enumerate(axes.flat):
-        ax.hist(frs[i])
-        ax.set_title(regions[i])
-        ax.set_xlabel("Mean Firing Rate (Hz)")
-    fig.tight_layout()
-    fig.show()
-
-
 # UTILS
-def time2train(spike_times, num_ms):
-    spike_train = np.zeros(num_ms)
-    spike_train[np.round(spike_times * 1000).astype(int)] = 1
-    return spike_train
-
-
 def rem_low_fr(unit_spike_times, trial_dur_ms, thresh=1):
     unit_spike_times_lite = {}
     for region in unit_spike_times:
@@ -632,35 +632,5 @@ def rem_low_fr_reg(unit_spike_times_reg, trial_dur_ms, thresh=1):
     return unit_spike_times_reg
 
 
-def half_gaussian_kernel(size=21, sigma=3, side="right"):
-    x = np.linspace(-size // 2, size // 2, size)
-    g = np.exp(-(x**2) / (2 * sigma**2))
-    if side == "right":
-        g[x < 0] = 0
-    elif side == "left":
-        g[x > 0] = 0
-    return g / g.sum()
-
-
-def get_fr(spike_times, binsize_ms=1):
-    """
-    returns fr in ms (each val is binsize_ms ms)
-    """
-
-    edges = np.arange(0, max(spike_times), binsize_ms / 1000)
-    [fr] = binary_spikes(
-        [spike_times], edges, kernel=half_gaussian_kernel(side="left")
-    ) / (binsize_ms / 1000)
-    return fr
-
-
 def get_mfr(spike_times, trial_dur_ms):
     return 1000 * len(spike_times) / trial_dur_ms
-
-
-def s2ms(sec):
-    return int(np.ceil(sec * 1000))
-
-
-def ms2s(ms):
-    return int(np.ceil(ms / 1000))

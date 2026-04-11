@@ -1,3 +1,14 @@
+"""
+eval_models.py
+
+Evaluate shared gain models.
+
+Author: Stellina X. Ao
+Created: 2026-02-09
+Last Modified: 2026-04-03
+Python Version: 3.11.14
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch

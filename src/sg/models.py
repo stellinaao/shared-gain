@@ -1,3 +1,12 @@
+"""
+models.py
+
+Datasets and base LVMs.
+
+Author: John Liska, Declan Rowley
+Python Version: 3.11.14
+"""
+
 from copy import deepcopy
 
 import torch

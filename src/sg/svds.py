@@ -1,4 +1,14 @@
-# original code by Lukas Oesch, modified by Max Melin, and further modified by Stellina Ao
+"""
+svds.py
+
+Functions to generate SVDs of videos.
+
+Author: Lukas Oesch, modified by Max Melin, further modified by Stellina Ao
+Created: 2025-03-26 # created before, but lost the record
+Last Modified: 2026-03-26
+Python Version: 3.11.14
+"""
+
 from wfield import load_stack, approximate_svd, chunk_indices
 import gc
 import time
@@ -7,7 +17,7 @@ from tqdm import tqdm
 import numpy as np
 import cv2
 from utils.paths import PROJECT_ROOT
-from sg.data import subject_ids, session_ids
+from core.data import subject_ids, session_ids
 
 LABELS = ["cam0"]  # , "cam1", "cam2"]  # adjust as needed
 
