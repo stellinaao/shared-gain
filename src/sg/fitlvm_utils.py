@@ -148,7 +148,7 @@ def get_dataset_dm(
     tvs = OHE().fit_transform(trial_data[task_vars]).todense()
     # print(f"mozza: {trai}, feta: {tvs.shape}")
     # tents
-    from external.NDNT.utils.NDNutils import tent_basis_generate
+    from ndnt.utils.NDNutils import tent_basis_generate
 
     num_trials = len(trial_data)
     xs = np.linspace(0, num_trials - 1, num_tents)
@@ -1343,7 +1343,7 @@ def fit_model(
     # print("hullo")
     from torch.optim import AdamW
 
-    from external.NDNT.training import EarlyStopping, LBFGSTrainer, Trainer
+    from ndnt.training import EarlyStopping, LBFGSTrainer, Trainer
 
     model.prepare_regularization()
 

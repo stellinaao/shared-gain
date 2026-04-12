@@ -25,13 +25,17 @@ shutup.please()
 
 # CONSTANTS
 session_pattern = re.compile(r"^\d{8}_\d{6}$")
-subject_ids = np.array([subj_id for subj_id in os.listdir(DATA_DIR)])
+subject_ids = np.sort(
+    [subj_id for subj_id in os.listdir(DATA_DIR) if not subj_id.startswith(".")]
+)
 session_ids = [
-    [
-        sess_id
-        for sess_id in os.listdir(DATA_DIR / subj_id)
-        if session_pattern.match(sess_id)
-    ]
+    np.sort(
+        [
+            sess_id
+            for sess_id in os.listdir(DATA_DIR / subj_id)
+            if session_pattern.match(sess_id)
+        ]
+    )
     for subj_id in subject_ids
 ]
 
