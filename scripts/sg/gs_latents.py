@@ -18,14 +18,14 @@ from utils.paths import PROJECT_ROOT
 
 from core.data import load_sess
 
-subj_ids = ["MM012", "MM012", "MR82", "MR83"]
-sess_idxs = [4, 5, 5, 5]
-modes = ["old", "old", "new", "new"]
+subj_ids = ["MR82", "MR83", "MR85"]
+sess_idxs = [5, 5, 5]
+modes = ["new", "new", "new"]
 
 m_latents = np.linspace(0, 5, 6, dtype=int)
 a_latents = np.linspace(0, 5, 6, dtype=int)
 
-for i in [2, 3]:  # range(4):
+for i in range(3):
     subj_id = subj_ids[i]
     sess_idx = sess_idxs[i]
     mode = modes[i]
@@ -33,7 +33,6 @@ for i in [2, 3]:  # range(4):
     unit_spike_times, trial_data, session_data, regions = load_sess(
         subj_id=subj_id, sess_idx=sess_idx, mode=mode
     )
-    # print(type(unit_spike_times), type(trial_data), type(session_data), type(regions))
 
     for m in m_latents:
         for a in a_latents:
@@ -49,6 +48,17 @@ for i in [2, 3]:  # range(4):
                 regions=regions,
                 n_latents_mult=int(m),
                 n_latents_addt=int(a),
+                task_vars={
+                    "digital": [
+                        "response",
+                        "rewarded",
+                        "block_side",
+                        "strategy",
+                        "response_prev",
+                        "rewarded_prev",
+                    ],
+                    "analog": [],
+                },
                 refit=True,
                 max_iter=10,
                 norm_activity=True,
@@ -80,6 +90,17 @@ for i in [2, 3]:  # range(4):
                     regions=[reg],
                     n_latents_mult=int(m),
                     n_latents_addt=int(a),
+                    task_vars={
+                        "digital": [
+                            "response",
+                            "rewarded",
+                            "block_side",
+                            "strategy",
+                            "response_prev",
+                            "rewarded_prev",
+                        ],
+                        "analog": [],
+                    },
                     refit=True,
                     max_iter=10,
                     norm_activity=True,

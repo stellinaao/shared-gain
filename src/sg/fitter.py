@@ -14,8 +14,10 @@ import random
 import numpy as np
 import torch
 
+from scipy.stats import zscore
+
 from core.data import load_sess
-from core.data import get_psths, get_pr
+from core.data import get_pr
 from sg.fitlvm_utils import (
     eval_model,
     fit_autoencoder,
@@ -128,7 +130,7 @@ class Encoder:
 
         if "pr" in self.task_vars["analog"]:
             num_units = np.sum([len(self.psths[reg]) for reg in self.regions])
-            pr = get_pr(self.psths, self.regions, num_units)
+            pr = zscore(get_pr(self.psths, self.regions, num_units))
             self.trial_data["pr"] = pr
             self.pr = pr
 
@@ -386,6 +388,11 @@ class LVMFamily(Encoder):
         self.mod_ae_offset.tv.weight.data = self.mod_taskvar.tv.weight.data.clone()
         self.mod_ae_offset.bias.data = self.mod_taskvar.bias.data.clone()
         self.mod_ae_offset.tv.weight.requires_grad = False
+
+        # added and did nothing...\
+        self.mod_ae_offset.tv.bias.requires_grad = False
+        self.mod_ae_offset.bias.requires_grad = False
+        self.mod_ae_offset.drift.weight.requires_grad = False
 
         self.mod_ae_offset.readout_offset.weight_scale = 1.0
         self.mod_ae_offset.latent_offset.weight_scale = 1.0
