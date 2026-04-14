@@ -13,8 +13,8 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset
 
-from external.NDNT.metrics.mse_loss import MseLoss_datafilter
-from external.NDNT.modules import layers
+from ndnt.metrics.mse_loss import MseLoss_datafilter
+from ndnt.modules import layers
 
 
 def to_device(x, device="cpu"):
