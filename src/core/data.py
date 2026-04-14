@@ -26,18 +26,21 @@ shutup.please()
 
 # CONSTANTS
 session_pattern = re.compile(r"^\d{8}_\d{6}$")
-subject_ids = np.array([subj_id for subj_id in os.listdir(DATA_DIR)])
+subject_ids = np.sort(
+    [subj_id for subj_id in os.listdir(DATA_DIR) if not subj_id.startswith(".")]
+)
 session_ids = [
-    [
-        sess_id
-        for sess_id in os.listdir(DATA_DIR / subj_id)
-        if session_pattern.match(sess_id)
-    ]
+    np.sort(
+        [
+            sess_id
+            for sess_id in os.listdir(DATA_DIR / subj_id)
+            if session_pattern.match(sess_id)
+        ]
+    )
     for subj_id in subject_ids
 ]
 
 probes = ["imec0", "imec1"]
-bin_size = 0.001  # s
 colors_model = {
     "default": "#333333",
     "drift": "#666666",
@@ -65,8 +68,11 @@ def load_sess(
     sess_id=None,
     subj_idx=None,
     sess_idx=None,
+    tpre=0.5,
+    tpost=1,
+    binwidth_ms=25,
+    alignment="choice",
     thresh=1,
-    mode="new",
 ):
     """
     subj_id:    the actual id of the subject, e.g., MM012, MR83
@@ -83,8 +89,6 @@ def load_sess(
     mode:       'old' to load data from the old cohort (MM012 & MM013), 'new' to load data from the new cohort (MR82, MR83, MR85)
     """
 
-    bin_size = 0.001  # 1 ms, or 0.001 s
-
     if (subj_id is None and subj_idx is None) or (sess_id is None and sess_idx is None):
         raise ValueError("wow all nones?! try again bucko.")
     else:
@@ -95,19 +99,27 @@ def load_sess(
                 subj_idx = np.where(subject_ids == subj_id)[0][0]
             sess_id = session_ids[subj_idx][sess_idx]
     print(subj_id, sess_id)
+
+    if subj_id == "MM012" or subj_id == "MM013":
+        mode = "old"
+    elif subj_id.startswith("MR"):
+        mode = "new"
+
     if mode == "new":
         fpath = DATA_DIR / subj_id / sess_id
         fpath.exists()
 
+        # load from pkl
         neural_data = pd.read_pickle(fpath / "neural_data.pkl")
 
-        unit_spike_times = {
+        spike_times = {
             region: values["spike_times"] for region, values in neural_data.items()
         }
         session_data = pd.read_pickle(fpath / "session_data.pkl")
         trial_data = pd.read_csv(fpath / "trialdata.csv")
         regions = np.array(list(neural_data.keys()))
 
+        # trial_data addendums
         trial_data["trial_start_time"] = session_data["events"].iloc[
             np.where(np.array(session_data["event_labels"]) == "trial_start")[0][0]
         ]["event_timestamps"]
@@ -115,75 +127,102 @@ def load_sess(
             trial_data["current_block_side"] == "left", 1, -1
         )
 
-        trial_dur_s = int(
-            np.ceil(
-                np.max(
-                    [
-                        max(unit_spike_times_reg)
-                        for reg in regions
-                        for unit_spike_times_reg in unit_spike_times[reg]
-                    ]
-                )
-            )
-        )  # s
-        trial_dur_ms = trial_dur_s * (1 / bin_size)  # ms
-
         trial_data = add_prev(trial_data)
         trial_data = add_strat(trial_data, session_data)
 
-        # trial_data["trial_start_time"] = trial_data["task_start_time"]
         trial_mask = get_trial_mask(trial_data)
         trial_data = trial_data[trial_mask]
 
-        # trial_data_choice = trial_data[~(trial_data['response']==0) & ~(trial_data['response_prev']==0)]
-        # trial_data_choice = trial_data[~(trial_data['response']==0)] # filter for choice made only
-
-        unit_spike_times = rem_low_fr(
-            unit_spike_times, trial_dur_ms=trial_dur_ms, thresh=thresh
+        # get psths
+        print("done until get_psths")
+        psths, trial_mask, zstd_units = get_psths(
+            spike_times,
+            trial_data,
+            session_data,
+            regions,
+            tpre=tpre,
+            tpost=tpost,
+            binwidth_ms=binwidth_ms,
+            alignment=alignment,
+            reward_only=False,
+            prev_filter=False,
+            get_strategy=False,
         )
 
-        return unit_spike_times, trial_data, session_data, regions
+        # update spike_times with the removed units
+        for reg in regions:
+            if len(zstd_units[reg]) > 0:
+                spike_times[reg] = [
+                    st_unit
+                    for i, st_unit in enumerate(spike_times[reg])
+                    if i not in set(zstd_units[reg])
+                ]
+
+        trial_data = trial_data[trial_mask]
+
+        psths, spike_times = rem_low_fr(
+            psths, spike_times, thresh=thresh, binwidth_ms=binwidth_ms
+        )
+
+        return spike_times, trial_data, psths, session_data, regions
     elif mode == "old":
         # load data and set variables needed for aligning spikes to behavioral events
+        if subj_idx is None:
+            subj_idx = np.where(np.array(subject_ids) == subj_id)[0][0]
+        if sess_idx is None:
+            sess_idx = np.where(session_ids[subj_idx] == sess_id)[0][0]
         _, _, trial_data_r, neural_data, animal_data, session_data = load_data_sess(
             subj_idx=subj_idx, sess_idx=sess_idx
         )
         spike_clusters, spike_times, _, _, _, regions = get_align_vars(
             neural_data, animal_data
         )
-        unit_spike_times = get_unit_spike_times(
+        spike_times = get_unit_spike_times(
             spike_times, spike_clusters, neural_data, regions
         )
         regions = np.concatenate(regions)
 
-        trial_dur_s = int(
-            np.ceil(
-                np.max(
-                    [
-                        max(unit_spike_times_reg)
-                        for reg in regions
-                        for unit_spike_times_reg in unit_spike_times[reg]
-                    ]
-                )
-            )
-        )  # s
-        trial_dur_ms = trial_dur_s * (1 / bin_size)  # ms
-
+        # trial_data addendums
         trial_data = add_prev(trial_data_r)
         trial_data = add_strat(trial_data, session_data)
-
-        # trial_data_choice = trial_data[~(trial_data['response']==0) & ~(trial_data['response_prev']==0)]
-        # trial_data_choice = trial_data[~(trial_data['response']==0)] # filter for choice made only
-
-        unit_spike_times_lite = rem_low_fr(
-            unit_spike_times, trial_dur_ms=trial_dur_ms, thresh=thresh
-        )  # remove low fr
 
         trial_data["trial_start_time"] = trial_data["task_start_time"]
         trial_mask = get_trial_mask(trial_data)
         trial_data = trial_data[trial_mask]
 
-        return unit_spike_times_lite, trial_data, session_data, regions
+        # get psths
+        psths, trial_mask, zstd_units = get_psths(
+            spike_times,
+            trial_data,
+            session_data,
+            regions,
+            tpre=tpre,
+            tpost=tpost,
+            binwidth_ms=binwidth_ms,
+            alignment=alignment,
+            reward_only=False,
+            prev_filter=False,
+            get_strategy=False,
+        )
+        print("after get psths")
+        # update spike_times with the removed units
+        for reg in regions:
+            if len(zstd_units[reg]) > 0:
+                spike_times[reg] = [
+                    st_unit
+                    for i, st_unit in enumerate(spike_times[reg])
+                    if i not in set(zstd_units[reg])
+                ]
+
+        trial_data = trial_data[trial_mask]
+
+        print("before remove low fr")
+        psths, spike_times = rem_low_fr(
+            psths, spike_times, thresh=thresh, binwidth_ms=binwidth_ms
+        )
+        print("SUCCESS!")
+
+        return spike_times, trial_data, psths, session_data, regions
     else:
         raise ValueError("valid values for mode are 'old' and 'new.'")
 
@@ -387,7 +426,6 @@ def get_psths(
         choice_ts = (
             trial_data["trial_start_time"][mask] + trial_data["response_time"][mask]
         )  # s
-
         if get_strategy:
             mb_idx = trial_data[
                 trial_data["iblock"].isin(session_data["MBblocks"]) & (mask)
@@ -502,39 +540,35 @@ def rem_zstd(psths_all, regions):
 
 
 # get conditional psths/choice timestamps
-def get_psths_cond(psths, trial_data, trial_mask, mode="both"):
+def get_psths_cond(psths, trial_data, mode="both"):
     if mode == "both":
         psths_cond = {
             "left_corr": psths[
                 :,
-                (trial_data[trial_mask]["response"] == 1)
-                & (trial_data[trial_mask]["rewarded"] == 1),
+                (trial_data["response"] == 1) & (trial_data["rewarded"] == 1),
             ],
             "right_corr": psths[
                 :,
-                (trial_data[trial_mask]["response"] == -1)
-                & (trial_data[trial_mask]["rewarded"] == 1),
+                (trial_data["response"] == -1) & (trial_data["rewarded"] == 1),
             ],
             "left_incorr": psths[
                 :,
-                (trial_data[trial_mask]["response"] == 1)
-                & (trial_data[trial_mask]["rewarded"] == 0),
+                (trial_data["response"] == 1) & (trial_data["rewarded"] == 0),
             ],
             "right_incorr": psths[
                 :,
-                (trial_data[trial_mask]["response"] == -1)
-                & (trial_data[trial_mask]["rewarded"] == 0),
+                (trial_data["response"] == -1) & (trial_data["rewarded"] == 0),
             ],
         }
     elif mode == "response":
         psths_cond = {
-            "left": psths[:, (trial_data[trial_mask]["response"] == 1)],
-            "right": psths[:, (trial_data[trial_mask]["response"] == -1)],
+            "left": psths[:, (trial_data["response"] == 1)],
+            "right": psths[:, (trial_data["response"] == -1)],
         }
     elif mode == "rewarded":
         psths_cond = {
-            "corr": psths[:, (trial_data[trial_mask]["rewarded"] == 1)],
-            "incorr": psths[:, (trial_data[trial_mask]["rewarded"] == 0)],
+            "corr": psths[:, (trial_data["rewarded"] == 1)],
+            "incorr": psths[:, (trial_data["rewarded"] == 0)],
         }
     else:
         raise NotImplementedError(
@@ -612,26 +646,19 @@ def balance_strategy(trial_data, mb_idx, mf_idx):
 
 
 # UTILS
-def rem_low_fr(unit_spike_times, trial_dur_ms, thresh=1):
-    unit_spike_times_lite = {}
-    for region in unit_spike_times:
-        unit_spike_times_lite[region] = rem_low_fr_reg(
-            unit_spike_times[region], trial_dur_ms, thresh=thresh
-        )
-    return unit_spike_times_lite
+def rem_low_fr(psths, spike_times, thresh=1, binwidth_ms=25):
+    psths_lite = {}
+    spike_times_lite = {}
 
+    for region in psths.keys():
+        frs = np.mean(psths[region], axis=(1, 2))
+        low_fr_idxs = np.where(frs < (thresh * binwidth_ms / 1000))[0]
 
-def rem_low_fr_reg(unit_spike_times_reg, trial_dur_ms, thresh=1):
-    frs = np.array(
-        [get_mfr(spike_times, trial_dur_ms) for spike_times in unit_spike_times_reg]
-    )
-    unit_spike_times_reg = [
-        unit_spike_times_reg[i]
-        for i in range(len(unit_spike_times_reg))
-        if i not in np.where(frs < thresh)[0]
-    ]  # thresh was hardcoded in the bool op...the messy hardcode strikes again..never forget (1.13.26)
-    return unit_spike_times_reg
-
-
-def get_mfr(spike_times, trial_dur_ms):
-    return 1000 * len(spike_times) / trial_dur_ms
+        # thresh was hardcoded in the bool op...the messy hardcode strikes again..never forget (1.13.26)
+        psths_lite[region] = np.delete(psths[region], low_fr_idxs, axis=0)
+        spike_times_lite[region] = [
+            spike_times[region][i]
+            for i in range(psths[region].shape[0])
+            if i not in low_fr_idxs
+        ]
+    return psths_lite, spike_times_lite

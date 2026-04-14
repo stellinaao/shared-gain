@@ -14,6 +14,7 @@ import random
 import numpy as np
 import torch
 
+from core.data import load_sess
 from core.data import get_psths, get_pr
 from sg.fitlvm_utils import (
     eval_model,
@@ -34,16 +35,13 @@ TODO
 class Encoder:
     def __init__(
         self,
-        trial_data=None,
-        spike_times=None,
-        session_data=None,
-        regions=None,
+        subj_id: str = None,
+        sess_id: str = None,
         **kwargs,
     ):
-        self.spike_times = spike_times
-        self.session_data = session_data
-        self.trial_data = trial_data
-        self.regions = regions
+        print(subj_id, sess_id)
+        self.subj_id = subj_id
+        self.sess_id = sess_id
 
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -60,6 +58,7 @@ class Encoder:
         self.tpost = kwargs.pop("tpost", 0.5)
         self.binwidth_ms = kwargs.pop("binwidth_ms", 25)
         self.alignment = kwargs.pop("alignment", "choice")
+        self.thresh = kwargs.pop("thresh", 1)
 
         # model params
         self.task_vars = kwargs.pop(
@@ -106,31 +105,26 @@ class Encoder:
         torch.cuda.manual_seed_all(self.seed_val)
 
     def get_data(self):
-        self.psths, self.trial_mask, self.zstd_units = get_psths(
+        print("hi")
+        (
             self.spike_times,
             self.trial_data,
+            self.psths,
             self.session_data,
             self.regions,
+        ) = load_sess(
+            subj_id=self.subj_id,
+            sess_id=self.sess_id,
             tpre=self.tpre,
             tpost=self.tpost,
             binwidth_ms=self.binwidth_ms,
             alignment=self.alignment,
-            reward_only=False,
-            prev_filter=False,
-            get_strategy=False,
+            thresh=self.thresh,
         )
+        print("bye")
 
-        # update spike_times with the removed units
-        for reg in self.regions:
-            if len(self.zstd_units[reg]) > 0:
-                self.spike_times[reg] = [
-                    st_unit
-                    for i, st_unit in enumerate(self.spike_times[reg])
-                    if i not in set(self.zstd_units[reg])
-                ]
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
-        self.trial_data = self.trial_data[self.trial_mask]
 
         if "pr" in self.task_vars["analog"]:
             num_units = np.sum([len(self.psths[reg]) for reg in self.regions])
@@ -270,10 +264,8 @@ class Encoder:
 class LVMFamily(Encoder):
     def __init__(
         self,
-        trial_data=None,
-        spike_times=None,
-        session_data=None,
-        regions=None,
+        subj_id: str = None,
+        sess_id: str = None,
         **kwargs,
     ):
         """
@@ -295,7 +287,7 @@ class LVMFamily(Encoder):
         self.refit = kwargs.pop("refit", False)
         self.max_iter = kwargs.pop("max_iter", 10) if self.refit else 0
 
-        super().__init__(trial_data, spike_times, session_data, regions, **kwargs)
+        super().__init__(subj_id, sess_id, **kwargs)
 
     def fit_all(self):
         super().fit_all()
