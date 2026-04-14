@@ -17,6 +17,7 @@ import pandas as pd
 import re
 import os
 import shutup
+
 from spks.utils import get_cluster_spike_times
 from damn.alignment import compute_spike_count
 from utils.paths import DATA_DIR
@@ -383,7 +384,7 @@ def get_trial_mask(trial_data, strategy_only=True, reward_only=False):
 # PR
 def get_pr(psths, regions, num_units):
     pr = (
-        np.array([psths[reg].sum(axis=0).sum(axis=1) for reg in regions]).sum(0)
+        np.array([(psths[reg].sum(axis=2)).sum(axis=0) for reg in regions]).sum(0)
         / num_units
     )
     return pr

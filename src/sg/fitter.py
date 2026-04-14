@@ -15,6 +15,7 @@ import numpy as np
 import torch
 
 from core.data import load_sess
+from core.data import get_psths, get_pr
 from sg.fitlvm_utils import (
     eval_model,
     fit_autoencoder,
@@ -62,14 +63,19 @@ class Encoder:
         # model params
         self.task_vars = kwargs.pop(
             "task_vars",
-            [
-                "response",
-                "rewarded",
-                "block_side",
-                "strategy",
-                "response_prev",
-                "rewarded_prev",
-            ],
+            {
+                "digital": [
+                    "response",
+                    "rewarded",
+                    "block_side",
+                    "strategy",
+                    "response_prev",
+                    "rewarded_prev",
+                ],
+                "analog": [
+                    "pr",
+                ],
+            },
         )
         self.n_splines = kwargs.pop("n_splines", 5)
         self.norm_activity = kwargs.pop("norm_activity", True)
@@ -119,6 +125,12 @@ class Encoder:
 
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
+
+        if "pr" in self.task_vars["analog"]:
+            num_units = np.sum([len(self.psths[reg]) for reg in self.regions])
+            pr = get_pr(self.psths, self.regions, num_units)
+            self.trial_data["pr"] = pr
+            self.pr = pr
 
         self.strategy = self.trial_data["strategy"]
         self.rewarded = self.trial_data["rewarded"]
