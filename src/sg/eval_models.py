@@ -775,48 +775,60 @@ def get_latent_r(
     m_latents = np.arange(n_m + 1)  # 10, 10)
     a_latents = np.arange(5 + 1)  # 10, 10)
 
+    print(folder, regions)
+
     if folder == "all":
         family = LVMFamily(
             trial_data=trial_data,
             spike_times=spike_times,
             session_data=session_data,
             regions=regions,
-            n_latents_mult=0,
-            n_latents_addt=3,
-            sanity_check=0,
-            task_vars=[
-                "response",
-                "rewarded",
-                "block_side",
-                "response_prev",
-                "rewarded_prev",
-            ],
-            refit=False,
+            n_latents_mult=1,
+            n_latents_addt=1,
+            task_vars={
+                "digital": [
+                    "response",
+                    "rewarded",
+                    "block_side",
+                    "strategy",
+                    "response_prev",
+                    "rewarded_prev",
+                ],
+                "analog": [],
+            },
+            refit=True,
+            max_iter=10,
             norm_activity=True,
         )
         family.fit_all()
         family.eval()
     elif folder in regions:
+        print("hello")
         family = LVMFamily(
             trial_data=trial_data,
-            spike_times={folder: spike_times[folder]},
+            spike_times=spike_times,
             session_data=session_data,
-            regions=[folder],
-            n_latents_mult=0,
-            n_latents_addt=3,
-            sanity_check=0,
-            task_vars=[
-                "response",
-                "rewarded",
-                "block_side",
-                "response_prev",
-                "rewarded_prev",
-            ],
-            refit=False,
+            regions=regions,
+            n_latents_mult=1,
+            n_latents_addt=1,
+            task_vars={
+                "digital": [
+                    "response",
+                    "rewarded",
+                    "block_side",
+                    "strategy",
+                    "response_prev",
+                    "rewarded_prev",
+                ],
+                "analog": [],
+            },
+            refit=False,  # fine because don't need the affine lvm
             norm_activity=True,
         )
         family.fit_all()
         family.eval()
+    else:
+        return
 
     r2s = np.zeros((len(m_latents), len(a_latents)))
     for i, m in enumerate(m_latents):
