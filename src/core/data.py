@@ -98,7 +98,6 @@ def load_sess(
             if subj_idx is None:
                 subj_idx = np.where(subject_ids == subj_id)[0][0]
             sess_id = session_ids[subj_idx][sess_idx]
-    print(subj_id, sess_id)
 
     if subj_id == "MM012" or subj_id == "MM013":
         mode = "old"
@@ -134,7 +133,6 @@ def load_sess(
         trial_data = trial_data[trial_mask]
 
         # get psths
-        print("done until get_psths")
         psths, trial_mask, zstd_units = get_psths(
             spike_times,
             trial_data,
@@ -204,7 +202,6 @@ def load_sess(
             prev_filter=False,
             get_strategy=False,
         )
-        print("after get psths")
         # update spike_times with the removed units
         for reg in regions:
             if len(zstd_units[reg]) > 0:
@@ -216,11 +213,9 @@ def load_sess(
 
         trial_data = trial_data[trial_mask]
 
-        print("before remove low fr")
         psths, spike_times = rem_low_fr(
             psths, spike_times, thresh=thresh, binwidth_ms=binwidth_ms
         )
-        print("SUCCESS!")
 
         return spike_times, trial_data, psths, session_data, regions
     else:
@@ -235,7 +230,6 @@ def load_data(thresh=1):
     regions = []
 
     for subj_idx in range(len(subject_ids)):
-        print(f"Subject: {subject_ids[subj_idx]}")
         (
             trial_data_r_subj,
             trial_data_subj,
@@ -261,7 +255,6 @@ def load_subj(subj_idx, thresh=1):
     regions = []
 
     for sess_idx in range(len(session_ids[subj_idx])):
-        print(f"> Session: {session_ids[subj_idx][sess_idx]}")
         (
             trial_data_r_sess,
             trial_data_sess,
@@ -461,7 +454,6 @@ def get_psths(
                     for unit in unit_spike_times[region]
                 ]
             )
-            # print(len(psths[region]))
             if get_strategy:
                 psths_mb[region] = np.squeeze(
                     [
@@ -505,7 +497,6 @@ def get_zstd_units(psths_all, regions):
             # delete all units that have a std of 0 for the signal (i.e., psth is a constant line, slope 0)
             signal_stds = np.std(np.mean(psths_[region], axis=1), axis=1)
             units_to_rem[region].extend(np.where(signal_stds == 0)[0])
-            # print(f"{region}.1, {len(np.where(signal_stds == 0)[0])}")
 
             # delete all units that have a std of 0 for the noise
             noise_stds = np.array(
@@ -531,7 +522,6 @@ def rem_zstd(psths_all, regions):
 
     for i in range(len(psths_all)):
         for region in regions:
-            # print(f"> {len(units_to_rem[region])}")
             psths_all[i][region] = np.delete(
                 psths_all[i][region], units_to_rem[region], axis=0
             )
@@ -630,7 +620,6 @@ def balance_strategy(trial_data, mb_idx, mf_idx):
     mf_left = mf_idx[trial_data.loc[mf_idx]["rewarded_side"] == "left"]
     mf_right = mf_idx[trial_data.loc[mf_idx]["rewarded_side"] == "right"]
 
-    print(len(mb_left), len(mf_left), len(mb_right), len(mf_right))
     n_left = min(len(mb_left), len(mf_left))
     n_right = min(len(mb_right), len(mf_right))
 

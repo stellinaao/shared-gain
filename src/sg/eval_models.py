@@ -31,7 +31,7 @@ from copy import deepcopy
 from core import data
 
 
-def plot_summary(
+def plot_latents(
     family,
     model,
     potato=None,
@@ -39,7 +39,6 @@ def plot_summary(
     label="block",
     metric="spearman",
     save_fig=False,
-    fname="",
 ):
     do_gain = mode == "gain" or mode == "affine"
     do_offset = mode == "offset" or mode == "affine"
@@ -116,8 +115,8 @@ def plot_summary(
     if save_fig:
         from utils.paths import FIGURES_DIR
 
-        save_dir = FIGURES_DIR / "latents"
-        fpath = save_dir / fname
+        save_dir = FIGURES_DIR / "latents" / family.subj_id / family.sess_id
+        fpath = save_dir / f"latents_{mode}.png"
         fpath.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(fpath, dpi=300, bbox_inches="tight")
 
@@ -352,6 +351,8 @@ def plot_r2_comp(
     label_b="",
     title="",
     mode="unity",
+    subj_id="",
+    sess_id="",
     save=False,
     fpath=None,
 ):
@@ -377,7 +378,12 @@ def plot_r2_comp(
         raise ValueError("valid arguments for mode are 'unity' and 'overlay.'")
 
     if save:
-        plt.savefig(fpath)
+        from utils.paths import FIGURES_DIR
+
+        save_dir = FIGURES_DIR / "r2_comp" / subj_id / sess_id
+        fpath = save_dir / f"r2_{label_a}_{label_b}.png"
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(fpath, dpi=300, bbox_inches="tight")
 
     ax.legend()
     fig.suptitle(title)
@@ -503,23 +509,23 @@ def plot_r2_latents_diff(das, subj_idx, sess_idx, is_msess=True, ae=True, thresh
     fig.show()
 
 
-def plot_latents_all(das, num_latents=8):
-    for latents in range(1, num_latents + 1):
-        plot_latents(das[latents - 1], num_latents=latents, ae=True)
+# def plot_latents_all(das, num_latents=8):
+#     for latents in range(1, num_latents + 1):
+#         plot_latents(das[latents - 1], num_latents=latents, ae=True)
 
 
-def plot_latents(das, num_latents, ae=True, mult=True):
-    plt.figure()
-    model = das["affineae"] if ae else das["affine"]
-    weights = (
-        model["model"].gain_mu.get_weights()
-        if mult
-        else model["model"].offset_mu.get_weights()
-    )
-    for ax in range(num_latents):
-        plt.plot(weights[:, ax], alpha=0.5, label=f"Latent {ax + 1}")
-    plt.title(f"Total # Latents: {num_latents}")
-    plt.legend()
+# def plot_latents(das, num_latents, ae=True, mult=True):
+#     plt.figure()
+#     model = das["affineae"] if ae else das["affine"]
+#     weights = (
+#         model["model"].gain_mu.get_weights()
+#         if mult
+#         else model["model"].offset_mu.get_weights()
+#     )
+#     for ax in range(num_latents):
+#         plt.plot(weights[:, ax], alpha=0.5, label=f"Latent {ax + 1}")
+#     plt.title(f"Total # Latents: {num_latents}")
+#     plt.legend()
 
 
 def plot_cweights_regions_hist(
@@ -563,8 +569,8 @@ def plot_cweights_regions_hist(
         if do_save:
             from utils.paths import FIGURES_DIR
 
-            save_dir = FIGURES_DIR / "cweights"
-            fpath = save_dir / fname
+            save_dir = FIGURES_DIR / "cweights" / family.subj_id / family.sess_id
+            fpath = save_dir / "cweights.png"
             fpath.parent.mkdir(parents=True, exist_ok=True)
             fig.savefig(fpath, dpi=300, bbox_inches="tight")
 
@@ -634,8 +640,8 @@ def plot_cweight_regions(
     if do_save:
         from utils.paths import FIGURES_DIR
 
-        save_dir = FIGURES_DIR / "cweights"
-        fpath = save_dir / fname
+        save_dir = FIGURES_DIR / "cweights" / family.subj_id / family.sess_id
+        fpath = save_dir / "cweights.png"
         fpath.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(fpath, dpi=300, bbox_inches="tight")
     if do_show:
@@ -702,28 +708,34 @@ def plot_cweights_regions_latent(
                 )
 
 
-def plot_cweights_mult(family):
-    M = family.n_latents_mult
-    if not family.no_mult:
-        if M == 1:
+def plot_cweights(family, mode="mult", do_save=True):
+    do_mult = mode == "mult"
+    do_addt = mode == "addt"
+
+    n_latents = family.n_latents_mult if do_mult else family.n_latents_addt
+
+    if (do_mult and not family.no_mult) or (do_addt and not family.no_addt):
+        if n_latents == 1:
             plot_cweights_regions_hist(
                 family,
                 family.mod_affine,
-                n_latents=M,
-                mode="gain",
+                n_latents=n_latents,
+                mode="gain" if do_mult else "offset",
+                do_save=do_save,
             )
         else:
-            for ax0 in range(M):
-                for ax1 in range(M):
+            for ax0 in range(n_latents):
+                for ax1 in range(n_latents):
                     if ax1 > ax0:
                         _ = plot_cweight_regions(
                             family,
                             family.mod_affine,
                             ax0=ax0,
                             ax1=ax1,
-                            num_latents=M,
-                            mode="gain",
+                            num_latents=n_latents,
+                            mode="gain" if do_mult else "offset",
                             do_show=False,
+                            do_save=do_save,
                         )
 
 
@@ -758,76 +770,45 @@ def plot_latent_corr(model, mode="gain"):
 
 
 def get_latent_r(
-    trial_data,
-    spike_times,
-    session_data,
-    regions,
+    subj_id,
+    sess_id,
     n_m=5,
-    subj_id=None,
-    sess_idx=None,
-    folder="all",
+    n_a=5,
+    region="all",
     do_plot=False,
+    do_show=False,
+    do_save=False,
 ):
     import numpy as np
-    from sg.fitter import LVMFamily
+    from sg.fitter import Encoder
     from utils.paths import PROJECT_ROOT
 
-    m_latents = np.arange(n_m + 1)  # 10, 10)
-    a_latents = np.arange(5 + 1)  # 10, 10)
+    m_latents = np.linspace(0, n_m, n_m + 1, dtype=int)
+    a_latents = np.linspace(0, n_a, n_a + 1, dtype=int)
 
-    print(folder, regions)
-
-    if folder == "all":
-        family = LVMFamily(
-            trial_data=trial_data,
-            spike_times=spike_times,
-            session_data=session_data,
-            regions=regions,
-            n_latents_mult=1,
-            n_latents_addt=1,
-            task_vars={
-                "digital": [
-                    "response",
-                    "rewarded",
-                    "block_side",
-                    "strategy",
-                    "response_prev",
-                    "rewarded_prev",
-                ],
-                "analog": [],
-            },
-            refit=True,
-            max_iter=10,
-            norm_activity=True,
-        )
+    # cell (0,0)
+    family = Encoder(
+        subj_id=subj_id,
+        sess_id=sess_id,
+        regions=None if region == "all" else [region],
+        task_vars={
+            "digital": [
+                "response",
+                "rewarded",
+                "block_side",
+                "strategy",
+                "response_prev",
+                "rewarded_prev",
+            ],
+            "analog": [],
+        },
+        tpre=0.5,
+        tpost=1,
+    )
+    try:
         family.fit_all()
         family.eval()
-    elif folder in regions:
-        print("hello")
-        family = LVMFamily(
-            trial_data=trial_data,
-            spike_times=spike_times,
-            session_data=session_data,
-            regions=regions,
-            n_latents_mult=1,
-            n_latents_addt=1,
-            task_vars={
-                "digital": [
-                    "response",
-                    "rewarded",
-                    "block_side",
-                    "strategy",
-                    "response_prev",
-                    "rewarded_prev",
-                ],
-                "analog": [],
-            },
-            refit=False,  # fine because don't need the affine lvm
-            norm_activity=True,
-        )
-        family.fit_all()
-        family.eval()
-    else:
+    except ValueError:
         return
 
     r2s = np.zeros((len(m_latents), len(a_latents)))
@@ -838,11 +819,10 @@ def get_latent_r(
             else:
                 with open(
                     PROJECT_ROOT.parents[0]
-                    / f"vars/families/{subj_id}/{sess_idx}/{folder}/family-m{int(m)}a{int(a)}.pkl",
+                    / f"vars/families/{subj_id}/{sess_id}/no_pr_onesec/{region}/family-m{m}a{a}.pkl",
                     "rb",
                 ) as f:
                     family_ = pickle.load(f)
-                    family_.eval()
                     r2s[i, j] = family_.res_affine["r2test"].mean()
 
     if do_plot:
@@ -851,16 +831,31 @@ def get_latent_r(
         plt.style.use(["nature"])
         plt.rcParams["figure.dpi"] = 200
 
-        plt.figure()
-        plt.imshow(r2s, vmin=max(0, np.min(r2s)), origin="lower", interpolation=None)
-        plt.xlabel("N. Additive Latents")
-        plt.ylabel("N. Multiplicative Latents")
-        plt.xticks(np.arange(len(a_latents)))
-        plt.yticks(np.arange(len(a_latents)))
-        plt.colorbar()
-        plt.tight_layout()
-        plt.show()
+        fig, ax = plt.subplots()
+        im = ax.imshow(
+            r2s, vmin=max(0, np.min(r2s)), origin="lower", interpolation=None
+        )
+        ax.set_xlabel("N. Additive Latents")
+        ax.set_ylabel("N. Multiplicative Latents")
+        ax.set_xticks(np.arange(len(a_latents)))
+        ax.set_yticks(np.arange(len(a_latents)))
 
+        fig.colorbar(im)
+        fig.tight_layout()
+
+        if do_show:
+            fig.show()
+        if do_save:
+            save_path = (
+                PROJECT_ROOT
+                / "figs"
+                / "gs_latents"
+                / subj_id
+                / sess_id
+                / f"gs_latents_{region}.png"
+            )
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            fig.savefig(save_path)
     return r2s
 
 
@@ -984,7 +979,7 @@ def everything(family, folder):
     if family is None:
         return
     if not family.no_mult:
-        plot_summary(
+        plot_latents(
             family,
             model=family.mod_affine,
             potato=family.strategy,
@@ -993,7 +988,7 @@ def everything(family, folder):
             fname=Path("0312-lm") / folder / "m-latents.png",
         )
     if not family.no_addt:
-        plot_summary(
+        plot_latents(
             family,
             model=family.mod_affine,
             potato=family.strategy,

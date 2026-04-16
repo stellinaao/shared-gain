@@ -14,8 +14,6 @@ import random
 import numpy as np
 import torch
 
-from scipy.stats import zscore
-
 from core.data import load_sess
 from core.data import get_pr
 from sg.fitlvm_utils import (
@@ -41,7 +39,6 @@ class Encoder:
         sess_id: str = None,
         **kwargs,
     ):
-        print(subj_id, sess_id)
         self.subj_id = subj_id
         self.sess_id = sess_id
 
@@ -62,6 +59,8 @@ class Encoder:
         self.alignment = kwargs.pop("alignment", "choice")
         self.thresh = kwargs.pop("thresh", 1)
 
+        self.regions = kwargs.pop("regions", None)
+
         # model params
         self.task_vars = kwargs.pop(
             "task_vars",
@@ -75,7 +74,7 @@ class Encoder:
                     "rewarded_prev",
                 ],
                 "analog": [
-                    "pr",
+                    # "pr",
                 ],
             },
         )
@@ -107,13 +106,12 @@ class Encoder:
         torch.cuda.manual_seed_all(self.seed_val)
 
     def get_data(self):
-        print("hi")
         (
             self.spike_times,
             self.trial_data,
             self.psths,
             self.session_data,
-            self.regions,
+            regions,
         ) = load_sess(
             subj_id=self.subj_id,
             sess_id=self.sess_id,
@@ -123,14 +121,25 @@ class Encoder:
             alignment=self.alignment,
             thresh=self.thresh,
         )
-        print("bye")
 
+        if self.regions is None:
+            # i.e., fit to everything
+            self.regions = regions
+        else:
+            # check that the regions specified in self.regions are actually valid
+            if not set(self.regions).issubset(set(regions)):
+                raise ValueError(
+                    f"some regions specified {self.regions} are not present in this session {regions}"
+                )
+            else:
+                self.psths = {reg: self.psths[reg] for reg in self.regions}
+                self.spike_times = {reg: self.spike_times[reg] for reg in self.regions}
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
 
         if "pr" in self.task_vars["analog"]:
             num_units = np.sum([len(self.psths[reg]) for reg in self.regions])
-            pr = zscore(get_pr(self.psths, self.regions, num_units))
+            pr = get_pr(self.psths, self.regions, num_units)
             self.trial_data["pr"] = pr
             self.pr = pr
 
@@ -286,7 +295,7 @@ class LVMFamily(Encoder):
 
         self.add_latent_noise = kwargs.pop("add_latent_noise", False)
 
-        self.refit = kwargs.pop("refit", False)
+        self.refit = kwargs.pop("refit", True)
         self.max_iter = kwargs.pop("max_iter", 10) if self.refit else 0
 
         super().__init__(subj_id, sess_id, **kwargs)
@@ -390,9 +399,9 @@ class LVMFamily(Encoder):
         self.mod_ae_offset.tv.weight.requires_grad = False
 
         # added and did nothing...\
-        self.mod_ae_offset.tv.bias.requires_grad = False
-        self.mod_ae_offset.bias.requires_grad = False
-        self.mod_ae_offset.drift.weight.requires_grad = False
+        # self.mod_ae_offset.tv.bias.requires_grad = False
+        # self.mod_ae_offset.bias.requires_grad = False
+        # self.mod_ae_offset.drift.weight.requires_grad = False
 
         self.mod_ae_offset.readout_offset.weight_scale = 1.0
         self.mod_ae_offset.latent_offset.weight_scale = 1.0
