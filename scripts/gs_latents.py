@@ -14,7 +14,7 @@ from joblib import Parallel, delayed
 
 from core.data import subject_ids, session_ids
 
-subj_ids = ["MM012", "MR82", "MR83"]
+subj_ids = ["MR82"]  # ["MM012", "MR82", "MR83"]
 
 m_latents = np.linspace(0, 5, 6, dtype=int)
 a_latents = np.linspace(0, 5, 6, dtype=int)
@@ -43,7 +43,6 @@ def fit_family(subj_id, sess_id, m, a, region="all"):
                 "response",
                 "rewarded",
                 "block_side",
-                "strategy",
                 "response_prev",
                 "rewarded_prev",
             ],
@@ -57,7 +56,7 @@ def fit_family(subj_id, sess_id, m, a, region="all"):
 
     save_path = (
         PROJECT_ROOT.parents[0]
-        / f"vars/families/{subj_id}/{sess_id}/no_pr_onesec/{region}/family-m{m}a{a}.pkl"
+        / f"vars/families/{subj_id}/{sess_id}/after_windows/{region}/family-m{m}a{a}.pkl"
     )
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -70,9 +69,9 @@ def fit_family(subj_id, sess_id, m, a, region="all"):
 for subj_id in subj_ids:
     subj_idx = np.where(subject_ids == subj_id)[0][0]
     for sess_id in session_ids[subj_idx]:
-        # sess_id = session_ids[subj_idx][5] # take the fifth session for all of them
-        if not sess_id == session_ids[subj_idx][5]:  # because we already did this one
-            Parallel(n_jobs=8, verbose=10)(
-                delayed(fit_all)(subj_id, sess_id, m, a)
-                for m, a in product(m_latents, a_latents)
-            )
+        sess_id = session_ids[subj_idx][5]  # take the fifth session for all of them
+        # if not sess_id == session_ids[subj_idx][5]:  # because we already did this one
+        Parallel(n_jobs=8, verbose=10)(
+            delayed(fit_all)(subj_id, sess_id, m, a)
+            for m, a in product(m_latents, a_latents)
+        )

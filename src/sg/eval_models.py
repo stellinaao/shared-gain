@@ -819,7 +819,7 @@ def get_latent_r(
             else:
                 with open(
                     PROJECT_ROOT.parents[0]
-                    / f"vars/families/{subj_id}/{sess_id}/no_pr_onesec/{region}/family-m{m}a{a}.pkl",
+                    / f"vars/families/{subj_id}/{sess_id}/after_windows/{region}/family-m{m}a{a}.pkl",
                     "rb",
                 ) as f:
                     family_ = pickle.load(f)
