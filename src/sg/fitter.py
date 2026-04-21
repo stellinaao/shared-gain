@@ -38,7 +38,6 @@ class Encoder:
         sess_id: str = None,
         **kwargs,
     ):
-        print(subj_id, sess_id)
         self.subj_id = subj_id
         self.sess_id = sess_id
 
@@ -99,7 +98,6 @@ class Encoder:
         torch.cuda.manual_seed_all(self.seed_val)
 
     def get_data(self):
-        print("hi")
         (
             self.spike_times,
             self.trial_data,
@@ -115,7 +113,6 @@ class Encoder:
             alignment=self.alignment,
             thresh=self.thresh,
         )
-        print("bye")
 
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20

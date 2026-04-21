@@ -97,7 +97,6 @@ def load_sess(
             if subj_idx is None:
                 subj_idx = np.where(subject_ids == subj_id)[0][0]
             sess_id = session_ids[subj_idx][sess_idx]
-    print(subj_id, sess_id)
 
     if subj_id == "MM012" or subj_id == "MM013":
         mode = "old"
@@ -133,7 +132,6 @@ def load_sess(
         trial_data = trial_data[trial_mask]
 
         # get psths
-        print("done until get_psths")
         psths, trial_mask, zstd_units = get_psths(
             spike_times,
             trial_data,
@@ -203,7 +201,6 @@ def load_sess(
             prev_filter=False,
             get_strategy=False,
         )
-        print("after get psths")
         # update spike_times with the removed units
         for reg in regions:
             if len(zstd_units[reg]) > 0:
@@ -215,11 +212,9 @@ def load_sess(
 
         trial_data = trial_data[trial_mask]
 
-        print("before remove low fr")
         psths, spike_times = rem_low_fr(
             psths, spike_times, thresh=thresh, binwidth_ms=binwidth_ms
         )
-        print("SUCCESS!")
 
         return spike_times, trial_data, psths, session_data, regions
     else:
