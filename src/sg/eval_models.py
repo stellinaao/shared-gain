@@ -757,13 +757,9 @@ def plot_latent_corr(model, mode="gain"):
 
 
 def get_latent_r(
-    trial_data,
-    spike_times,
-    session_data,
-    regions,
     n_m=5,
     subj_id=None,
-    sess_idx=None,
+    sess_id=None,
     folder="all",
     do_plot=False,
 ):
@@ -776,10 +772,8 @@ def get_latent_r(
 
     if folder == "all":
         family = LVMFamily(
-            trial_data=trial_data,
-            spike_times=spike_times,
-            session_data=session_data,
-            regions=regions,
+            subj_id=subj_id,
+            sess_id=sess_id,
             n_latents_mult=0,
             n_latents_addt=3,
             sanity_check=0,
@@ -795,27 +789,27 @@ def get_latent_r(
         )
         family.fit_all()
         family.eval()
-    elif folder in regions:
-        family = LVMFamily(
-            trial_data=trial_data,
-            spike_times={folder: spike_times[folder]},
-            session_data=session_data,
-            regions=[folder],
-            n_latents_mult=0,
-            n_latents_addt=3,
-            sanity_check=0,
-            task_vars=[
-                "response",
-                "rewarded",
-                "block_side",
-                "response_prev",
-                "rewarded_prev",
-            ],
-            refit=False,
-            norm_activity=True,
-        )
-        family.fit_all()
-        family.eval()
+    # elif folder in regions:
+    #     family = LVMFamily(
+    #         trial_data=trial_data,
+    #         spike_times={folder: spike_times[folder]},
+    #         session_data=session_data,
+    #         regions=[folder],
+    #         n_latents_mult=0,
+    #         n_latents_addt=3,
+    #         sanity_check=0,
+    #         task_vars=[
+    #             "response",
+    #             "rewarded",
+    #             "block_side",
+    #             "response_prev",
+    #             "rewarded_prev",
+    #         ],
+    #         refit=False,
+    #         norm_activity=True,
+    #     )
+    #     family.fit_all()
+    #     family.eval()
 
     r2s = np.zeros((len(m_latents), len(a_latents)))
     for i, m in enumerate(m_latents):
@@ -823,14 +817,18 @@ def get_latent_r(
             if m == 0 and a == 0:
                 r2s[i, j] = family.res_taskvar["r2test"].mean()
             else:
-                with open(
-                    PROJECT_ROOT.parents[0]
-                    / f"vars/families/{subj_id}/{sess_idx}/{folder}/family-m{int(m)}a{int(a)}.pkl",
-                    "rb",
-                ) as f:
-                    family_ = pickle.load(f)
-                    family_.eval()
-                    r2s[i, j] = family_.res_affine["r2test"].mean()
+                seeds = []
+                for seed in range(3):
+                    with open(
+                        PROJECT_ROOT.parents[0]
+                        / f"vars/families/{subj_id}/{sess_id}/9acfb66/{folder}/family-m{int(m)}a{int(a)}-seed{seed}.pkl",
+                        "rb",
+                    ) as f:
+                        family_ = pickle.load(f)
+                        family_.eval()
+                        seeds.append(family_.res_affine["r2test"].mean())
+
+                r2s[i, j] = np.mean(seeds)
 
     if do_plot:
         import matplotlib.pyplot as plt
