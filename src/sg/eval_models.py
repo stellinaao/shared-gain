@@ -770,46 +770,25 @@ def get_latent_r(
     m_latents = np.arange(n_m + 1)  # 10, 10)
     a_latents = np.arange(5 + 1)  # 10, 10)
 
-    if folder == "all":
-        family = LVMFamily(
-            subj_id=subj_id,
-            sess_id=sess_id,
-            n_latents_mult=0,
-            n_latents_addt=3,
-            sanity_check=0,
-            task_vars=[
-                "response",
-                "rewarded",
-                "block_side",
-                "response_prev",
-                "rewarded_prev",
-            ],
-            refit=False,
-            norm_activity=True,
-        )
-        family.fit_all()
-        family.eval()
-    # elif folder in regions:
-    #     family = LVMFamily(
-    #         trial_data=trial_data,
-    #         spike_times={folder: spike_times[folder]},
-    #         session_data=session_data,
-    #         regions=[folder],
-    #         n_latents_mult=0,
-    #         n_latents_addt=3,
-    #         sanity_check=0,
-    #         task_vars=[
-    #             "response",
-    #             "rewarded",
-    #             "block_side",
-    #             "response_prev",
-    #             "rewarded_prev",
-    #         ],
-    #         refit=False,
-    #         norm_activity=True,
-    #     )
-    #     family.fit_all()
-    #     family.eval()
+    family = LVMFamily(
+        subj_id=subj_id,
+        sess_id=sess_id,
+        n_latents_mult=0,
+        n_latents_addt=3,
+        regions=None if folder == "all" else [folder],
+        sanity_check=0,
+        task_vars=[
+            "response",
+            "rewarded",
+            "block_side",
+            "response_prev",
+            "rewarded_prev",
+        ],
+        refit=False,
+        norm_activity=True,
+    )
+    family.fit_all()
+    family.eval()
 
     r2s = np.zeros((len(m_latents), len(a_latents)))
     for i, m in enumerate(m_latents):

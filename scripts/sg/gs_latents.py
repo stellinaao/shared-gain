@@ -27,34 +27,38 @@ modes = ["old", "old", "new", "new"]
 m_latents = [0]  # np.linspace(0, , 1, dtype=int)
 a_latents = np.linspace(0, 5, 6, dtype=int)
 
+regions = ["all", "DMS", "DLS"]
+
 
 def fit(subj_id, sess_id, m, a):
     if m == 0 and a == 0:
         return
-    for seed in range(3):
-        print(
-            f"Fitting for {int(m)} multiplicative latents and {int(a)} additive latents, seed {seed}"
-        )
-        family = LVMFamily(
-            subj_id=subj_id,
-            sess_id=sess_id,
-            n_latents_mult=m,
-            n_latents_addt=a,
-            refit=True,
-            max_iter=10,
-            norm_activity=True,
-            seed=seed,
-        )
-        family.fit_all()
+    for region in regions:
+        for seed in range(3):
+            print(
+                f"Fitting for {int(m)} multiplicative latents and {int(a)} additive latents, region {region}, seed {seed}"
+            )
+            family = LVMFamily(
+                subj_id=subj_id,
+                sess_id=sess_id,
+                n_latents_mult=m,
+                n_latents_addt=a,
+                regions=None if region == "all" else [region],
+                refit=True,
+                max_iter=10,
+                norm_activity=True,
+                seed=seed,
+            )
+            family.fit_all()
 
-        save_path = (
-            PROJECT_ROOT.parents[0]
-            / f"vars/families/{subj_id}/{sess_id}/9acfb66/all/family-m{m}a{a}-seed{seed}.pkl"
-        )
-        save_path.parent.mkdir(parents=True, exist_ok=True)
+            save_path = (
+                PROJECT_ROOT.parents[0]
+                / f"vars/families/{subj_id}/{sess_id}/9acfb66/{region}/family-m{m}a{a}-seed{seed}.pkl"
+            )
+            save_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(save_path, "wb") as f:
-            pickle.dump(family, f)
+            with open(save_path, "wb") as f:
+                pickle.dump(family, f)
 
 
 for i in [2]:

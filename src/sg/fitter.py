@@ -58,6 +58,8 @@ class Encoder:
         self.alignment = kwargs.pop("alignment", "choice")
         self.thresh = kwargs.pop("thresh", 1)
 
+        self.regions = kwargs.pop("regions", None)
+
         # model params
         self.task_vars = kwargs.pop(
             "task_vars",
@@ -103,7 +105,7 @@ class Encoder:
             self.trial_data,
             self.psths,
             self.session_data,
-            self.regions,
+            regions,
         ) = load_sess(
             subj_id=self.subj_id,
             sess_id=self.sess_id,
@@ -113,6 +115,17 @@ class Encoder:
             alignment=self.alignment,
             thresh=self.thresh,
         )
+
+        if self.regions is None:
+            # i.e., fit to everything
+            self.regions = regions
+        else:
+            # check that the regions specified in self.regions are actually valid
+            if not set(self.regions).issubset(set(regions)):
+                raise ValueError(f"{self.regions} must be a subste of {regions}")
+            else:
+                self.psths = {reg: self.psths[reg] for reg in self.regions}
+                self.spike_times = {reg: self.spike_times[reg] for reg in self.regions}
 
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
