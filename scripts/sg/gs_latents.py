@@ -19,22 +19,30 @@ from utils.paths import PROJECT_ROOT
 from joblib import Parallel, delayed
 from itertools import product
 
+subj_ids = ["MR82"]
+sess_idxs = ["20251027_152036"]
+regions = ["all", "DMS", "DLS"]
 
-subj_ids = ["MM012", "MM012", "MR82", "MR83"]
-sess_idxs = [4, 5, "20251027_152036", 5]
-modes = ["old", "old", "new", "new"]
-
-m_latents = [0]  # np.linspace(0, , 1, dtype=int)
+m_latents = np.linspace(0, 5, 6, dtype=int)
 a_latents = np.linspace(0, 5, 6, dtype=int)
 
-regions = ["all", "DMS", "DLS"]
+n_cv = 5
 
 
 def fit(subj_id, sess_id, m, a):
     if m == 0 and a == 0:
         return
+
+    results_dict = {
+        "subj_id": subj_id,
+        "sess_id": sess_id,
+        "n_latents_mult": m,
+        "n_latents_addt": a,
+    }
+
     for region in regions:
-        for seed in range(3):
+        results_dict[region] = {"res_affine": []}
+        for seed in range(n_cv):
             print(
                 f"Fitting for {int(m)} multiplicative latents and {int(a)} additive latents, region {region}, seed {seed}"
             )
@@ -50,81 +58,34 @@ def fit(subj_id, sess_id, m, a):
                 seed=seed,
             )
             family.fit_all()
+            family.eval()
 
-            save_path = (
-                PROJECT_ROOT.parents[0]
-                / f"vars/families/{subj_id}/{sess_id}/9acfb66/{region}/family-m{m}a{a}-seed{seed}.pkl"
-            )
-            save_path.parent.mkdir(parents=True, exist_ok=True)
+            results_dict[region]["res_affine"].append(family.res_affine["r2test"])
 
-            with open(save_path, "wb") as f:
-                pickle.dump(family, f)
+            # only save the first and last sets of models
+            if seed == 0:
+                results_dict["family_0"] = family
+            if seed == n_cv - 1:
+                results_dict["family_1"] = family
+
+    # save
+    save_path = (
+        PROJECT_ROOT.parents[0]
+        / "gs"
+        / subj_id
+        / sess_id
+        / f"results_dict_m{m}a{a}.pkl"
+    )
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(save_path, "wb") as f:
+        pickle.dump(results_dict, f)
 
 
-for i in [2]:
+for i in [0]:
     subj_id = subj_ids[i]
     sess_id = sess_idxs[i]
 
     Parallel(n_jobs=8)(
         delayed(fit)(subj_id, sess_id, m, a) for (m, a) in product(m_latents, a_latents)
     )
-
-    # for m in m_latents:
-    #     for a in a_latents:
-    #         for seed in range(3):
-    #             if m == 0 and a == 0:
-    #                 continue
-    #             print(
-    #                 f"Fitting for {int(m)} multiplicative latents and {int(a)} additive latents, seed {seed}"
-    #             )
-    #             family = LVMFamily(
-    #                 subj_id=subj_id,
-    #                 sess_id=sess_id,
-    #                 n_latents_mult=int(m),
-    #                 n_latents_addt=int(a),
-    #                 refit=True,
-    #                 max_iter=10,
-    #                 norm_activity=True,
-    #                 seed=seed,
-    #             )
-    #             family.fit_all()
-
-    #             save_path = (
-    #                 PROJECT_ROOT.parents[0]
-    #                 / f"vars/families/{subj_id}/{sess_id}/9acfb66/all/family-m{int(m)}a{int(a)}-seed{seed}.pkl"
-    #             )
-    #             save_path.parent.mkdir(parents=True, exist_ok=True)
-
-    #             with open(save_path, "wb") as f:
-    #                 # print(type(family))
-    #                 pickle.dump(family, f)
-
-    # for reg in regions:
-    #     for m in m_latents:
-    #         for a in a_latents:
-    #             if m == 0 and a == 0:
-    #                 continue
-    #             print(
-    #                 f"Fitting for {reg}, {int(m)} multiplicative latents and {int(a)} additive latents"
-    #             )
-    #             family = LVMFamily(
-    #                 trial_data=trial_data,
-    #                 spike_times={reg: unit_spike_times[reg]},
-    #                 session_data=session_data,
-    #                 regions=[reg],
-    #                 n_latents_mult=int(m),
-    #                 n_latents_addt=int(a),
-    #                 refit=True,
-    #                 max_iter=10,
-    #                 norm_activity=True,
-    #             )
-    #             family.fit_all()
-
-    #             save_path = (
-    #                 PROJECT_ROOT.parents[0]
-    #                 / f"vars/families/{subj_id}/{sess_idx}/{reg}/family-m{int(m)}a{int(a)}.pkl"
-    #             )
-    #             save_path.parent.mkdir(parents=True, exist_ok=True)
-
-    #             with open(save_path, "wb") as f:
-    #                 pickle.dump(family, f)

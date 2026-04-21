@@ -796,18 +796,20 @@ def get_latent_r(
             if m == 0 and a == 0:
                 r2s[i, j] = family.res_taskvar["r2test"].mean()
             else:
-                seeds = []
-                for seed in range(3):
-                    with open(
-                        PROJECT_ROOT.parents[0]
-                        / f"vars/families/{subj_id}/{sess_id}/9acfb66/{folder}/family-m{int(m)}a{int(a)}-seed{seed}.pkl",
-                        "rb",
-                    ) as f:
-                        family_ = pickle.load(f)
-                        family_.eval()
-                        seeds.append(family_.res_affine["r2test"].mean())
+                with open(
+                    PROJECT_ROOT.parents[0]
+                    / "gs"
+                    / subj_id
+                    / sess_id
+                    / f"results_dict_m{m}a{a}.pkl",
+                    "rb",
+                ) as f:
+                    results_dict = pickle.load(f)
 
-                r2s[i, j] = np.mean(seeds)
+                print([np.shape(res) for res in results_dict[folder]["res_affine"]])
+                r2s[i, j] = np.mean(
+                    [torch.mean(res) for res in results_dict[folder]["res_affine"]]
+                )
 
     if do_plot:
         import matplotlib.pyplot as plt
