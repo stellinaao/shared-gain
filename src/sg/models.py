@@ -305,6 +305,7 @@ class SharedLatentGain(Encoder):
         # eps = torch.randn_like(std)
         return x
 
+    # the bigger gold nugget
     def forward(self, input):
         x = 0
         if self.tv is not None:

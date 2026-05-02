@@ -149,7 +149,9 @@ def get_dataset_dm(
 
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
-    tvs = OHE().fit_transform(trial_data[task_vars]).todense()
+    tvs = OHE().fit_transform(trial_data[task_vars["digital"]]).todense()
+    tvs = np.concatenate((tvs, trial_data[task_vars["analog"]]), axis=1)
+    print(tvs.shape)
     # print(f"mozza: {trai}, feta: {tvs.shape}")
     # tents
     from ndnt.utils.NDNutils import tent_basis_generate
@@ -1089,7 +1091,7 @@ def get_data_model(
     regions,
     norm=True,
     num_tents=2,
-    task_vars=["response"],
+    task_vars={"digital": ["response"], "analog": []},
     verbosity=0,
     sanity_check=0,
     tuber=None,
