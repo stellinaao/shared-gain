@@ -3732,7 +3732,7 @@ source = { git = "https://github.com/stellinaao/spks.git#d86b9dfff61f33fe0326fac
 [[package]]
 name = "squiggs"
 version = "0.1.0"
-source = { git = "https://github.com/stellinaao/SQUIGGS#74c83aa09374f3d35986019503a6c654e53fa22e" }
+source = { git = "https://github.com/stellinaao/SQUIGGS#97dd0370147266030ec90f5e1791b6f9d16801e8" }
 dependencies = [
     { name = "damn" },
     { name = "matplotlib" },
