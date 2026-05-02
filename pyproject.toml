@@ -1,10 +1,10 @@
 [project]
-name = "dfna"
+name = "shared-gain"
 version = "0.1.0"
-description = "various analyses of neural activity recorded from a dynamic foraging task"
+description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "Stellina Ao", email = "stellina@ucla.edu" }
+    { name = "Stellina Ao", email = "stellinaxxao@gmail.com" }
 ]
 requires-python = ">=3.11"
 dependencies = [
