@@ -127,7 +127,11 @@ def get_dataset_dm(
         robs - np.mean(robs, axis=0)
     )  # abs diff from avg rate of units across all trials, np.mean: shape = (# cells,), adiff: shape = (# trials, # cells)
     mad = np.median(adiff)  # scalar
-    dfs = (adiff / mad) < 8  # shape = (# trials, # cells)
+    dfs = (adiff / mad) < 5  # shape = (# trials, # cells)
+
+    dfs_vals = adiff / mad
+    print(dfs.shape, np.sum(dfs))
+    # print((dfs.shape[0]*dfs.shape[1]), torch.sum(dfs), (dfs.shape[0]*dfs.shape[1])-torch.sum(dfs))
     # print(mad)
 
     # filter for good units
@@ -135,7 +139,7 @@ def get_dataset_dm(
     # print(f"good units {np.sum(good)}/{len(good)}")
     # robs = robs[:,good]
     # dfs = dfs[:,good]
-    dfs = np.ones_like(dfs)
+    # dfs = np.ones_like(dfs)
 
     # normalize
     if norm:
@@ -158,6 +162,7 @@ def get_dataset_dm(
         "robs": torch.tensor(robs, dtype=torch.float32),
         "reg_keys": torch.tensor(reg_keys, dtype=torch.float32),
         "dfs": torch.tensor(dfs, dtype=torch.float32),
+        "dfs_val": torch.tensor(dfs_vals, dtype=torch.float32),
         "tv": torch.tensor(tvs, dtype=torch.float32),
         "tents": torch.tensor(tents, dtype=torch.float32),
         "indices": torch.tensor(
