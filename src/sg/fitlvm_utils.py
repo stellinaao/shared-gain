@@ -1213,6 +1213,11 @@ def get_dataloaders(data_gd, folds=5, batch_size=64, use_dropout=True, seed=1234
 
 
 def rsquared(y, yhat, dfs=None, eps=1e-10):
+    """
+    we need this function because it does not make sense to send the masked data
+    into sklearn's r2_score because then we are essentially padding with a lot of
+    "correct" values from our mask (i.e., a lot of correct 0s)
+    """
     # no accidental overestimation pls
     # if dfs is None:
     #     dfs = torch.ones(y.shape, device=y.device)
