@@ -801,12 +801,12 @@ def get_latent_r(
                     / "gs"
                     / subj_id
                     / sess_id
+                    / "no_regl_refit"
                     / f"results_dict_m{m}a{a}.pkl",
                     "rb",
                 ) as f:
                     results_dict = pickle.load(f)
 
-                print([np.shape(res) for res in results_dict[folder]["res_affine"]])
                 r2s[i, j] = np.mean(
                     [torch.mean(res) for res in results_dict[folder]["res_affine"]]
                 )
@@ -821,6 +821,7 @@ def get_latent_r(
         plt.imshow(r2s, vmin=max(0, np.min(r2s)), origin="lower", interpolation=None)
         plt.xlabel("N. Additive Latents")
         plt.ylabel("N. Multiplicative Latents")
+        plt.title(folder)
         plt.xticks(np.arange(len(a_latents)))
         plt.yticks(np.arange(len(a_latents)))
         plt.colorbar()

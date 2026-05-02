@@ -67,7 +67,6 @@ class Encoder:
                 "response",
                 "rewarded",
                 "block_side",
-                "strategy",
                 "response_prev",
                 "rewarded_prev",
             ],
@@ -178,8 +177,8 @@ class Encoder:
         fit_model(self.mod_baseline, self.train_dl, self.val_dl, use_lbfgs=True)
 
     def fit_taskvar(self):
-        self.tv_reg = {"l2": 0.001}
-        self.reg = {"l2": 0.001}
+        # self.tv_reg = {"l2": 0.001}
+        # self.reg = {"l2": 0.001}
         if self.verbosity > 0:
             print(self.tv_actv_fn, self.nonlinearity)
         self.mod_taskvar = SharedGain(
@@ -307,8 +306,8 @@ class LVMFamily(Encoder):
         self.ae2lvm()
 
     def fit_ae_gain(self):
-        self.tv_reg = {"l2": 1}
-        self.reg = {"l2": 0.001}
+        # self.tv_reg = {"l2": 1}
+        # self.reg = {"l2": 0.001}
         self.mod_ae_gain = SharedGain(
             tv_dims=self.num_tv,
             num_units=self.num_units,
@@ -541,6 +540,12 @@ class LVMFamily(Encoder):
             self.res_affine = eval_model(
                 self.mod_affine, self.data_gd, self.test_dl.dataset
             )
+            self.qi = self.get_qi()
+
+    def get_qi(self):
+        r2_lvm = self.res_affine["r2test"].mean()
+        r2_taskvar = self.res_taskvar["r2test"].mean()
+        return (r2_lvm - r2_taskvar) / (1 - r2_taskvar)
 
 
 class ScrambledEncoder:
