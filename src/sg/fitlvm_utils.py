@@ -127,7 +127,11 @@ def get_dataset_dm(
         robs - np.mean(robs, axis=0)
     )  # abs diff from avg rate of units across all trials, np.mean: shape = (# cells,), adiff: shape = (# trials, # cells)
     mad = np.median(adiff)  # scalar
-    dfs = (adiff / mad) < 8  # shape = (# trials, # cells)
+    dfs = (adiff / mad) < 5  # shape = (# trials, # cells)
+
+    dfs_vals = adiff / mad
+    print(dfs.shape, np.sum(dfs))
+    # print((dfs.shape[0]*dfs.shape[1]), torch.sum(dfs), (dfs.shape[0]*dfs.shape[1])-torch.sum(dfs))
     # print(mad)
 
     # filter for good units
@@ -135,7 +139,7 @@ def get_dataset_dm(
     # print(f"good units {np.sum(good)}/{len(good)}")
     # robs = robs[:,good]
     # dfs = dfs[:,good]
-    dfs = np.ones_like(dfs)
+    # dfs = np.ones_like(dfs)
 
     # normalize
     if norm:
@@ -160,6 +164,7 @@ def get_dataset_dm(
         "robs": torch.tensor(robs, dtype=torch.float32),
         "reg_keys": torch.tensor(reg_keys, dtype=torch.float32),
         "dfs": torch.tensor(dfs, dtype=torch.float32),
+        "dfs_val": torch.tensor(dfs_vals, dtype=torch.float32),
         "tv": torch.tensor(tvs, dtype=torch.float32),
         "tents": torch.tensor(tents, dtype=torch.float32),
         "indices": torch.tensor(
@@ -1208,24 +1213,14 @@ def get_dataloaders(data_gd, folds=5, batch_size=64, use_dropout=True, seed=1234
 
 
 def rsquared(y, yhat, dfs=None, eps=1e-10):
-    if dfs is None:
-        dfs = torch.ones(y.shape, device=y.device)
+    # no accidental overestimation pls
+    # if dfs is None:
+    #     dfs = torch.ones(y.shape, device=y.device)
     ybar = (y * dfs).sum(dim=0) / dfs.sum(dim=0)  # the average y value
     resids = y - yhat  # the difference between observed and predicted
     residnull = y - ybar  # the difference between observed and observed avg
     sstot = torch.sum(residnull**2 * dfs, dim=0) + eps  # denom
     ssres = torch.sum(resids**2 * dfs, dim=0)  # num
-    r2 = 1 - ssres / sstot
-
-    return r2.detach().cpu()
-
-    if dfs is None:
-        dfs = torch.ones(y.shape, device=y.device)
-    ybar = (y).sum(dim=0) / dfs.shape[0]  # sum(dim=0) # the average y value
-    resids = y - yhat  # the difference between observed and predicted
-    residnull = y - ybar  # the difference between observed and observed avg
-    sstot = torch.sum(residnull**2, dim=0)  # denom
-    ssres = torch.sum(resids**2, dim=0)  # num
     r2 = 1 - ssres / sstot
 
     return r2.detach().cpu()

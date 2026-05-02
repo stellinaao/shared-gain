@@ -41,7 +41,6 @@ class Encoder:
         sess_id: str = None,
         **kwargs,
     ):
-        print(subj_id, sess_id)
         self.subj_id = subj_id
         self.sess_id = sess_id
 
@@ -62,22 +61,18 @@ class Encoder:
         self.alignment = kwargs.pop("alignment", "choice")
         self.thresh = kwargs.pop("thresh", 1)
 
+        self.regions = kwargs.pop("regions", None)
+
         # model params
         self.task_vars = kwargs.pop(
             "task_vars",
-            {
-                "digital": [
-                    "response",
-                    "rewarded",
-                    "block_side",
-                    "strategy",
-                    "response_prev",
-                    "rewarded_prev",
-                ],
-                "analog": [
-                    "pr",
-                ],
-            },
+            [
+                "response",
+                "rewarded",
+                "block_side",
+                "response_prev",
+                "rewarded_prev",
+            ],
         )
         self.n_splines = kwargs.pop("n_splines", 5)
         self.norm_activity = kwargs.pop("norm_activity", True)
@@ -107,13 +102,12 @@ class Encoder:
         torch.cuda.manual_seed_all(self.seed_val)
 
     def get_data(self):
-        print("hi")
         (
             self.spike_times,
             self.trial_data,
             self.psths,
             self.session_data,
-            self.regions,
+            regions,
         ) = load_sess(
             subj_id=self.subj_id,
             sess_id=self.sess_id,
@@ -123,7 +117,17 @@ class Encoder:
             alignment=self.alignment,
             thresh=self.thresh,
         )
-        print("bye")
+
+        if self.regions is None:
+            # i.e., fit to everything
+            self.regions = regions
+        else:
+            # check that the regions specified in self.regions are actually valid
+            if not set(self.regions).issubset(set(regions)):
+                raise ValueError(f"{self.regions} must be a subste of {regions}")
+            else:
+                self.psths = {reg: self.psths[reg] for reg in self.regions}
+                self.spike_times = {reg: self.spike_times[reg] for reg in self.regions}
 
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
@@ -182,8 +186,8 @@ class Encoder:
         fit_model(self.mod_baseline, self.train_dl, self.val_dl, use_lbfgs=True)
 
     def fit_taskvar(self):
-        self.tv_reg = {"l2": 0.001}
-        self.reg = {"l2": 0.001}
+        # self.tv_reg = {"l2": 0.001}
+        # self.reg = {"l2": 0.001}
         if self.verbosity > 0:
             print(self.tv_actv_fn, self.nonlinearity)
         self.mod_taskvar = SharedGain(
@@ -311,8 +315,8 @@ class LVMFamily(Encoder):
         self.ae2lvm()
 
     def fit_ae_gain(self):
-        self.tv_reg = {"l2": 1}
-        self.reg = {"l2": 0.001}
+        # self.tv_reg = {"l2": 1}
+        # self.reg = {"l2": 0.001}
         self.mod_ae_gain = SharedGain(
             tv_dims=self.num_tv,
             num_units=self.num_units,
@@ -550,6 +554,12 @@ class LVMFamily(Encoder):
             self.res_affine = eval_model(
                 self.mod_affine, self.data_gd, self.test_dl.dataset
             )
+            self.qi = self.get_qi()
+
+    def get_qi(self):
+        r2_lvm = self.res_affine["r2test"].mean()
+        r2_taskvar = self.res_taskvar["r2test"].mean()
+        return (r2_lvm - r2_taskvar) / (1 - r2_taskvar)
 
 
 class ScrambledEncoder:

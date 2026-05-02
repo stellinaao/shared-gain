@@ -19,8 +19,8 @@ from utils.paths import PROJECT_ROOT
 from joblib import Parallel, delayed
 from itertools import product
 
-subj_ids = ["MR82"]
-sess_idxs = ["20251027_152036"]
+subj_ids = ["MR83"]
+sess_idxs = ["20251027_162326"]
 regions = ["all", "DMS", "DLS"]
 
 m_latents = np.linspace(0, 5, 6, dtype=int)
@@ -43,30 +43,43 @@ def fit(subj_id, sess_id, m, a):
     for region in regions:
         results_dict[region] = {"res_affine": []}
         for seed in range(n_cv):
-            print(
-                f"Fitting for {int(m)} multiplicative latents and {int(a)} additive latents, region {region}, seed {seed}"
-            )
-            family = LVMFamily(
-                subj_id=subj_id,
-                sess_id=sess_id,
-                n_latents_mult=m,
-                n_latents_addt=a,
-                regions=None if region == "all" else [region],
-                refit=False,
-                # max_iter=10,
-                norm_activity=True,
-                seed=seed,
-            )
-            family.fit_all()
-            family.eval()
+            best_family = None
+            for regl_tv, regl in product(
+                np.logspace(-3, 0, 4, base=10), np.logspace(-3, 0, 4, base=10)
+            ):
+                print(
+                    f"Fitting for {int(m)} multiplicative latents and {int(a)} additive latents, region {region}, seed {seed}, regl_tv {regl_tv}, regl {regl}"
+                )
+                family = LVMFamily(
+                    subj_id=subj_id,
+                    sess_id=sess_id,
+                    n_latents_mult=m,
+                    n_latents_addt=a,
+                    regions=None if region == "all" else [region],
+                    refit=False,
+                    # max_iter=10,
+                    norm_activity=True,
+                    seed=seed,
+                    tv_reg={"l2": regl_tv},
+                    reg={"l2": regl},
+                )
+                family.fit_all()
+                family.eval()
 
-            results_dict[region]["res_affine"].append(family.res_affine["r2test"])
+                if (
+                    best_family is None
+                    or best_family.res_taskvar["r2test"].mean()
+                    < family.res_taskvar["r2test"].mean()
+                ):
+                    best_family = family
+
+            results_dict[region]["res_affine"].append(best_family.res_affine["r2test"])
 
             # only save the first and last sets of models
             if seed == 0:
-                results_dict["family_0"] = family
+                results_dict["family_0"] = best_family
             if seed == n_cv - 1:
-                results_dict["family_1"] = family
+                results_dict["family_1"] = best_family
 
     # save
     save_path = (
@@ -74,7 +87,7 @@ def fit(subj_id, sess_id, m, a):
         / "gs"
         / subj_id
         / sess_id
-        / "no_regl_refit"
+        / "no_refit"
         / f"results_dict_m{m}a{a}.pkl"
     )
 
