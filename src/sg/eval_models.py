@@ -347,6 +347,7 @@ def get_scores_mean(scores):
 def plot_r2_comp(
     results_a,
     results_b,
+    qi,
     label_a="",
     label_b="",
     title="",
@@ -368,10 +369,11 @@ def plot_r2_comp(
         mn = torch.min(results_a["r2test"].min(), results_b["r2test"].min())
         mx = torch.max(results_a["r2test"].max(), results_b["r2test"].max())
         ax.scatter(results_a["r2test"], results_b["r2test"], color="#E5A400")
-        ax.plot((mn, mx), (mn, mx), linestyle="--", color="#444444", label="unity")
+        ax.plot((mn, mx), (mn, mx), linestyle="--", color="#444444")
         ax.set_xlabel(label_a)
         ax.set_ylabel(label_b)
         ax.set_xlim([mn - 0.05, mx + 0.05]), ax.set_ylim([mn - 0.05, mx + 0.05])
+        ax.set_title(f"QI: {qi:.3f}")
     else:
         raise ValueError("valid arguments for mode are 'unity' and 'overlay.'")
 
