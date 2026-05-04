@@ -130,7 +130,7 @@ def get_dataset_dm(
     dfs = (adiff / mad) < 5  # shape = (# trials, # cells)
 
     dfs_vals = adiff / mad
-    print(dfs.shape, np.sum(dfs))
+    # print(dfs.shape, np.sum(dfs))
     # print((dfs.shape[0]*dfs.shape[1]), torch.sum(dfs), (dfs.shape[0]*dfs.shape[1])-torch.sum(dfs))
     # print(mad)
 
@@ -149,9 +149,9 @@ def get_dataset_dm(
 
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
-    tvs = OHE().fit_transform(trial_data[task_vars["digital"]]).todense()
-    tvs = np.concatenate((tvs, trial_data[task_vars["analog"]]), axis=1)
-    print(tvs.shape)
+    tvs = OHE().fit_transform(trial_data[task_vars]).todense()
+    # tvs = np.concatenate((tvs, trial_data[task_vars["analog"]]), axis=1)
+    # print(tvs.shape)
     # print(f"mozza: {trai}, feta: {tvs.shape}")
     # tents
     from ndnt.utils.NDNutils import tent_basis_generate

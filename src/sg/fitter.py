@@ -14,10 +14,8 @@ import random
 import numpy as np
 import torch
 
-from scipy.stats import zscore
 
 from core.data import load_sess
-from core.data import get_pr
 from sg.fitlvm_utils import (
     eval_model,
     fit_autoencoder,
@@ -56,7 +54,7 @@ class Encoder:
 
         # neural data
         self.tpre = kwargs.pop("tpre", 0.5)
-        self.tpost = kwargs.pop("tpost", 0.5)
+        self.tpost = kwargs.pop("tpost", 1)
         self.binwidth_ms = kwargs.pop("binwidth_ms", 25)
         self.alignment = kwargs.pop("alignment", "choice")
         self.thresh = kwargs.pop("thresh", 1)
@@ -131,12 +129,6 @@ class Encoder:
 
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
-
-        if "pr" in self.task_vars["analog"]:
-            num_units = np.sum([len(self.psths[reg]) for reg in self.regions])
-            pr = zscore(get_pr(self.psths, self.regions, num_units))
-            self.trial_data["pr"] = pr
-            self.pr = pr
 
         self.strategy = self.trial_data["strategy"]
         self.rewarded = self.trial_data["rewarded"]
@@ -562,31 +554,30 @@ class LVMFamily(Encoder):
         return (r2_lvm - r2_taskvar) / (1 - r2_taskvar)
 
 
+"""
 class ScrambledEncoder:
     def __init__(
         self,
-        trial_data=None,
-        spike_times=None,
-        session_data=None,
-        regions=None,
+        subj_id,
+        sess_id,
         pivot: str = None,
         **kwargs,
     ):
 
         self.mod_full = Encoder(
-            trial_data=trial_data,
-            spike_times=spike_times,
-            session_data=session_data,
-            regions=regions,
+            subj_id=subj_id,
+            sess_id=sess_id,
             **kwargs,
         )
+
+        self.mod_full.get_data()
 
         self.pivot = pivot
 
         if pivot not in self.mod_full.task_vars:
             raise ValueError(f"pivot must be one of {self.mod_full.task_vars}")
 
-        self.trial_data_scramble_d = trial_data.copy(deep=True)
+        self.trial_data_scramble_d = self.mod_full.trial_data.copy(deep=True)
         self.trial_data_scramble_d[self.pivot] = (
             self.trial_data_scramble_d[self.pivot].sample(frac=1).to_numpy()
         )
@@ -647,3 +638,4 @@ class ScrambledEncoder:
 
         self.d_r2 = self.r2_full - self.r2_scramble_d
         self.r2_scramble = self.mod_scramble.res_taskvar["r2test"].mean()
+"""
