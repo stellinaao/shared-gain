@@ -15,7 +15,6 @@ import torch
 import pickle
 from pathlib import Path
 
-from tqdm import tqdm
 
 from sklearn.svm import SVC
 from sklearn.model_selection import cross_val_score
@@ -27,7 +26,7 @@ from core.data import load_sess
 from pprint import pprint
 
 from sg.fitlvm_utils import eval_model
-from sg.fitter import ScrambledEncoder
+# from sg.fitter import ScrambledEncoder
 
 import matplotlib.colors as colors
 import matplotlib.cm as cm
@@ -154,6 +153,7 @@ def get_num_latents(das, subj_idx, sess_idx, is_msess=True, ae=True, do_plot=Fal
 
 
 # encoder
+"""
 def monkey_cv_d_r2(
     trial_data,
     spike_times,
@@ -209,6 +209,7 @@ def monkey_cv_d_r2(
     }
 
     return scramble_r2s, scramble_r2s_summary
+"""
 
 
 # latent decoding

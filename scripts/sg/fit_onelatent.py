@@ -14,13 +14,11 @@ import pickle
 import numpy as np
 from sg.fitter import LVMFamily
 from utils.paths import MODELS_DIR
-from core.data import subject_ids, session_ids
 
-from joblib import Parallel, delayed
 from itertools import product
 
-subj_ids = ["MR82"]
-regions = ["all", "DMS", "DLS"]
+subj_ids = ["MR83", "MM012", "MR82"]
+regions = ["all", "ACC", "M2", "DMS", "DLS"]
 
 n_cv = 5
 
@@ -37,8 +35,6 @@ def fit(subj_id, sess_id, no_dupl=True):
     }
 
     for region in regions:
-        results_dict[region] = {"families": [], "res_tv_lvms": []}
-
         # find the best regl constants first
         best_regl_consts = None
         best_score = -np.inf
@@ -82,6 +78,8 @@ def fit(subj_id, sess_id, no_dupl=True):
 
         if best_regl_consts is None:
             continue
+
+        results_dict[region] = {"families": [], "res_tv_lvms": []}
         for seed in range(n_cv):
             print(f"Fitting for {subj_id}, {sess_id}, region {region}, seed {seed}")
 
@@ -123,8 +121,9 @@ def fit(subj_id, sess_id, no_dupl=True):
     print(f"DONE for {subj_id}, {sess_id}")
 
 
-for subj_id in subj_ids:
-    subj_idx = np.where(subject_ids == subj_id)[0][0]
-    Parallel(n_jobs=8)(
-        delayed(fit)(subj_id, sess_id) for sess_id in session_ids[subj_idx]
-    )
+fit("MR82", "20251030_150221", no_dupl=False)
+# for subj_id in subj_ids:
+#     subj_idx = np.where(subject_ids == subj_id)[0][0]
+#     Parallel(n_jobs=8)(
+#         delayed(fit)(subj_id, sess_id) for sess_id in session_ids[subj_idx]
+#     )

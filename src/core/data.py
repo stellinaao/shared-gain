@@ -48,6 +48,12 @@ colors_model = {
     "affine": "#1A4D99",
 }
 
+colors_subj = {
+    "MM012": "#E32525",
+    "MR82": "#40AAC2",
+    "MR83": "#3359D7",
+}
+
 colors_region = {
     "ACC": "#140C6A",
     "DMS": "#7166E9",
