@@ -52,6 +52,14 @@ class Encoder:
         self.verbosity = kwargs.pop("verbosity", 0)
         self.sanity_check = kwargs.pop("sanity_check", 0)
 
+        # trial data
+        self.mb_only = kwargs.pop("mb_only", False)
+        self.mf_only = kwargs.pop("mf_only", False)
+        if self.mb_only and self.mf_only:
+            raise ValueError("gosh pick a side!")
+        if self.mb_only or self.mf_only:
+            self.subsample_strategy = kwargs.pop("subsample_strategy", True)
+
         # neural data
         self.tpre = kwargs.pop("tpre", 0.5)
         self.tpost = kwargs.pop("tpost", 1)
@@ -129,6 +137,50 @@ class Encoder:
 
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
+
+        # update trial_data and psths if needed
+        if self.mb_only:
+            mb_mask = self.trial_data["strategy"] == 1
+
+            if not self.subsample_strategy:
+                self.trial_data = self.trial_data[mb_mask]
+                self.psths = {
+                    region: self.psths[region][:, mb_mask, :] for region in self.regions
+                }
+            else:
+                mf_mask = self.trial_data["strategy"] == -1
+
+                num_trial = min(mb_mask.sum(), mf_mask.sum())
+                idxs_subsamp = np.sort(
+                    np.random.choice(np.arange(mb_mask.sum()), num_trial)
+                )
+
+                self.trial_data = self.trial_data[mb_mask].iloc[idxs_subsamp]
+                self.psths = {
+                    region: self.psths[region][:, mb_mask, :][:, idxs_subsamp, :]
+                    for region in self.regions
+                }
+
+        elif self.mf_only:
+            mf_mask = self.trial_data["strategy"] == -1
+            if not self.subsample_strategy:
+                self.trial_data = self.trial_data[mf_mask]
+                self.psths = {
+                    region: self.psths[region][:, mf_mask, :] for region in self.regions
+                }
+            else:
+                mb_mask = self.trial_data["strategy"] == 1
+
+                num_trial = min(mb_mask.sum(), mf_mask.sum())
+                idxs_subsamp = np.sort(
+                    np.random.choice(np.arange(mf_mask.sum()), num_trial)
+                )
+
+                self.trial_data = self.trial_data[mf_mask].iloc[idxs_subsamp]
+                self.psths = {
+                    region: self.psths[region][:, mf_mask, :][:, idxs_subsamp, :]
+                    for region in self.regions
+                }
 
         self.strategy = self.trial_data["strategy"]
         self.rewarded = self.trial_data["rewarded"]
