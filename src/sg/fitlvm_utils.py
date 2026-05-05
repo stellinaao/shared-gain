@@ -143,7 +143,8 @@ def get_dataset_dm(
 
     # normalize
     if norm:
-        s = np.std(robs, axis=0)
+        s = np.std(robs, axis=0) + 1e-10
+        # TODO
         mu = np.mean(robs, axis=0)
         robs = (robs - mu) / s
 

@@ -59,6 +59,7 @@ class Encoder:
             raise ValueError("gosh pick a side!")
         if self.mb_only or self.mf_only:
             self.subsample_strategy = kwargs.pop("subsample_strategy", True)
+        self.enough_trials = False
 
         # neural data
         self.tpre = kwargs.pop("tpre", 0.5)
@@ -93,12 +94,17 @@ class Encoder:
             extra_kwargs = ", ".join('"%s' % k for k in list(kwargs.keys()))
             raise ValueError("Extra arguments %s" % extra_kwargs)
 
+        # housekeeping
+        self.baseline_fit = False
+        self.taskvar_fit = False
+
     def fit_all(self):
         self.get_data()
-        self.fit_baseline()
-        self.fit_taskvar()
-        self.get_cids()
-        self.update_cids()
+        if self.enough_trials:
+            self.fit_baseline()
+            self.fit_taskvar()
+            self.get_cids()
+            self.update_cids()
 
     def seed(self):
         random.seed(self.seed_val)
@@ -143,6 +149,9 @@ class Encoder:
             mb_mask = self.trial_data["strategy"] == 1
 
             if not self.subsample_strategy:
+                if mb_mask.sum() < 20:
+                    return
+                self.enough_trials = True
                 self.trial_data = self.trial_data[mb_mask]
                 self.psths = {
                     region: self.psths[region][:, mb_mask, :] for region in self.regions
@@ -151,6 +160,9 @@ class Encoder:
                 mf_mask = self.trial_data["strategy"] == -1
 
                 num_trial = min(mb_mask.sum(), mf_mask.sum())
+                if num_trial < 20:
+                    return
+                self.enough_trials = True
                 idxs_subsamp = np.sort(
                     np.random.choice(np.arange(mb_mask.sum()), num_trial)
                 )
@@ -164,6 +176,9 @@ class Encoder:
         elif self.mf_only:
             mf_mask = self.trial_data["strategy"] == -1
             if not self.subsample_strategy:
+                if mf_mask.sum() < 20:
+                    return
+                self.enough_trials = True
                 self.trial_data = self.trial_data[mf_mask]
                 self.psths = {
                     region: self.psths[region][:, mf_mask, :] for region in self.regions
@@ -172,6 +187,10 @@ class Encoder:
                 mb_mask = self.trial_data["strategy"] == 1
 
                 num_trial = min(mb_mask.sum(), mf_mask.sum())
+
+                if num_trial < 20:
+                    return
+                self.enough_trials = True
                 idxs_subsamp = np.sort(
                     np.random.choice(np.arange(mf_mask.sum()), num_trial)
                 )
@@ -228,6 +247,7 @@ class Encoder:
             reg_vals=self.reg,
         )
         fit_model(self.mod_baseline, self.train_dl, self.val_dl, use_lbfgs=True)
+        self.baseline_fit = True
 
     def fit_taskvar(self):
         # self.tv_reg = {"l2": 0.001}
@@ -253,6 +273,7 @@ class Encoder:
         self.mod_taskvar.drift.weight.data = self.mod_baseline.drift.weight.data.clone()
 
         fit_model(self.mod_taskvar, self.train_dl, self.val_dl, use_lbfgs=True)
+        self.taskvar_fit = True
 
     def get_cids(self):
         res_taskvar = eval_model(self.mod_taskvar, self.data_gd, self.test_dl.dataset)
@@ -301,14 +322,16 @@ class Encoder:
 
     def eval(self):
         # baseline
-        self.res_baseline = eval_model(
-            self.mod_baseline, self.data_gd, self.test_dl.dataset
-        )
+        if self.baseline_fit:
+            self.res_baseline = eval_model(
+                self.mod_baseline, self.data_gd, self.test_dl.dataset
+            )
 
         # task variables
-        self.res_taskvar = eval_model(
-            self.mod_taskvar, self.data_gd, self.test_dl.dataset
-        )
+        if self.taskvar_fit:
+            self.res_taskvar = eval_model(
+                self.mod_taskvar, self.data_gd, self.test_dl.dataset
+            )
 
 
 class LVMFamily(Encoder):
@@ -339,24 +362,31 @@ class LVMFamily(Encoder):
 
         super().__init__(subj_id, sess_id, **kwargs)
 
+        # housekeeping
+        self.ae_gain_fit = False
+        self.ae_offset_fit = False
+        self.ae_affine_fit = False
+        self.lvms_fit = False
+
     def fit_all(self):
         super().fit_all()
 
-        if not self.no_mult:
-            self.fit_ae_gain()
-        if not self.no_addt:
-            self.fit_ae_offset()
-        if not self.no_mult and not self.no_addt:
-            self.fit_ae_affine()
-        elif self.no_mult:
-            self.mod_ae_affine = self.mod_ae_offset
-        elif self.no_addt:
-            self.mod_ae_affine = self.mod_ae_gain
-        else:
-            print("BOOHOO something is catastrophically wrong")
-            return
+        if self.enough_trials:
+            if not self.no_mult:
+                self.fit_ae_gain()
+            if not self.no_addt:
+                self.fit_ae_offset()
+            if not self.no_mult and not self.no_addt:
+                self.fit_ae_affine()
+            elif self.no_mult:
+                self.mod_ae_affine = self.mod_ae_offset
+            elif self.no_addt:
+                self.mod_ae_affine = self.mod_ae_gain
+            else:
+                print("BOOHOO something is catastrophically wrong")
+                return
 
-        self.ae2lvm()
+            self.ae2lvm()
 
     def fit_ae_gain(self):
         # self.tv_reg = {"l2": 1}
@@ -405,6 +435,8 @@ class LVMFamily(Encoder):
             max_iter=self.max_iter,
             verbosity=self.verbosity,
         )
+
+        self.ae_gain_fit = True
 
     def fit_ae_offset(self):
         self.mod_ae_offset = SharedGain(
@@ -456,6 +488,8 @@ class LVMFamily(Encoder):
             max_iter=self.max_iter,
             verbosity=self.verbosity,
         )
+
+        self.ae_offset_fit = True
 
     def fit_ae_affine(self):
         self.mod_ae_affine = SharedGain(
@@ -516,6 +550,7 @@ class LVMFamily(Encoder):
             max_iter=self.max_iter,
             verbosity=self.verbosity,
         )
+        self.ae_affine_fit = True
 
     def ae2lvm(self):
         if not self.no_mult:
@@ -580,6 +615,7 @@ class LVMFamily(Encoder):
             self.mod_affine = self.mod_gain
         else:
             print("KABOOM. The world exploded because you made a non sequitur.")
+        self.lvms_fit = True
 
     def eval(self, do_taskvar=True, do_lvm=True):
         if do_taskvar:
@@ -587,18 +623,19 @@ class LVMFamily(Encoder):
 
         # lvms
         if do_lvm:
-            if not self.no_mult:
+            if (not self.no_mult) and (self.ae_gain_fit and self.lvms_fit):
                 self.res_gain = eval_model(
                     self.mod_gain, self.data_gd, self.test_dl.dataset
                 )
-            if not self.no_addt:
+            if (not self.no_addt) and (self.ae_offset_fit and self.lvms_fit):
                 self.res_offset = eval_model(
                     self.mod_offset, self.data_gd, self.test_dl.dataset
                 )
-            self.res_affine = eval_model(
-                self.mod_affine, self.data_gd, self.test_dl.dataset
-            )
-            self.qi = self.get_qi()
+            if self.ae_affine_fit and self.lvms_fit:
+                self.res_affine = eval_model(
+                    self.mod_affine, self.data_gd, self.test_dl.dataset
+                )
+                self.qi = self.get_qi()
 
     def get_qi(self):
         r2_lvm = self.res_affine["r2test"].mean()

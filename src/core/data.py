@@ -571,9 +571,14 @@ def get_psths_cond(psths, trial_data, mode="both"):
             "corr": psths[:, (trial_data["rewarded"] == 1)],
             "incorr": psths[:, (trial_data["rewarded"] == 0)],
         }
+    elif mode == "strategy":
+        psths_cond = {
+            "mb": psths[:, (trial_data["strategy"] == 1)],
+            "mf": psths[:, (trial_data["strategy"] == -1)],
+        }
     else:
         raise NotImplementedError(
-            "valid arguments for mode are 'response,' 'rewarded,' and 'both.'"
+            "valid arguments for mode are 'response,' 'rewarded,' 'both,' and 'strategy.'"
         )
     return psths_cond
 
@@ -609,9 +614,16 @@ def get_choice_ts(trial_data, mode="both"):
             "incorr": trial_data[(li_mask) | (ri_mask)]["trial_start_time"]
             + trial_data[(li_mask) | (ri_mask)]["response_time"],
         }
+    elif mode == "strategy":
+        choice_ts = {
+            "mb": trial_data[(trial_data.strategy == 1)]["trial_start_time"]
+            + trial_data[(trial_data.strategy == 1)]["response_time"],
+            "mf": trial_data[(trial_data.strategy == -1)]["trial_start_time"]
+            + trial_data[(trial_data.strategy == -1)]["response_time"],
+        }
     else:
         raise NotImplementedError(
-            "valid arguments for mode are 'response,' 'rewarded,' and 'both.'"
+            "valid arguments for mode are 'response,' 'rewarded,' 'both,' and 'strategy.'"
         )
     return choice_ts
 
