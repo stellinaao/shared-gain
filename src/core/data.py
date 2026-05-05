@@ -54,6 +54,8 @@ colors_subj = {
     "MR83": "#3359D7",
 }
 
+colors_strategy = {"mb": "#E6B906", "mf": "#2F5CE0"}
+
 colors_region = {
     "ACC": "#140C6A",
     "DMS": "#7166E9",

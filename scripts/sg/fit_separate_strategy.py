@@ -20,7 +20,7 @@ from core.data import subject_ids, session_ids
 from joblib import Parallel, delayed
 from itertools import product
 
-subj_ids = ["MR82", "MR83", "MM012"]
+subj_ids = ["MM012"]
 regions = ["all", "ACC", "M2", "DMS", "DLS"]
 
 n_cv = 5
@@ -30,6 +30,7 @@ def fit(subj_id, sess_id, no_dupl=True):
     save_dir = MODELS_DIR / "fit" / subj_id / sess_id / "separate_strategy"
 
     if save_dir.is_dir() and no_dupl:
+        print(f"DONE for {subj_id}, {sess_id}")
         return
 
     results_dict = {
@@ -38,6 +39,7 @@ def fit(subj_id, sess_id, no_dupl=True):
     }
 
     for region in regions:
+        results_dict[region] = {}
         for strategy in ["mb", "mf"]:
             # find the best regl constants first
             best_regl_consts = None
@@ -74,7 +76,10 @@ def fit(subj_id, sess_id, no_dupl=True):
 
                 # the entire session is trash, return
                 if not family.enough_trials:
+                    print(f"DONE for {subj_id}, {sess_id}")
                     return
+                if not family.lvms_fit:
+                    continue
 
                 if (
                     best_regl_consts is None
@@ -91,7 +96,6 @@ def fit(subj_id, sess_id, no_dupl=True):
             if best_regl_consts is None:
                 continue
 
-            results_dict[region] = {}
             results_dict[region][strategy] = {"families": [], "res_tv_lvms": []}
             for seed in range(n_cv):
                 print(f"Fitting for {subj_id}, {sess_id}, region {region}, seed {seed}")
@@ -114,6 +118,10 @@ def fit(subj_id, sess_id, no_dupl=True):
                     reg={"l2": best_regl_consts[1]},
                 )
                 family.fit_all()
+
+                if not family.lvms_fit:
+                    continue
+
                 family.eval()
 
                 results_dict[region][strategy]["families"].append(family)
@@ -133,12 +141,13 @@ def fit(subj_id, sess_id, no_dupl=True):
     save_path.parent.mkdir(parents=True, exist_ok=True)
     with open(save_path, "wb") as f:
         pickle.dump(results_dict, f)
+
     print(f"DONE for {subj_id}, {sess_id}")
 
 
 for subj_id in subj_ids:
     subj_idx = np.where(subject_ids == subj_id)[0][0]
     Parallel(n_jobs=8)(
-        delayed(fit)(subj_id, sess_id, no_dupl=False)
+        delayed(fit)(subj_id, sess_id, no_dupl=True)
         for sess_id in session_ids[subj_idx]
     )

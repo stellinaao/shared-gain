@@ -371,7 +371,7 @@ class LVMFamily(Encoder):
     def fit_all(self):
         super().fit_all()
 
-        if self.enough_trials:
+        if self.enough_trials and self.num_units > 0:
             if not self.no_mult:
                 self.fit_ae_gain()
             if not self.no_addt:
@@ -427,14 +427,23 @@ class LVMFamily(Encoder):
 
         self.mod_ae_gain.prepare_regularization()
 
-        fit_autoencoder(
-            self.mod_ae_gain,
-            self.train_dl,
-            self.val_dl,
-            min_iter=0,
-            max_iter=self.max_iter,
-            verbosity=self.verbosity,
-        )
+        try:
+            fit_autoencoder(
+                self.mod_ae_gain,
+                self.train_dl,
+                self.val_dl,
+                min_iter=0,
+                max_iter=self.max_iter,
+                verbosity=self.verbosity,
+            )
+        except RuntimeError:
+            print(self.num_trials, self.num_units)
+            print(
+                self.robs.shape,
+                self.train_dl.dataset[:]["dfs"].sum(),
+                self.val_dl.dataset[:]["dfs"].sum(),
+                self.test_dl.dataset[:]["dfs"].sum(),
+            )
 
         self.ae_gain_fit = True
 
