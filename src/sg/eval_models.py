@@ -15,7 +15,6 @@ import torch
 import pickle
 from pathlib import Path
 
-from tqdm import tqdm
 
 from sklearn.svm import SVC
 from sklearn.model_selection import cross_val_score
@@ -23,8 +22,14 @@ from sklearn.model_selection import cross_val_score
 from scipy.stats import spearmanr
 from core.utils import spearmanr_vec
 
+from core.data import load_sess
+from pprint import pprint
+
 from sg.fitlvm_utils import eval_model
-from sg.fitter import ScrambledEncoder
+# from sg.fitter import ScrambledEncoder
+
+import matplotlib.colors as colors
+import matplotlib.cm as cm
 
 from copy import deepcopy
 
@@ -50,7 +55,7 @@ def plot_summary(
     )
 
     fig, axes = plt.subplots(
-        ncols=1, nrows=n_latents, figsize=(3, 1.5 * n_latents), squeeze=False
+        ncols=1, nrows=n_latents, figsize=(6, 3 * n_latents), squeeze=False
     )
 
     for latent_idx, ax in enumerate(axes.flat):
@@ -148,6 +153,7 @@ def get_num_latents(das, subj_idx, sess_idx, is_msess=True, ae=True, do_plot=Fal
 
 
 # encoder
+"""
 def monkey_cv_d_r2(
     trial_data,
     spike_times,
@@ -203,6 +209,7 @@ def monkey_cv_d_r2(
     }
 
     return scramble_r2s, scramble_r2s_summary
+"""
 
 
 # latent decoding
@@ -279,7 +286,11 @@ def get_latent_decoding_scores(X, X_taskvar, y, cv):
 
 
 def latent_decoding(family, y=None, model="affine", mode="both", cv=20):
-
+    """
+    usage:
+    scores = latent_decoding(family)
+    pprint(get_scores_mean(scores))
+    """
     if model == "affine":
         model = family.mod_affine
     elif model == "single":
@@ -524,6 +535,49 @@ def plot_latents(das, num_latents, ae=True, mult=True):
     plt.legend()
 
 
+# CWEIGHTS
+def plot_cweights_tv_label(family, mode, ax0=0, ax1=1):
+    task_vars_str = {
+        "response": ["left", "right"],
+        "rewarded": ["no", "yes"],
+        "block_side": ["left", "right"],
+        "strategy": ["MF", "MB"],
+        "response_prev": ["left", "none", "right"],
+        "rewarded_prev": ["no", "yes"],
+    }
+    model = family.mod_gain if mode == "gain" else family.mod_offset
+    coupling = (
+        model.readout_gain.weight.data[:].T
+        if mode == "gain"
+        else mode.readout_offset.weight.data
+    )
+
+    i = 0
+    for pivot in task_vars_str.keys():
+        fig, axes = plt.subplots(
+            ncols=len(task_vars_str[pivot]), figsize=(2 * len(task_vars_str[pivot]), 2)
+        )
+
+        for val, ax in zip(task_vars_str[pivot], axes.flat):
+            taskvar_weights = family.mod_taskvar.tv.weight.data[:][i]
+            norm = colors.Normalize(
+                vmin=taskvar_weights.min(), vmax=taskvar_weights.max()
+            )
+            cmap = cm.viridis
+            mapped_colors = cmap(norm(taskvar_weights))
+
+            ax.scatter(coupling[:, ax0], coupling[:, ax1], color=mapped_colors, s=0.5)
+
+            ax.set_xlabel("Latent 1")
+            ax.set_ylabel("Latent 2")
+            ax.set_title(f"{pivot}_{val}")
+
+            i += 1
+
+        fig.suptitle(pivot)
+        fig.tight_layout()
+
+
 def plot_cweights_regions_hist(
     family, model, n_latents, mode="offset", do_save=False, fname=""
 ):
@@ -759,6 +813,36 @@ def plot_latent_corr(model, mode="gain"):
     plt.show()
 
 
+# NUM UNITS
+def get_num_units(subj_id, sess_id):
+    (_, _, psths, _, regions) = load_sess(
+        subj_id=subj_id,
+        sess_id=sess_id,
+        tpre=0.5,
+        tpost=1,
+        binwidth_ms=25,
+        alignment="choice",
+        thresh=1,
+    )
+    pprint({reg: len(psths[reg]) for reg in regions})
+
+
+# LATENT GRID SEARCH
+
+
+def get_r2s_helper(subj_id, sess_id, folders=["all", "ACC", "DMS", "M2", "DLS"], n_m=5):
+    r2s = {}
+
+    for f in folders:
+        r2s[f] = get_latent_r(
+            subj_id=subj_id,
+            sess_id=sess_id,
+            folder=f,
+            n_m=n_m,
+            do_plot=True,
+        )
+
+
 def get_latent_r(
     n_m=5,
     subj_id=None,
@@ -804,7 +888,7 @@ def get_latent_r(
                     / "gs"
                     / subj_id
                     / sess_id
-                    / "no_regl_refit"
+                    / "no_regl_no_refit"
                     / f"results_dict_m{m}a{a}.pkl",
                     "rb",
                 ) as f:
