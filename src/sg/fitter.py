@@ -164,7 +164,7 @@ class Encoder:
                     return
                 self.enough_trials = True
                 idxs_subsamp = np.sort(
-                    np.random.choice(np.arange(mb_mask.sum()), num_trial)
+                    np.random.choice(np.arange(mb_mask.sum()), num_trial, replace=False)
                 )
 
                 self.trial_data = self.trial_data[mb_mask].iloc[idxs_subsamp]
@@ -192,7 +192,7 @@ class Encoder:
                     return
                 self.enough_trials = True
                 idxs_subsamp = np.sort(
-                    np.random.choice(np.arange(mf_mask.sum()), num_trial)
+                    np.random.choice(np.arange(mf_mask.sum()), num_trial, replace=False)
                 )
 
                 self.trial_data = self.trial_data[mf_mask].iloc[idxs_subsamp]
@@ -200,6 +200,9 @@ class Encoder:
                     region: self.psths[region][:, mf_mask, :][:, idxs_subsamp, :]
                     for region in self.regions
                 }
+        else:
+            if self.trial_data.shape[0] > 20:
+                self.enough_trials = True
 
         self.strategy = self.trial_data["strategy"]
         self.rewarded = self.trial_data["rewarded"]

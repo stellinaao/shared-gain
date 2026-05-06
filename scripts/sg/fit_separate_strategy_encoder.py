@@ -5,8 +5,8 @@ Fit two LVM with one mult and one addt latent to every session,
 one for MB and one for MF trials.
 
 Author: Stellina X. Ao
-Created: 2026-05-04
-Last Modified: 2026-05-04
+Created: 2026-05-05
+Last Modified: 2026-05-05
 Python Version: 3.11.14
 """
 
@@ -138,5 +138,5 @@ subj_sess = [
 ]
 
 Parallel(n_jobs=8)(
-    delayed(fit)(subj_id, sess_id, no_dupl=True) for (subj_id, sess_id) in subj_sess
+    delayed(fit)(subj_id, sess_id, no_dupl=False) for (subj_id, sess_id) in subj_sess
 )
