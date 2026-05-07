@@ -536,6 +536,15 @@ def plot_latents(das, num_latents, ae=True, mult=True):
 
 
 # CWEIGHTS
+def get_coupling(model, mode):
+    coupling = (
+        model.readout_gain.weight.data[:].T
+        if mode == "gain"
+        else model.readout_offset.weight.data
+    )
+    return coupling
+
+
 def plot_cweights_tv_label(family, mode, ax0=0, ax1=1):
     task_vars_str = {
         "response": ["left", "right"],
@@ -549,7 +558,7 @@ def plot_cweights_tv_label(family, mode, ax0=0, ax1=1):
     coupling = (
         model.readout_gain.weight.data[:].T
         if mode == "gain"
-        else mode.readout_offset.weight.data
+        else model.readout_offset.weight.data
     )
 
     i = 0

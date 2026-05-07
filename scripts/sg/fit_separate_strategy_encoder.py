@@ -5,7 +5,7 @@ Fit two LVM with one mult and one addt latent to every session,
 one for MB and one for MF trials.
 
 Author: Stellina X. Ao
-Created: 2026-05-04
+Created: 2026-05-05
 Last Modified: 2026-05-05
 Python Version: 3.11.14
 """
@@ -13,21 +13,27 @@ Python Version: 3.11.14
 import pickle
 
 import numpy as np
-from sg.fitter import LVMFamily
+from sg.fitter import Encoder
 from utils.paths import MODELS_DIR
 from core.data import subject_ids, session_ids
 
 from joblib import Parallel, delayed
-from itertools import product
 
-subj_ids = ["MM012"]
+subj_ids = ["MR82", "MR83", "MM012"]
 regions = ["all", "ACC", "M2", "DMS", "DLS"]
 
 n_cv = 5
 
 
 def fit(subj_id, sess_id, no_dupl=True):
-    save_dir = MODELS_DIR / "fit" / subj_id / sess_id / "separate_strategy"
+    save_dir = (
+        MODELS_DIR
+        / "fit"
+        / subj_id
+        / sess_id
+        / "separate_strategy"
+        / "encoder_no_update_cid"
+    )
 
     if save_dir.is_dir() and no_dupl:
         print(f"DONE for {subj_id}, {sess_id}")
@@ -41,35 +47,33 @@ def fit(subj_id, sess_id, no_dupl=True):
     for region in regions:
         results_dict[region] = {}
         for strategy in ["mb", "mf"]:
-            # find the best regl constants first
-            best_regl_consts = None
+            # find the best regl constant first
+            best_regl_const = None
             best_score = -np.inf
             print(
                 f"Finding regl consts for {subj_id}, {sess_id}, {strategy}, region {region}"
             )
 
-            for regl_tv, regl in product(
-                np.logspace(-3, 0, 4, base=10), np.logspace(-3, 0, 4, base=10)
-            ):
-                family = LVMFamily(
+            for regl_tv in np.logspace(-3, 0, 4, base=10):
+                family = Encoder(
                     subj_id=subj_id,
                     sess_id=sess_id,
-                    n_latents_mult=1,
-                    n_latents_addt=1,
                     regions=None if region == "all" else [region],
-                    refit=False,
                     tpre=0.5,
                     tpost=1,
                     binwidth_ms=25,
-                    norm_activity=True,
                     mb_only=True if strategy == "mb" else False,
                     mf_only=True if strategy == "mf" else False,
+                    norm_activity=True,
                     seed=1234,
                     tv_reg={"l2": regl_tv},
-                    reg={"l2": regl},
                 )
                 try:
-                    family.fit_all()
+                    family.get_data()
+                    if family.enough_trials:
+                        family.fit_baseline()
+                        family.fit_taskvar()
+                        family.get_cids()
                 except ValueError:
                     break
                 family.eval()
@@ -78,35 +82,25 @@ def fit(subj_id, sess_id, no_dupl=True):
                 if not family.enough_trials:
                     print(f"DONE for {subj_id}, {sess_id}")
                     return
-                if not family.lvms_fit:
-                    continue
 
                 if (
-                    best_regl_consts is None
-                    or best_score
-                    < family.res_taskvar["r2test"].mean()
-                    + family.res_affine["r2test"].mean()
+                    best_regl_const is None
+                    or best_score < family.res_taskvar["r2test"].mean()
                 ):
-                    best_regl_consts = (regl_tv, regl)
-                    best_score = (
-                        family.res_taskvar["r2test"].mean()
-                        + family.res_affine["r2test"].mean()
-                    )
+                    best_regl_const = regl_tv
+                    best_score = family.res_taskvar["r2test"].mean()
 
-            if best_regl_consts is None:
+            if best_regl_const is None:
                 continue
 
-            results_dict[region][strategy] = {"families": [], "res_tv_lvms": []}
+            results_dict[region][strategy] = {"families": []}
             for seed in range(n_cv):
                 print(f"Fitting for {subj_id}, {sess_id}, region {region}, seed {seed}")
 
-                family = LVMFamily(
+                family = Encoder(
                     subj_id=subj_id,
                     sess_id=sess_id,
-                    n_latents_mult=1,
-                    n_latents_addt=1,
                     regions=None if region == "all" else [region],
-                    refit=False,
                     tpre=0.5,
                     tpost=1,
                     binwidth_ms=25,
@@ -114,27 +108,16 @@ def fit(subj_id, sess_id, no_dupl=True):
                     mb_only=True if strategy == "mb" else False,
                     mf_only=True if strategy == "mf" else False,
                     seed=seed,
-                    tv_reg={"l2": best_regl_consts[0]},
-                    reg={"l2": best_regl_consts[1]},
+                    tv_reg={"l2": best_regl_const},
                 )
-                family.fit_all()
-
-                if not family.lvms_fit:
-                    continue
+                family.get_data()
+                family.fit_baseline()
+                family.fit_taskvar()
+                family.get_cids()
 
                 family.eval()
 
                 results_dict[region][strategy]["families"].append(family)
-                results_dict[region][strategy]["res_tv_lvms"].append(
-                    {
-                        "r2test_taskvar": family.res_taskvar["r2test"].mean(),
-                        "r2test_affine": family.res_affine["r2test"].mean(),
-                        "r2test_diff": (
-                            family.res_affine["r2test"] - family.res_taskvar["r2test"]
-                        ).mean(),
-                        "qi": family.qi,
-                    }
-                )
 
     # save
     save_path = save_dir / "results_dict.pkl"
@@ -145,9 +128,15 @@ def fit(subj_id, sess_id, no_dupl=True):
     print(f"DONE for {subj_id}, {sess_id}")
 
 
-for subj_id in subj_ids:
-    subj_idx = np.where(subject_ids == subj_id)[0][0]
-    Parallel(n_jobs=8)(
-        delayed(fit)(subj_id, sess_id, no_dupl=True)
-        for sess_id in session_ids[subj_idx]
-    )
+# for subj_id in subj_ids:
+#     subj_idx = np.where(subject_ids == subj_id)[0][0]
+
+subj_sess = [
+    (subj_id, sess_id)
+    for subj_id in ["MR82", "MR83", "MM012"]
+    for sess_id in session_ids[np.where(subject_ids == subj_id)[0][0]]
+]
+
+Parallel(n_jobs=8)(
+    delayed(fit)(subj_id, sess_id, no_dupl=False) for (subj_id, sess_id) in subj_sess
+)

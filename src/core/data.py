@@ -80,6 +80,7 @@ def load_sess(
     tpost=1,
     binwidth_ms=25,
     alignment="choice",
+    trial_start_pre=0,
     thresh=1,
 ):
     """
@@ -150,9 +151,11 @@ def load_sess(
             tpost=tpost,
             binwidth_ms=binwidth_ms,
             alignment=alignment,
+            trial_start_pre=trial_start_pre,
             reward_only=False,
             prev_filter=False,
             get_strategy=False,
+            mode=mode,
         )
 
         # update spike_times with the removed units
@@ -206,9 +209,11 @@ def load_sess(
             tpost=tpost,
             binwidth_ms=binwidth_ms,
             alignment=alignment,
+            trial_start_pre=trial_start_pre,
             reward_only=False,
             prev_filter=False,
             get_strategy=False,
+            mode=mode,
         )
         # update spike_times with the removed units
         for reg in regions:
@@ -403,100 +408,114 @@ def get_psths(
     tpost=2,
     binwidth_ms=50,
     alignment="choice",
+    trial_start_pre=0,  # can be > 0 to account for alignment to some time before trial start
     get_strategy=False,
     balance=True,
     reward_only=True,
     do_rem_zstd=True,
     shuffle=False,
     prev_filter=True,
+    mode="new",
 ):
+    mask_resp = (
+        ~np.isnan(trial_data["response_time"])
+        if ("response_prev" not in trial_data.columns or not prev_filter)
+        else (~np.isnan(trial_data["response_time"]))
+        & (~trial_data["response_prev"] == 0)
+    )  # account for trials where there was no response
+    mask_reward = trial_data["rewarded"]
+
+    mask = (mask_resp) & (mask_reward) if reward_only else (mask_resp)
+    assert np.mean(mask) == 1  # the trial data passed in should be clean already
+
+    idx = trial_data[
+        mask
+    ].index  # np.where(mask)[0] if 'response_prev' not in trial_data.columns else np.where(mask)[0] + 1
+
     if alignment == "choice":
-        mask_resp = (
-            ~np.isnan(trial_data["response_time"])
-            if ("response_prev" not in trial_data.columns or not prev_filter)
-            else (~np.isnan(trial_data["response_time"]))
-            & (~trial_data["response_prev"] == 0)
-        )  # account for trials where there was no response
-        mask_reward = trial_data["rewarded"]
-
-        mask = (mask_resp) & (mask_reward) if reward_only else (mask_resp)
-        assert np.mean(mask) == 1  # the trial data passed in should be clean already
-
-        idx = trial_data[
-            mask
-        ].index  # np.where(mask)[0] if 'response_prev' not in trial_data.columns else np.where(mask)[0] + 1
-
-        choice_ts = (
+        ts = (
             trial_data["trial_start_time"][mask] + trial_data["response_time"][mask]
         )  # s
+    elif alignment == "trial_start":
+        print("BOO", trial_start_pre)
+        ts = trial_data["trial_start_time"][mask] - trial_start_pre
+    elif alignment == "reward":
+        try:
+            ts = trial_data["trial_start_time"][mask] + trial_data["outcome_time"][mask]
+        except KeyError:
+            if mode == "old":
+                ts = (
+                    trial_data["trial_start_time"][mask]
+                    + trial_data["response_time"][mask]
+                    + 0.2
+                )
+            else:
+                raise KeyError
+    else:
+        raise ValueError(f"{alignment} alignment not implemented yet")
+
+    if get_strategy:
+        mb_idx = trial_data[
+            trial_data["iblock"].isin(session_data["MBblocks"]) & (mask)
+        ].index
+        mf_idx = trial_data[
+            trial_data["iblock"].isin(session_data["MFblocks"]) & (mask)
+        ].index
+
+        # mb_idx = np.delete(mb_idx, np.where(mb_idx == 0))
+        # mf_idx = np.delete(mf_idx, np.where(mf_idx == 0))
+
+        if balance:
+            mb_idx, mf_idx = balance_strategy(trial_data, mb_idx, mf_idx)
+
+        if shuffle:
+            pool = np.concatenate((mb_idx, mf_idx))
+            mb_idx = np.random.choice(pool, len(mb_idx))
+            mf_idx = np.random.choice(pool, len(mf_idx))
+
+    psths = {}
+
+    if get_strategy:
+        psths_mb = {}
+        psths_mf = {}
+
+    for region in regions:
+        # dimensions will be cells x trials x time
+        psths[region] = np.squeeze(
+            [
+                compute_spike_count(ts, unit, tpre, tpost, binwidth_ms / 1000)[0]
+                for unit in unit_spike_times[region]
+            ]
+        )
+        # print(len(psths[region]))
         if get_strategy:
-            mb_idx = trial_data[
-                trial_data["iblock"].isin(session_data["MBblocks"]) & (mask)
-            ].index
-            mf_idx = trial_data[
-                trial_data["iblock"].isin(session_data["MFblocks"]) & (mask)
-            ].index
-
-            # mb_idx = np.delete(mb_idx, np.where(mb_idx == 0))
-            # mf_idx = np.delete(mf_idx, np.where(mf_idx == 0))
-
-            if balance:
-                mb_idx, mf_idx = balance_strategy(trial_data, mb_idx, mf_idx)
-
-            if shuffle:
-                pool = np.concatenate((mb_idx, mf_idx))
-                mb_idx = np.random.choice(pool, len(mb_idx))
-                mf_idx = np.random.choice(pool, len(mf_idx))
-
-        psths = {}
-
-        if get_strategy:
-            psths_mb = {}
-            psths_mf = {}
-
-        for region in regions:
-            # dimensions will be cells x trials x time
-            psths[region] = np.squeeze(
+            psths_mb[region] = np.squeeze(
                 [
                     compute_spike_count(
-                        choice_ts, unit, tpre, tpost, binwidth_ms / 1000
+                        ts.loc[mb_idx], unit, tpre, tpost, binwidth_ms / 1000
                     )[0]
                     for unit in unit_spike_times[region]
                 ]
             )
-            # print(len(psths[region]))
-            if get_strategy:
-                psths_mb[region] = np.squeeze(
-                    [
-                        compute_spike_count(
-                            choice_ts.loc[mb_idx], unit, tpre, tpost, binwidth_ms / 1000
-                        )[0]
-                        for unit in unit_spike_times[region]
-                    ]
-                )
-                psths_mf[region] = np.squeeze(
-                    [
-                        compute_spike_count(
-                            choice_ts.loc[mf_idx], unit, tpre, tpost, binwidth_ms / 1000
-                        )[0]
-                        for unit in unit_spike_times[region]
-                    ]
-                )
+            psths_mf[region] = np.squeeze(
+                [
+                    compute_spike_count(
+                        ts.loc[mf_idx], unit, tpre, tpost, binwidth_ms / 1000
+                    )[0]
+                    for unit in unit_spike_times[region]
+                ]
+            )
 
-        if get_strategy:
-            if do_rem_zstd:
-                [psths, psths_mb, psths_mf], units_to_rem = rem_zstd(
-                    [psths, psths_mb, psths_mf], regions
-                )
-            return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask, units_to_rem
-        else:
-            if do_rem_zstd:
-                [psths], units_to_rem = rem_zstd([psths], regions)
-            return psths, mask, units_to_rem
+    if get_strategy:
+        if do_rem_zstd:
+            [psths, psths_mb, psths_mf], units_to_rem = rem_zstd(
+                [psths, psths_mb, psths_mf], regions
+            )
+        return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask, units_to_rem
     else:
-        return NotImplementedError(
-            f"ERROR: not yet implemented for alignment {alignment}"
-        )
+        if do_rem_zstd:
+            [psths], units_to_rem = rem_zstd([psths], regions)
+        return psths, mask, units_to_rem
 
 
 def get_zstd_units(psths_all, regions):
