@@ -80,6 +80,7 @@ def load_sess(
     tpost=1,
     binwidth_ms=25,
     alignment="choice",
+    trial_start_pre=0,
     thresh=1,
 ):
     """
@@ -150,6 +151,7 @@ def load_sess(
             tpost=tpost,
             binwidth_ms=binwidth_ms,
             alignment=alignment,
+            trial_start_pre=trial_start_pre,
             reward_only=False,
             prev_filter=False,
             get_strategy=False,
@@ -207,6 +209,7 @@ def load_sess(
             tpost=tpost,
             binwidth_ms=binwidth_ms,
             alignment=alignment,
+            trial_start_pre=trial_start_pre,
             reward_only=False,
             prev_filter=False,
             get_strategy=False,
@@ -405,6 +408,7 @@ def get_psths(
     tpost=2,
     binwidth_ms=50,
     alignment="choice",
+    trial_start_pre=0,  # can be > 0 to account for alignment to some time before trial start
     get_strategy=False,
     balance=True,
     reward_only=True,
@@ -433,7 +437,8 @@ def get_psths(
             trial_data["trial_start_time"][mask] + trial_data["response_time"][mask]
         )  # s
     elif alignment == "trial_start":
-        ts = trial_data["trial_start_time"][mask]
+        print("BOO", trial_start_pre)
+        ts = trial_data["trial_start_time"][mask] - trial_start_pre
     elif alignment == "reward":
         try:
             ts = trial_data["trial_start_time"][mask] + trial_data["outcome_time"][mask]

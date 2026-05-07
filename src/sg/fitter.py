@@ -68,6 +68,7 @@ class Encoder:
         self.tpost = kwargs.pop("tpost", 1)
         self.binwidth_ms = kwargs.pop("binwidth_ms", 25)
         self.alignment = kwargs.pop("alignment", "choice")
+        self.trial_start_pre = kwargs.pop("trial_start_pre", 0)
         self.thresh = kwargs.pop("thresh", 1)
 
         self.regions = kwargs.pop("regions", None)
@@ -129,6 +130,7 @@ class Encoder:
             tpost=self.tpost,
             binwidth_ms=self.binwidth_ms,
             alignment=self.alignment,
+            trial_start_pre=self.trial_start_pre,
             thresh=self.thresh,
         )
 
