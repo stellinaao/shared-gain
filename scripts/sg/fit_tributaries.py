@@ -71,10 +71,7 @@ def gs_regl(subj_id, sess_id, region, epoch):
             tv_reg={"l2": regl_tv},
             reg={"l2": regl},
         )
-        try:
-            family.fit_all()
-        except ValueError:  # region doesn't exist for that session
-            return None
+        family.fit_all()
         family.eval()
 
         # the entire session is trash, return
@@ -120,7 +117,10 @@ def fit(subj_id, sess_id, no_dupl=True):
                 "res_tv_lvms": [],
             }
             # search through all 16 regl latents
-            best_regl_consts = gs_regl(subj_id, sess_id, region, epoch)
+            try:
+                best_regl_consts = gs_regl(subj_id, sess_id, region, epoch)
+            except ValueError:  # region doesn't exist for this session
+                break
 
             # if not enough trials, continue to the next session
             if best_regl_consts is None:
@@ -130,7 +130,7 @@ def fit(subj_id, sess_id, no_dupl=True):
             # fit everything (encoder + lvm)
             for seed in range(n_cv):
                 print(
-                    f"Fitting for {subj_id}, {sess_id}, region {region}, epoch {epoch['alignment']}, seed {seed}"
+                    f"Fitting for {subj_id}, {sess_id}, region {region}, strategy both, epoch {epoch['alignment']}, seed {seed}"
                 )
 
                 family = LVMFamily(
@@ -186,19 +186,41 @@ def fit(subj_id, sess_id, no_dupl=True):
 
                     # use the same split
                     if strategy == "mb":
-                        try:
-                            idxs_subsamp = results_dict[region][epoch["alignment"]][
-                                "both"
-                            ]["families"][seed].idxs_subsamp_mb
-                        except IndexError:  # doesn't exist for that seed
+                        seed_idxs = np.where(
+                            np.array(
+                                [
+                                    family.seed_val
+                                    for family in results_dict[region][
+                                        epoch["alignment"]
+                                    ]["both"]["families"]
+                                ]
+                            )
+                            == seed
+                        )[0]
+                        if len(seed_idxs) == 0:  # doesn't exist for that seed
                             continue
+                        seed_idx = seed_idxs[0]
+                        idxs_subsamp = results_dict[region][epoch["alignment"]]["both"][
+                            "families"
+                        ][seed_idx].idxs_subsamp_mb
                     elif strategy == "mf":
-                        try:
-                            idxs_subsamp = results_dict[region][epoch["alignment"]][
-                                "both"
-                            ]["families"][seed].idxs_subsamp_mf
-                        except IndexError:
+                        seed_idxs = np.where(
+                            np.array(
+                                [
+                                    family.seed_val
+                                    for family in results_dict[region][
+                                        epoch["alignment"]
+                                    ]["both"]["families"]
+                                ]
+                            )
+                            == seed
+                        )[0]
+                        if len(seed_idxs) == 0:  # doesn't exist for that seed
                             continue
+                        seed_idx = seed_idxs[0]
+                        idxs_subsamp = results_dict[region][epoch["alignment"]]["both"][
+                            "families"
+                        ][seed_idx].idxs_subsamp_mf
 
                     family = LVMFamily(
                         subj_id=subj_id,

@@ -437,7 +437,6 @@ def get_psths(
             trial_data["trial_start_time"][mask] + trial_data["response_time"][mask]
         )  # s
     elif alignment == "trial_start":
-        print("BOO", trial_start_pre)
         ts = trial_data["trial_start_time"][mask] - trial_start_pre
     elif alignment == "reward":
         try:
