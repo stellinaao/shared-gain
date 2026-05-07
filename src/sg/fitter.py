@@ -53,6 +53,8 @@ class Encoder:
         self.sanity_check = kwargs.pop("sanity_check", 0)
 
         # trial data
+        self.idxs_subsamp = kwargs.pop("idxs_subsamp", None)
+        self.balance_strategy = kwargs.pop("balance_strategy", False)
         self.mb_only = kwargs.pop("mb_only", False)
         self.mf_only = kwargs.pop("mf_only", False)
         if self.mb_only and self.mf_only:
@@ -163,13 +165,13 @@ class Encoder:
                 if num_trial < 20:
                     return
                 self.enough_trials = True
-                idxs_subsamp = np.sort(
-                    np.random.choice(np.arange(mb_mask.sum()), num_trial, replace=False)
+                self.idxs_subsamp = np.sort(
+                    np.random.choice(np.where(mb_mask)[0], num_trial, replace=False)
                 )
 
-                self.trial_data = self.trial_data[mb_mask].iloc[idxs_subsamp]
+                self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
                 self.psths = {
-                    region: self.psths[region][:, mb_mask, :][:, idxs_subsamp, :]
+                    region: self.psths[region][:, self.idxs_subsamp, :]
                     for region in self.regions
                 }
 
@@ -191,15 +193,53 @@ class Encoder:
                 if num_trial < 20:
                     return
                 self.enough_trials = True
-                idxs_subsamp = np.sort(
-                    np.random.choice(np.arange(mf_mask.sum()), num_trial, replace=False)
+                self.idxs_subsamp = np.sort(
+                    np.random.choice(np.where(mf_mask)[0], num_trial, replace=False)
                 )
 
-                self.trial_data = self.trial_data[mf_mask].iloc[idxs_subsamp]
+                self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
                 self.psths = {
-                    region: self.psths[region][:, mf_mask, :][:, idxs_subsamp, :]
+                    region: self.psths[region][:, self.idxs_subsamp, :]
                     for region in self.regions
                 }
+
+        elif self.balance_strategy:
+            mb_mask = self.trial_data["strategy"] == 1
+            mf_mask = self.trial_data["strategy"] == -1
+
+            num_trial = min(mb_mask.sum(), mf_mask.sum())
+
+            if num_trial * 2 < 20:
+                return
+            self.enough_trials = True
+            self.idxs_subsamp_mb = np.random.choice(
+                np.where(mb_mask)[0], num_trial, replace=False
+            )
+            self.idxs_subsamp_mf = np.random.choice(
+                np.where(mf_mask)[0], num_trial, replace=False
+            )
+
+            self.idxs_subsamp = np.sort(
+                np.concatenate((self.idxs_subsamp_mb, self.idxs_subsamp_mf))
+            )
+
+            self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
+            self.psths = {
+                region: self.psths[region][:, self.idxs_subsamp, :]
+                for region in self.regions
+            }
+        elif self.idxs_subsamp is not None:
+            if len(self.idxs_subsamp) < 20:
+                return
+            self.enough_trials = True
+
+            self.idxs_subsamp = np.sort(self.idxs_subsamp)
+
+            self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
+            self.psths = {
+                region: self.psths[region][:, self.idxs_subsamp, :]
+                for region in self.regions
+            }
         else:
             if self.trial_data.shape[0] > 20:
                 self.enough_trials = True
