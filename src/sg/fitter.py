@@ -689,12 +689,17 @@ class LVMFamily(Encoder):
                 self.res_affine = eval_model(
                     self.mod_affine, self.data_gd, self.test_dl.dataset
                 )
-                self.qi = self.get_qi()
+            self.get_qi()
 
     def get_qi(self):
-        r2_lvm = self.res_affine["r2test"].mean()
+        if self.no_mult:
+            r2_lvm = self.res_offset["r2test"].mean()
+        elif self.no_addt:
+            r2_lvm = self.res_gain["r2test"].mean()
+        else:
+            r2_lvm = self.res_affine["r2test"].mean()
         r2_taskvar = self.res_taskvar["r2test"].mean()
-        return (r2_lvm - r2_taskvar) / (1 - r2_taskvar)
+        self.qi = (r2_lvm - r2_taskvar) / (1 - r2_taskvar)
 
 
 """
