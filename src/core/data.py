@@ -54,7 +54,7 @@ colors_subj = {
     "MR83": "#3359D7",
 }
 
-colors_strategy = {"mb": "#E6B906", "mf": "#2F5CE0"}
+colors_strategy = {"mb": "#D7A007", "mf": "#183488"}
 colors_epoch = {"choice": "#1F6A92", "reward": "#229B46", "iti": "#7051B8"}
 
 colors_region = {

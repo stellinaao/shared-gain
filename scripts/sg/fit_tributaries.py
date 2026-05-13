@@ -10,13 +10,16 @@ Last Modified: 2026-05-06
 Python Version: 3.11.14
 """
 
+import pickle
 import numpy as np
 from sg.fitter import LVMFamily
+from core.data import subject_ids, session_ids
 from utils.paths import MODELS_DIR
 
+from joblib import Parallel, delayed
 from itertools import product
 
-subj_ids = ["MR82", "MR83", "MM012"]
+subj_ids = ["MR82"]  # ["MR82", "MR83", "MM012"]
 regions = ["all", "ACC", "M2", "DMS", "DLS"]
 epochs = [
     {"key": "choice", "alignment": "choice", "tpre": 0.5, "tpost": 0.5},
@@ -117,7 +120,6 @@ def fit(subj_id, sess_id, no_dupl=True):
             # FIT ALL TRIALS
             results_dict[region][epoch["key"]]["both"] = {
                 "families": [],
-                # "res_tv_lvms": [],
             }
             # search through all 16 regl latents
             try:
@@ -138,8 +140,6 @@ def fit(subj_id, sess_id, no_dupl=True):
                 print(
                     f"Fitting for {subj_id}, {sess_id}, region {region}, strategy both, epoch {epoch['alignment']}, number {counter}"
                 )
-
-                print("!", counter, seed_sample)
 
                 family = LVMFamily(
                     subj_id=subj_id,
@@ -169,30 +169,16 @@ def fit(subj_id, sess_id, no_dupl=True):
                 if not family.lvms_fit:
                     continue
 
-                print("*", counter, family.seed_val)
-                seeds[counter] = seed_sample
                 family.eval()
-
                 results_dict[region][epoch["key"]]["both"]["families"].append(family)
-                # results_dict[region][epoch["key"]]["both"]["res_tv_lvms"].append(
-                #     {
-                #         "r2test_taskvar": family.res_taskvar["r2test"].mean(),
-                #         "r2test_affine": family.res_affine["r2test"].mean(),
-                #         "r2test_diff": (
-                #             family.res_affine["r2test"] - family.res_taskvar["r2test"]
-                #         ).mean(),
-                #         "qi": family.qi,
-                #     }
-                # )
 
+                seeds[counter] = seed_sample
                 counter += 1
 
-            print(seeds)
             # FIT MB/MF
             for strategy in ["mb", "mf"]:
                 results_dict[region][epoch["key"]][strategy] = {
                     "families": [],
-                    # "res_tv_lvms": [],
                 }
 
                 # fit everything
@@ -201,15 +187,19 @@ def fit(subj_id, sess_id, no_dupl=True):
                         f"Fitting for {subj_id}, {sess_id}, region {region}, strategy {strategy}, epoch {epoch['alignment']}, number {i}"
                     )
 
-                    # use the same split
+                    # use the same split and cids
                     if strategy == "mb":
-                        idxs_subsamp = results_dict[region][epoch["key"]]["both"][
-                            "families"
-                        ][i].idxs_subsamp_mb
+                        family = results_dict[region][epoch["key"]]["both"]["families"][
+                            i
+                        ]
+                        idxs_subsamp = family.idxs_subsamp_mb
+                        cids = family.cids
                     elif strategy == "mf":
-                        idxs_subsamp = results_dict[region][epoch["key"]]["both"][
-                            "families"
-                        ][i].idxs_subsamp_mf
+                        family = results_dict[region][epoch["key"]]["both"]["families"][
+                            i
+                        ]
+                        idxs_subsamp = family.idxs_subsamp_mf
+                        cids = family.cids
 
                     family = LVMFamily(
                         subj_id=subj_id,
@@ -234,59 +224,37 @@ def fit(subj_id, sess_id, no_dupl=True):
                         },  # use the same regularization constant
                         reg={"l2": best_regl_consts[1]},
                     )
-                    family.fit_all()
+                    family.fit_all(cids=cids)
 
                     # could be that there are > 20 mb and mf trials, but < 20 indv mb/mf trials
                     if not family.enough_trials:
                         break
-                    # if not family.lvms_fit:
-                    #     continue
 
                     family.eval()
-
                     results_dict[region][epoch["key"]][strategy]["families"].append(
                         family
                     )
-                    # results_dict[region][epoch["key"]][strategy][
-                    #     "res_tv_lvms"
-                    # ].append(
-                    #     {
-                    #         "r2test_taskvar": family.res_taskvar["r2test"].mean(),
-                    #         "r2test_affine": family.res_affine["r2test"].mean(),
-                    #         "r2test_diff": (
-                    #             family.res_affine["r2test"]
-                    #             - family.res_taskvar["r2test"]
-                    #         ).mean(),
-                    #         "qi": family.qi,
-                    #     }
-                    # )
 
-    for region in regions:
-        for epoch in epochs:
-            for strategy in ["both", "mb", "mf"]:
-                print(
-                    f"{region}, {epoch['key']}, {strategy}: {[family.res_taskvar['r2hat'].mean() for family in results_dict[region][epoch['key']][strategy]['families']]}"
-                )
     # save
-    # save_path = save_dir / "results_dict.pkl"
-    # save_path.parent.mkdir(parents=True, exist_ok=True)
-    # with open(save_path, "wb") as f:
-    #     pickle.dump(results_dict, f)
+    save_path = save_dir / "results_dict.pkl"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(save_path, "wb") as f:
+        pickle.dump(results_dict, f)
 
     print(f"DONE for {subj_id}, {sess_id}")
 
 
-subj_id = "MR82"
-sess_id = "20251027_152036"
+# subj_id = "MR82"
+# sess_id = "20251027_152036"
 
-fit(subj_id, sess_id, no_dupl=False)
+# fit(subj_id, sess_id, no_dupl=False)
 
-# subj_sess = [
-#     (subj_id, sess_id)
-#     for subj_id in ["MR82", "MR83", "MM012"]
-#     for sess_id in session_ids[np.where(subject_ids == subj_id)[0][0]]
-# ]
+subj_sess = [
+    (subj_id, sess_id)
+    for subj_id in ["MR82", "MR83", "MM012"]
+    for sess_id in session_ids[np.where(subject_ids == subj_id)[0][0]]
+]
 
-# Parallel(n_jobs=8)(
-#     delayed(fit)(subj_id, sess_id, no_dupl=False) for (subj_id, sess_id) in subj_sess
-# )
+Parallel(n_jobs=8)(
+    delayed(fit)(subj_id, sess_id, no_dupl=False) for (subj_id, sess_id) in subj_sess
+)

@@ -428,8 +428,8 @@ class LVMFamily(Encoder):
         self.ae_affine_fit = False
         self.lvms_fit = False
 
-    def fit_all(self):
-        super().fit_all()
+    def fit_all(self, cids=None):
+        super().fit_all(cids)
 
         if self.enough_trials and self.num_units > 0:
             if not self.no_mult:
