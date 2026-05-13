@@ -24,6 +24,8 @@ epochs = [
     {"key": "iti", "alignment": "trial_start", "tpre": 1.5, "tpost": -0.5},
 ]
 
+epoch_ref = {"key": "ref", "alignment": "choice", "tpre": 0.5, "tpost": 1.5}
+
 n_cv = 5
 
 # FIT ALL TRIALS
@@ -60,8 +62,12 @@ def gs_regl(subj_id, sess_id, region, epoch):
             alignment=epoch["alignment"],
             tpre=epoch["tpre"],
             tpost=epoch["tpost"],
+            alignment_ref=epoch_ref["alignment"],
+            tpre_ref=epoch_ref["tpre"],
+            tpost_ref=epoch_ref["tpost"],
             binwidth_ms=25,
             norm_activity=True,
+            n_splines=2,
             balance_strategy=True,  # subsample for an even number of mb and mf trials
             seed=1234,
             tv_reg={"l2": regl_tv},
@@ -145,7 +151,11 @@ def fit(subj_id, sess_id, no_dupl=True):
                     alignment=epoch["alignment"],
                     tpre=epoch["tpre"],
                     tpost=epoch["tpost"],
+                    alignment_ref=epoch_ref["alignment"],
+                    tpre_ref=epoch_ref["tpre"],
+                    tpost_ref=epoch_ref["tpost"],
                     binwidth_ms=25,
+                    n_splines=2,
                     norm_activity=True,
                     balance_strategy=True,
                     seed=seed_sample,
@@ -211,8 +221,12 @@ def fit(subj_id, sess_id, no_dupl=True):
                         alignment=epoch["alignment"],
                         tpre=epoch["tpre"],
                         tpost=epoch["tpost"],
+                        alignment_ref=epoch_ref["alignment"],
+                        tpre_ref=epoch_ref["tpre"],
+                        tpost_ref=epoch_ref["tpost"],
                         binwidth_ms=25,
                         norm_activity=True,
+                        n_splines=2,
                         idxs_subsamp=idxs_subsamp,
                         seed=seed,
                         tv_reg={

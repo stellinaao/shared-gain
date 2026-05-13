@@ -22,7 +22,6 @@ from sg.fitlvm_utils import (
     fit_gain_model,
     fit_model,
     get_data_model,
-    check_stable_lowd,
 )
 from sg.models import SharedGain
 
@@ -66,8 +65,13 @@ class Encoder:
         # neural data
         self.tpre = kwargs.pop("tpre", 0.5)
         self.tpost = kwargs.pop("tpost", 1)
-        self.binwidth_ms = kwargs.pop("binwidth_ms", 25)
         self.alignment = kwargs.pop("alignment", "choice")
+
+        self.tpre_ref = kwargs.pop("tpre_ref", 0.5)
+        self.tpost_ref = kwargs.pop("tpost_ref", 1)
+        self.alignment_ref = kwargs.pop("alignment_ref", "choice")
+
+        self.binwidth_ms = kwargs.pop("binwidth_ms", 25)
         self.trial_start_pre = kwargs.pop("trial_start_pre", 0)
         self.thresh = kwargs.pop("thresh", 1)
 
@@ -101,13 +105,14 @@ class Encoder:
         self.baseline_fit = False
         self.taskvar_fit = False
 
-    def fit_all(self):
+    def fit_all(self, cids=None):
         self.get_data()
         if self.enough_trials:
             self.fit_baseline()
             self.fit_taskvar()
-            self.get_cids()
-            self.update_cids()
+            if cids is None:
+                self.get_cids()
+            self.update_cids(cids)
 
     def seed(self):
         random.seed(int(self.seed_val))
@@ -128,8 +133,11 @@ class Encoder:
             sess_id=self.sess_id,
             tpre=self.tpre,
             tpost=self.tpost,
-            binwidth_ms=self.binwidth_ms,
             alignment=self.alignment,
+            tpre_ref=self.tpre_ref,
+            tpost_ref=self.tpost_ref,
+            alignment_ref=self.alignment_ref,
+            binwidth_ms=self.binwidth_ms,
             trial_start_pre=self.trial_start_pre,
             thresh=self.thresh,
         )
@@ -321,21 +329,28 @@ class Encoder:
         self.taskvar_fit = True
 
     def get_cids(self):
+        res_baseline = eval_model(self.mod_baseline, self.data_gd, self.test_dl.dataset)
         res_taskvar = eval_model(self.mod_taskvar, self.data_gd, self.test_dl.dataset)
-        self.cids_tv = np.where(res_taskvar["r2test"] > 0)[0]
-        self.cids_pca = check_stable_lowd(
-            self.data_gd,
-            self.train_dl.dataset[:]["dfs"] > 0,
-            self.val_dl.dataset[:]["dfs"] > 0,
-            self.num_units,
-            rank=4,
-        )
-        # it was this stinker that kept letting things through
-        self.cids = np.intersect1d(
-            self.cids_tv, self.cids_pca
-        )  # changed from union to intersection
+        self.cids_tv_zero = np.where(res_taskvar["r2test"] > 0)[0]
+        self.cids_tv_baseline = np.where(
+            res_taskvar["r2test"] > res_baseline["r2test"]
+        )[0]
+        self.cids = np.intersect1d(self.cids_tv_zero, self.cids_tv_baseline)
+        # self.cids_pca = check_stable_lowd(
+        #     self.data_gd,
+        #     self.train_dl.dataset[:]["dfs"] > 0,
+        #     self.val_dl.dataset[:]["dfs"] > 0,
+        #     self.num_units,
+        #     rank=4,
+        # )
+        # # it was this stinker that kept letting things through
+        # self.cids = np.intersect1d(
+        #     self.cids_tv, self.cids_pca
+        # )  # changed from union to intersection
 
-    def update_cids(self):
+    def update_cids(self, cids=None):
+        if cids is not None:
+            self.cids = cids
         # housekeeping
         self.data_gd[:]["robs"] = self.data_gd[:]["robs"][:, self.cids]
         self.sample["robs"] = self.sample["robs"][:, self.cids]

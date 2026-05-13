@@ -83,7 +83,7 @@ def load_sess(
     alignment="choice",
     tpre_ref=0.5,
     tpost_ref=1,
-    alignment_ref="choice",
+    alignment_ref=None,
     trial_start_pre=0,
     thresh=1,
 ):
@@ -163,22 +163,25 @@ def load_sess(
             mode=mode,
         )
 
-        psths_ref, _ = get_psths(
-            spike_times,
-            trial_data,
-            session_data,
-            regions,
-            tpre=tpre_ref,
-            tpost=tpost_ref,
-            binwidth_ms=binwidth_ms,
-            alignment=alignment_ref,
-            trial_start_pre=trial_start_pre,
-            do_rem_zstd=False,  # so that there are no indexing issues later
-            reward_only=False,
-            prev_filter=False,
-            get_strategy=False,
-            mode=mode,
-        )
+        if alignment_ref is not None:
+            psths_ref, _ = get_psths(
+                spike_times,
+                trial_data,
+                session_data,
+                regions,
+                tpre=tpre_ref,
+                tpost=tpost_ref,
+                binwidth_ms=binwidth_ms,
+                alignment=alignment_ref,
+                trial_start_pre=trial_start_pre,
+                do_rem_zstd=False,  # so that there are no indexing issues later
+                reward_only=False,
+                prev_filter=False,
+                get_strategy=False,
+                mode=mode,
+            )
+        else:
+            psths_ref = None
 
         # update spike_times and psths_ref with the removed units
         # for reg in regions:
