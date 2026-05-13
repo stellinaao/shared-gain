@@ -110,7 +110,7 @@ class Encoder:
             self.update_cids()
 
     def seed(self):
-        random.seed(self.seed_val)
+        random.seed(int(self.seed_val))
         np.random.seed(self.seed_val)
         torch.manual_seed(self.seed_val)
         torch.cuda.manual_seed(self.seed_val)
@@ -140,7 +140,7 @@ class Encoder:
         else:
             # check that the regions specified in self.regions are actually valid
             if not set(self.regions).issubset(set(regions)):
-                raise ValueError(f"{self.regions} must be a subste of {regions}")
+                raise ValueError(f"{self.regions} must be a subset of {regions}")
             else:
                 self.psths = {reg: self.psths[reg] for reg in self.regions}
                 self.spike_times = {reg: self.spike_times[reg] for reg in self.regions}
@@ -692,14 +692,17 @@ class LVMFamily(Encoder):
             self.get_qi()
 
     def get_qi(self):
-        if self.no_mult:
-            r2_lvm = self.res_offset["r2test"].mean()
-        elif self.no_addt:
-            r2_lvm = self.res_gain["r2test"].mean()
+        if self.lvms_fit and self.taskvar_fit:
+            if self.no_mult:
+                r2_lvm = self.res_offset["r2test"].mean()
+            elif self.no_addt:
+                r2_lvm = self.res_gain["r2test"].mean()
+            elif self.lvms_fit:
+                r2_lvm = self.res_affine["r2test"].mean()
+            r2_taskvar = self.res_taskvar["r2test"].mean()
+            self.qi = (r2_lvm - r2_taskvar) / (1 - r2_taskvar)
         else:
-            r2_lvm = self.res_affine["r2test"].mean()
-        r2_taskvar = self.res_taskvar["r2test"].mean()
-        self.qi = (r2_lvm - r2_taskvar) / (1 - r2_taskvar)
+            self.qi = np.nan
 
 
 """
