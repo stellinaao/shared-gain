@@ -105,7 +105,7 @@ class Encoder:
         self.baseline_fit = False
         self.taskvar_fit = False
 
-    def fit_all(self, cids=None):
+    def fit_all(self, cids=None, update_cids=True):
         self.get_data()
         if self.enough_trials:
             self.fit_baseline()

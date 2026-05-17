@@ -22,6 +22,12 @@ from itertools import product
 subj_ids = ["MR82"]  # ["MR82", "MR83", "MM012"]
 regions = ["all", "ACC", "M2", "DMS", "DLS"]
 epochs = [
+    {
+        "key": "full",
+        "alignment": "choice",
+        "tpre": 0.5,
+        "tpost": 1.5,
+    },  # full is choice + reward
     {"key": "choice", "alignment": "choice", "tpre": 0.5, "tpost": 0.5},
     {"key": "reward", "alignment": "reward", "tpre": 0, "tpost": 1},
     {"key": "iti", "alignment": "trial_start", "tpre": 1.5, "tpost": -0.5},
@@ -169,7 +175,7 @@ def fit(subj_id, sess_id, no_dupl=True):
                     tv_reg={"l2": best_regl_consts[0]},
                     reg={"l2": best_regl_consts[1]},
                 )
-                family.fit_all()
+                family.fit_all(update_cids=False)
 
                 seed_sample += 1  # gotta do this before it potentially terminates
 
@@ -231,7 +237,7 @@ def fit(subj_id, sess_id, no_dupl=True):
                         },  # use the same regularization constant
                         reg={"l2": best_regl_consts[1]},
                     )
-                    family.fit_all(cids=None)  # cids)
+                    family.fit_all(update_cids=False)  # cids=None)  # cids)
 
                     # could be that there are > 20 mb and mf trials, but < 20 indv mb/mf trials
                     if not family.enough_trials:
