@@ -104,7 +104,7 @@ def get_dataset_dm(
                 ]
             ).T
             ** 0.5
-        )  # spks_utils.get_nspikes_choice(unit_spike_times, trial_data, regions, pre=1, post=1)**0.5
+        )  # robs of everything, no idx subsamp atm
     reg_keys = np.concatenate(
         [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
     )
@@ -1077,7 +1077,7 @@ def get_data_model(
     regions,
     norm=True,
     num_tents=2,
-    task_vars={"digital": ["response"], "analog": []},
+    task_vars=["response", "rewarded"],
     verbosity=0,
     sanity_check=0,
     tuber=None,
@@ -1096,10 +1096,7 @@ def get_data_model(
 
     train_dl, val_dl, test_dl, indices = get_dataloaders(
         data_gd, batch_size=264, folds=4, use_dropout=True
-    )  # , sanity_check=sanity_check)
-
-    # Mtrain = train_dl.dataset[:]['dfs']>0
-    # Mtest = val_dl.dataset[:]['dfs']>0
+    )
 
     sample = data_gd[:]
     num_trials, num_tv = sample["tv"].shape

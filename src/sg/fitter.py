@@ -137,6 +137,7 @@ class Encoder:
             thresh=self.thresh,
         )
 
+        # region subsample check
         if self.regions is None:
             # i.e., fit to everything
             self.regions = regions
@@ -148,10 +149,11 @@ class Encoder:
                 self.psths = {reg: self.psths[reg] for reg in self.regions}
                 self.spike_times = {reg: self.spike_times[reg] for reg in self.regions}
 
+        # sanity check check
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
 
-        # update trial_data and psths if needed
+        # get idxs_subsamp if specified
         if self.balance_strategy:
             mb_mask = self.trial_data["strategy"] == 1
             mf_mask = self.trial_data["strategy"] == -1
@@ -161,6 +163,7 @@ class Encoder:
             if num_trial * 2 < 20:
                 return
             self.enough_trials = True
+
             self.idxs_subsamp_mb = np.random.choice(
                 np.where(mb_mask)[0], num_trial, replace=False
             )
@@ -172,11 +175,6 @@ class Encoder:
                 np.concatenate((self.idxs_subsamp_mb, self.idxs_subsamp_mf))
             )
 
-            self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
-            self.psths = {
-                region: self.psths[region][:, self.idxs_subsamp, :]
-                for region in self.regions
-            }
         elif self.idxs_subsamp is not None:
             if len(self.idxs_subsamp) < 20:
                 return
@@ -184,21 +182,9 @@ class Encoder:
 
             self.idxs_subsamp = np.sort(self.idxs_subsamp)
 
-            self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
-            self.psths = {
-                region: self.psths[region][:, self.idxs_subsamp, :]
-                for region in self.regions
-            }
         else:
             if self.trial_data.shape[0] > 20:
                 self.enough_trials = True
-
-        self.strategy = self.trial_data["strategy"]
-        self.rewarded = self.trial_data["rewarded"]
-        self.response = self.trial_data["response"]
-        self.rewarded_prev = self.trial_data["rewarded_prev"]
-        self.response_prev = self.trial_data["response_prev"]
-        self.block_side = self.trial_data["block_side"]
 
         (
             self.data_gd,
@@ -212,8 +198,10 @@ class Encoder:
         ) = get_data_model(
             self.psths,
             self.trial_data,
-            self.idxs_subsamp,
-            self.regions,
+            idxs=self.idxs_subsamp
+            if self.idxs_subsamp is not None
+            else np.arange(self.trial_data.shape[0]),
+            regions=self.regions,
             norm=self.norm_activity,
             num_tents=self.n_splines,
             task_vars=self.task_vars,
@@ -221,6 +209,21 @@ class Encoder:
         )
         self.sample = self.data_gd[:]
         self.robs = self.sample["robs"].detach().cpu().numpy()
+
+        # update trial_data and psths with idxs_subsamp
+        if self.idxs_subsamp is not None:
+            self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
+            self.psths = {
+                region: self.psths[region][:, self.idxs_subsamp, :]
+                for region in self.regions
+            }
+
+        self.strategy = self.trial_data["strategy"]
+        self.rewarded = self.trial_data["rewarded"]
+        self.response = self.trial_data["response"]
+        self.rewarded_prev = self.trial_data["rewarded_prev"]
+        self.response_prev = self.trial_data["response_prev"]
+        self.block_side = self.trial_data["block_side"]
 
     def fit_baseline(self):
         self.mod_baseline = SharedGain(
