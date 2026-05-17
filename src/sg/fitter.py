@@ -112,7 +112,8 @@ class Encoder:
             self.fit_taskvar()
             if cids is None:
                 self.get_cids()
-            self.update_cids(cids)
+            if self.update_cids:
+                self.update_cids(cids)
 
     def seed(self):
         random.seed(int(self.seed_val))
@@ -428,25 +429,26 @@ class LVMFamily(Encoder):
         self.ae_affine_fit = False
         self.lvms_fit = False
 
-    def fit_all(self, cids=None):
+    def fit_all(self, cids=None, fit_lvms=True):
         super().fit_all(cids)
 
-        if self.enough_trials and self.num_units > 0:
-            if not self.no_mult:
-                self.fit_ae_gain()
-            if not self.no_addt:
-                self.fit_ae_offset()
-            if not self.no_mult and not self.no_addt:
-                self.fit_ae_affine()
-            elif self.no_mult:
-                self.mod_ae_affine = self.mod_ae_offset
-            elif self.no_addt:
-                self.mod_ae_affine = self.mod_ae_gain
-            else:
-                print("BOOHOO something is catastrophically wrong")
-                return
+        if fit_lvms:
+            if self.enough_trials and self.num_units > 0:
+                if not self.no_mult:
+                    self.fit_ae_gain()
+                if not self.no_addt:
+                    self.fit_ae_offset()
+                if not self.no_mult and not self.no_addt:
+                    self.fit_ae_affine()
+                elif self.no_mult:
+                    self.mod_ae_affine = self.mod_ae_offset
+                elif self.no_addt:
+                    self.mod_ae_affine = self.mod_ae_gain
+                else:
+                    print("BOOHOO something is catastrophically wrong")
+                    return
 
-            self.ae2lvm()
+                self.ae2lvm()
 
     def fit_ae_gain(self):
         # self.tv_reg = {"l2": 1}
