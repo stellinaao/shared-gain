@@ -112,7 +112,7 @@ class Encoder:
             self.fit_taskvar()
             if cids is None:
                 self.get_cids()
-            if self.update_cids:
+            if update_cids:
                 self.update_cids(cids)
 
     def seed(self):
@@ -429,8 +429,8 @@ class LVMFamily(Encoder):
         self.ae_affine_fit = False
         self.lvms_fit = False
 
-    def fit_all(self, cids=None, fit_lvms=True):
-        super().fit_all(cids)
+    def fit_all(self, cids=None, update_cids=True, fit_lvms=True):
+        super().fit_all(cids=cids, update_cids=update_cids)
 
         if fit_lvms:
             if self.enough_trials and self.num_units > 0:
