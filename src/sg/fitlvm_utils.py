@@ -52,6 +52,7 @@ def seed(self):
 def get_dataset_dm(
     psths,
     trial_data,
+    idxs,
     regions,
     task_vars=["response"],
     num_tents=2,
@@ -83,15 +84,6 @@ def get_dataset_dm(
         )
 
         robs_ = {}
-        # no zscore
-        # all that matters is that all neurons in dms and m2 get multiplied to the same degree
-        # robs_['DMS']  = zscore(np.sum(psths['DMS'] * (25 / 1000), axis=2))
-        # robs_['DMS']  = [(1/np.mean(cell))*potato*cell for cell in robs_['DMS']]
-        # robs_['M2']   = zscore(np.sum(psths['M2'] * (25 / 1000), axis=2))
-        # robs_['M2']  = [(1/np.mean(cell))*tuber*cell for cell in robs_['M2']]
-        # robs_['ACC']  = zscore(np.sum(psths['ACC']*(25/1000), axis=2))
-        # robs_['DLS']  = zscore(np.sum(psths['DLS']*(25/1000), axis=2))
-
         robs_["DMS"] = np.sum(psths["DMS"] * (25 / 1000), axis=2)
         robs_["DMS"] = [(np.mean(cell)) * potato * cell for cell in robs_["DMS"]]
         robs_["M2"] = np.sum(psths["M2"] * (25 / 1000), axis=2)
@@ -115,9 +107,7 @@ def get_dataset_dm(
         )  # spks_utils.get_nspikes_choice(unit_spike_times, trial_data, regions, pre=1, post=1)**0.5
     reg_keys = np.concatenate(
         [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
-    )  # spks_utils.get_nspikes_choice(unit_spike_times, trial_data, regions, pre=1, post=1)**0.5
-
-    # robs = spks_utils.get_nspikes_trial(unit_spike_times, trial_data, trial_dur_s, regions)
+    )
 
     if verbosity > 0:
         print(f"originally {sum([len(psths[region]) for region in regions])} units")
@@ -129,17 +119,11 @@ def get_dataset_dm(
     mad = np.median(adiff)  # scalar
     dfs = (adiff / mad) < 5  # shape = (# trials, # cells)
 
-    dfs_vals = adiff / mad
-    # print(dfs.shape, np.sum(dfs))
-    # print((dfs.shape[0]*dfs.shape[1]), torch.sum(dfs), (dfs.shape[0]*dfs.shape[1])-torch.sum(dfs))
-    # print(mad)
-
     # filter for good units
     # good = np.mean(dfs, axis=0) == 1 # at least 80% of the trials were good
     # print(f"good units {np.sum(good)}/{len(good)}")
     # robs = robs[:,good]
     # dfs = dfs[:,good]
-    # dfs = np.ones_like(dfs)
 
     # normalize
     if norm:
@@ -148,16 +132,18 @@ def get_dataset_dm(
         mu = np.mean(robs, axis=0)
         robs = (robs - mu) / s
 
+    robs = robs[idxs, :]
+    dfs = dfs[idxs, :]
+
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
     tvs = OHE().fit_transform(trial_data[task_vars]).todense()
-    # tvs = np.concatenate((tvs, trial_data[task_vars["analog"]]), axis=1)
-    # print(tvs.shape)
-    # print(f"mozza: {trai}, feta: {tvs.shape}")
+    tvs = tvs[idxs, :]
+
     # tents
     from ndnt.utils.NDNutils import tent_basis_generate
 
-    num_trials = len(trial_data)
+    num_trials = robs.shape[0]
     xs = np.linspace(0, num_trials - 1, num_tents)
     tents = tent_basis_generate(xs)
 
@@ -165,7 +151,6 @@ def get_dataset_dm(
         "robs": torch.tensor(robs, dtype=torch.float32),
         "reg_keys": torch.tensor(reg_keys, dtype=torch.float32),
         "dfs": torch.tensor(dfs, dtype=torch.float32),
-        "dfs_val": torch.tensor(dfs_vals, dtype=torch.float32),
         "tv": torch.tensor(tvs, dtype=torch.float32),
         "tents": torch.tensor(tents, dtype=torch.float32),
         "indices": torch.tensor(
@@ -174,7 +159,6 @@ def get_dataset_dm(
     }
 
     data_gd = models.GenericDataset(data_dict, device=device)
-    # data_df = pd.DataFrame(data)
 
     return data_gd, data_dict
 
@@ -1089,6 +1073,7 @@ def plot_summary(
 def get_data_model(
     psths,
     trial_data,
+    idxs,
     regions,
     norm=True,
     num_tents=2,
@@ -1100,6 +1085,7 @@ def get_data_model(
     data_gd, data_dict = get_dataset_dm(
         psths,
         trial_data,
+        idxs,
         regions,
         norm=norm,
         num_tents=num_tents,

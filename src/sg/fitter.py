@@ -54,12 +54,6 @@ class Encoder:
         # trial data
         self.idxs_subsamp = kwargs.pop("idxs_subsamp", None)
         self.balance_strategy = kwargs.pop("balance_strategy", False)
-        self.mb_only = kwargs.pop("mb_only", False)
-        self.mf_only = kwargs.pop("mf_only", False)
-        if self.mb_only and self.mf_only:
-            raise ValueError("gosh pick a side!")
-        if self.mb_only or self.mf_only:
-            self.subsample_strategy = kwargs.pop("subsample_strategy", True)
         self.enough_trials = False
 
         # neural data
@@ -158,63 +152,7 @@ class Encoder:
             self.psths["DMS"] *= 20
 
         # update trial_data and psths if needed
-        if self.mb_only:
-            mb_mask = self.trial_data["strategy"] == 1
-
-            if not self.subsample_strategy:
-                if mb_mask.sum() < 20:
-                    return
-                self.enough_trials = True
-                self.trial_data = self.trial_data[mb_mask]
-                self.psths = {
-                    region: self.psths[region][:, mb_mask, :] for region in self.regions
-                }
-            else:
-                mf_mask = self.trial_data["strategy"] == -1
-
-                num_trial = min(mb_mask.sum(), mf_mask.sum())
-                if num_trial < 20:
-                    return
-                self.enough_trials = True
-                self.idxs_subsamp = np.sort(
-                    np.random.choice(np.where(mb_mask)[0], num_trial, replace=False)
-                )
-
-                self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
-                self.psths = {
-                    region: self.psths[region][:, self.idxs_subsamp, :]
-                    for region in self.regions
-                }
-
-        elif self.mf_only:
-            mf_mask = self.trial_data["strategy"] == -1
-            if not self.subsample_strategy:
-                if mf_mask.sum() < 20:
-                    return
-                self.enough_trials = True
-                self.trial_data = self.trial_data[mf_mask]
-                self.psths = {
-                    region: self.psths[region][:, mf_mask, :] for region in self.regions
-                }
-            else:
-                mb_mask = self.trial_data["strategy"] == 1
-
-                num_trial = min(mb_mask.sum(), mf_mask.sum())
-
-                if num_trial < 20:
-                    return
-                self.enough_trials = True
-                self.idxs_subsamp = np.sort(
-                    np.random.choice(np.where(mf_mask)[0], num_trial, replace=False)
-                )
-
-                self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
-                self.psths = {
-                    region: self.psths[region][:, self.idxs_subsamp, :]
-                    for region in self.regions
-                }
-
-        elif self.balance_strategy:
+        if self.balance_strategy:
             mb_mask = self.trial_data["strategy"] == 1
             mf_mask = self.trial_data["strategy"] == -1
 
@@ -274,6 +212,7 @@ class Encoder:
         ) = get_data_model(
             self.psths,
             self.trial_data,
+            self.idxs_subsamp,
             self.regions,
             norm=self.norm_activity,
             num_tents=self.n_splines,
