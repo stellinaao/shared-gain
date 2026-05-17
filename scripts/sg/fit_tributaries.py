@@ -99,7 +99,14 @@ def gs_regl(subj_id, sess_id, region, epoch):
 
 
 def fit(subj_id, sess_id, no_dupl=True):
-    save_dir = MODELS_DIR / "fit" / subj_id / sess_id / "river_n_tributaries"
+    save_dir = (
+        MODELS_DIR
+        / "fit"
+        / subj_id
+        / sess_id
+        / "river_n_tributaries"
+        / "no_cid_enforcement"
+    )
 
     if save_dir.is_dir() and no_dupl:
         print(f"DONE for {subj_id}, {sess_id}")
@@ -193,13 +200,13 @@ def fit(subj_id, sess_id, no_dupl=True):
                             i
                         ]
                         idxs_subsamp = family.idxs_subsamp_mb
-                        cids = family.cids
+                        # cids = family.cids
                     elif strategy == "mf":
                         family = results_dict[region][epoch["key"]]["both"]["families"][
                             i
                         ]
                         idxs_subsamp = family.idxs_subsamp_mf
-                        cids = family.cids
+                        # cids = family.cids
 
                     family = LVMFamily(
                         subj_id=subj_id,
@@ -224,7 +231,7 @@ def fit(subj_id, sess_id, no_dupl=True):
                         },  # use the same regularization constant
                         reg={"l2": best_regl_consts[1]},
                     )
-                    family.fit_all(cids=cids)
+                    family.fit_all(cids=None)  # cids)
 
                     # could be that there are > 20 mb and mf trials, but < 20 indv mb/mf trials
                     if not family.enough_trials:
@@ -255,6 +262,6 @@ subj_sess = [
     for sess_id in session_ids[np.where(subject_ids == subj_id)[0][0]]
 ]
 
-Parallel(n_jobs=8)(
+Parallel(n_jobs=6)(
     delayed(fit)(subj_id, sess_id, no_dupl=False) for (subj_id, sess_id) in subj_sess
 )

@@ -839,7 +839,9 @@ def get_num_units(subj_id, sess_id):
 # LATENT GRID SEARCH
 
 
-def get_r2s_helper(subj_id, sess_id, folders=["all", "ACC", "DMS", "M2", "DLS"], n_m=5):
+def get_r2s_helper(
+    subj_id, sess_id, folders=["all", "ACC", "DMS", "M2", "DLS"], n_m=5, do_plot=True
+):
     r2s = {}
 
     for f in folders:
@@ -848,8 +850,9 @@ def get_r2s_helper(subj_id, sess_id, folders=["all", "ACC", "DMS", "M2", "DLS"],
             sess_id=sess_id,
             folder=f,
             n_m=n_m,
-            do_plot=True,
+            do_plot=do_plot,
         )
+    return r2s
 
 
 def get_latent_r(
@@ -897,7 +900,7 @@ def get_latent_r(
                     / "gs"
                     / subj_id
                     / sess_id
-                    / "no_regl_no_refit"
+                    / "two_spline"
                     / f"results_dict_m{m}a{a}.pkl",
                     "rb",
                 ) as f:

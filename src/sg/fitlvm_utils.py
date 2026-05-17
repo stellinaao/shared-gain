@@ -1225,11 +1225,16 @@ def rsquared(y, yhat, dfs=None, eps=1e-10):
     ybar = (y * dfs).sum(dim=0) / dfs.sum(dim=0)  # the average y value
     resids = y - yhat  # the difference between observed and predicted
     residnull = y - ybar  # the difference between observed and observed avg
-    sstot = torch.sum(residnull**2 * dfs, dim=0) + eps  # denom
+    sstot = torch.sum(residnull**2 * dfs, dim=0)  # + eps  # denom
     ssres = torch.sum(resids**2 * dfs, dim=0)  # num
+
+    zero_idxs = np.where(sstot == 0)[0]
+    if len(zero_idxs) > 0:
+        sstot[np.where(sstot == 0)[0]] = np.nan
+
     r2 = 1 - ssres / sstot
 
-    return r2.detach().cpu()
+    return r2.detach().cpu()  # , sstot, ssres
 
 
 def censored_lstsq(A, B, M):

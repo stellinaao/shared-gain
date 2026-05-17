@@ -700,7 +700,7 @@ class LVMFamily(Encoder):
                 self.res_offset = eval_model(
                     self.mod_offset, self.data_gd, self.test_dl.dataset
                 )
-            if self.ae_affine_fit and self.lvms_fit:
+            if self.lvms_fit:
                 self.res_affine = eval_model(
                     self.mod_affine, self.data_gd, self.test_dl.dataset
                 )
