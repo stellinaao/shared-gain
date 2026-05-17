@@ -164,11 +164,11 @@ class Encoder:
                 return
             self.enough_trials = True
 
-            self.idxs_subsamp_mb = np.random.choice(
-                np.where(mb_mask)[0], num_trial, replace=False
+            self.idxs_subsamp_mb = np.sort(
+                np.random.choice(np.where(mb_mask)[0], num_trial, replace=False)
             )
-            self.idxs_subsamp_mf = np.random.choice(
-                np.where(mf_mask)[0], num_trial, replace=False
+            self.idxs_subsamp_mf = np.sort(
+                np.random.choice(np.where(mf_mask)[0], num_trial, replace=False)
             )
 
             self.idxs_subsamp = np.sort(
