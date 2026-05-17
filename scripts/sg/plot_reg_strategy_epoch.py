@@ -97,7 +97,7 @@ def get_metrics_3x3(subj_id, metric):
     return metrics
 
 
-def plot_metrics_3x3(subj_id, metrics, metric, do_save=True):
+def plot_metrics_3x3_sess(subj_id, metrics, metric, do_save=True):
     fig, axes = plt.subplots(ncols=len(metrics), nrows=3, figsize=(5, 4), sharey=True)
 
     for i, reg in enumerate(metrics):
@@ -195,6 +195,41 @@ def plot_metrics_3x3_bar(subj_id, metrics, metric, do_save=True):
         fig.savefig(fpath_svg, dpi=300, bbox_inches="tight")
 
 
+def plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True):
+    fig, axes = plt.subplots(
+        ncols=len(metrics), nrows=3, figsize=(5, 4), sharex="all", sharey="all"
+    )
+
+    for i, reg in enumerate(metrics):
+        for j, strategy in enumerate(metrics[reg]):
+            ax = axes[j][i]
+            epochs = metrics[reg][strategy].keys()
+
+            for epoch in epochs:
+                metrics_epoch = metrics[reg][strategy][epoch]
+
+                ax.hist(
+                    np.ravel(metrics_epoch),
+                    bins=np.linspace(0, 0.8, 25),
+                    color=colors_epoch[epoch],
+                    histtype="stepfilled",
+                    alpha=0.5,
+                )
+
+            ax.set_xlabel(metric)
+            ax.set_ylabel("freq")
+
+    fig.tight_layout()
+    if do_save:
+        from utils.paths import FIGURES_DIR
+
+        fpath_png = FIGURES_DIR / "reg_strategy_epoch" / subj_id / f"{metric}_hist.png"
+        fpath_svg = FIGURES_DIR / "reg_strategy_epoch" / subj_id / f"{metric}_hist.svg"
+        fpath_png.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(fpath_png, dpi=300, bbox_inches="tight")
+        fig.savefig(fpath_svg, dpi=300, bbox_inches="tight")
+
+
 def fit(subj_id, metric, force_redo=False):
     print(f"STARTING {subj_id}, {metric}")
     save_dir = MODELS_DIR / "fit" / subj_id / "metrics" / "no_cid_enforcement"
@@ -209,8 +244,9 @@ def fit(subj_id, metric, force_redo=False):
             pickle.dump(metrics, f)
 
     print(f"PLOTTING {subj_id}, {metric}")
-    plot_metrics_3x3(subj_id, metrics, metric, do_save=True)
+    # plot_metrics_3x3_sess(subj_id, metrics, metric, do_save=True)
     plot_metrics_3x3_bar(subj_id, metrics, metric, do_save=True)
+    plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True)
 
 
 subj_metric = [(subj_id, metric) for subj_id in subj_ids for metric in metrics]
