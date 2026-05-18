@@ -52,8 +52,8 @@ def seed(self):
 def get_dataset_dm(
     psths,
     trial_data,
-    idxs,
-    regions,
+    strategy_filter=None,
+    regions=["DMS", "DLS"],
     task_vars=["response"],
     num_tents=2,
     norm=True,
@@ -131,6 +131,17 @@ def get_dataset_dm(
         # TODO
         mu = np.mean(robs, axis=0)
         robs = (robs - mu) / s
+
+    if strategy_filter == "mb":
+        idxs = np.where(trial_data["strategy"] == 1)[0]
+    elif strategy_filter == "mf":
+        idxs = np.where(trial_data["strategy"] == -1)[0]
+    elif strategy_filter is None:
+        idxs = np.arange(trial_data.shape[0])
+    else:
+        raise ValueError(
+            f"valid values for strategy_filter are 'mb', 'mf', and None, not {strategy_filter}"
+        )
 
     robs = robs[idxs, :]
     dfs = dfs[idxs, :]
@@ -1073,8 +1084,8 @@ def plot_summary(
 def get_data_model(
     psths,
     trial_data,
-    idxs,
-    regions,
+    strategy_filter=None,
+    regions=["DMS", "DLS"],
     norm=True,
     num_tents=2,
     task_vars=["response", "rewarded"],
@@ -1085,7 +1096,7 @@ def get_data_model(
     data_gd, data_dict = get_dataset_dm(
         psths,
         trial_data,
-        idxs,
+        strategy_filter,
         regions,
         norm=norm,
         num_tents=num_tents,

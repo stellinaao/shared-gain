@@ -52,9 +52,39 @@ class Encoder:
         self.sanity_check = kwargs.pop("sanity_check", 0)
 
         # trial data
-        self.idxs_subsamp = kwargs.pop("idxs_subsamp", None)
         self.balance_strategy = kwargs.pop("balance_strategy", False)
+
+        self.idxs_subsamp = kwargs.pop(
+            "idxs_subsamp", None
+        )  # with relation to the balanced trial_data
+
+        if self.idxs_subsamp is not None:
+            self.idxs_subsamp_balance = kwargs.pop(
+                "idxs_subsamp_balance", None
+            )  # idxs are in relation to the og, full trial_data
+            self.mb_only = kwargs.pop("mb_only", False)
+            self.mf_only = kwargs.pop("mf_only", False)
+        else:
+            self.mb_only = False
+            self.mf_only = False
+
         self.enough_trials = False
+
+        if not self.balance_strategy and self.idxs_subsamp is not None:
+            raise NotImplementedError(
+                "logic for balance_strategy = False and idxs_subsamp is not None not yet implemented"
+            )
+
+        if self.idxs_subsamp is not None and self.idxs_subsamp_balance is None:
+            raise ValueError("must pass idxs_subsamp_balance if passing idxs_subsamp")
+
+        if self.mb_only and self.mf_only:
+            raise ValueError("both mb_only and mf_only? gosh pick a side...")
+
+        if self.idxs_subsamp is not None and (not self.mb_only and not self.mf_only):
+            raise ValueError(
+                "you've got to have at least one strategy you're subsampling..."
+            )
 
         # neural data
         self.tpre = kwargs.pop("tpre", 0.5)
@@ -154,7 +184,7 @@ class Encoder:
             self.psths["DMS"] *= 20
 
         # get idxs_subsamp if specified
-        if self.balance_strategy:
+        if self.balance_strategy and self.idxs_subsamp is None:
             mb_mask = self.trial_data["strategy"] == 1
             mf_mask = self.trial_data["strategy"] == -1
 
@@ -175,48 +205,86 @@ class Encoder:
                 np.concatenate((self.idxs_subsamp_mb, self.idxs_subsamp_mf))
             )
 
-        elif self.idxs_subsamp is not None:
+            self.idxs_subsamp_balance = self.idxs_subsamp
+
+        elif self.balance_strategy and self.idxs_subsamp is not None:
             if len(self.idxs_subsamp) < 20:
                 return
             self.enough_trials = True
 
             self.idxs_subsamp = np.sort(self.idxs_subsamp)
+            self.idxs_subsamp_balance = np.sort(self.idxs_subsamp_balance)
 
         else:
             if self.trial_data.shape[0] > 20:
                 self.enough_trials = True
 
-        (
-            self.data_gd,
-            self.train_dl,
-            self.val_dl,
-            self.test_dl,
-            self.indices,
-            self.num_trials,
-            self.num_tv,
-            self.num_units,
-        ) = get_data_model(
-            self.psths,
-            self.trial_data,
-            idxs=self.idxs_subsamp
-            if self.idxs_subsamp is not None
-            else np.arange(self.trial_data.shape[0]),
-            regions=self.regions,
-            norm=self.norm_activity,
-            num_tents=self.n_splines,
-            task_vars=self.task_vars,
-            sanity_check=self.sanity_check,
-        )
-        self.sample = self.data_gd[:]
-        self.robs = self.sample["robs"].detach().cpu().numpy()
-
-        # update trial_data and psths with idxs_subsamp
-        if self.idxs_subsamp is not None:
-            self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
-            self.psths = {
-                region: self.psths[region][:, self.idxs_subsamp, :]
+        if self.balance_strategy:
+            trial_data_balance = self.trial_data.iloc[self.idxs_subsamp_balance]
+            psths_balance = {
+                region: self.psths[region][:, self.idxs_subsamp_balance, :]
                 for region in self.regions
             }
+
+            (
+                self.data_gd,
+                self.train_dl,
+                self.val_dl,
+                self.test_dl,
+                self.indices,
+                self.num_trials,
+                self.num_tv,
+                self.num_units,
+            ) = get_data_model(
+                psths_balance,
+                trial_data_balance,
+                strategy_filter=None
+                if not (self.mb_only or self.mf_only)
+                else ("mb" if self.mb_only else "mf"),
+                regions=self.regions,
+                norm=self.norm_activity,
+                num_tents=self.n_splines,
+                task_vars=self.task_vars,
+                sanity_check=self.sanity_check,
+            )
+            self.sample = self.data_gd[:]
+            self.robs = self.sample["robs"].detach().cpu().numpy()
+
+            # update trial_data and psths with idxs_subsamp
+            if self.idxs_subsamp is not None:
+                self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
+                self.psths = {
+                    region: self.psths[region][:, self.idxs_subsamp, :]
+                    for region in self.regions
+                }
+
+        # full case, no trial indexing
+        elif not self.balance_strategy and self.idxs_subsamp is None:
+            (
+                self.data_gd,
+                self.train_dl,
+                self.val_dl,
+                self.test_dl,
+                self.indices,
+                self.num_trials,
+                self.num_tv,
+                self.num_units,
+            ) = get_data_model(
+                self.psths,
+                self.trial_data,
+                strategy_filter=None,
+                regions=self.regions,
+                norm=self.norm_activity,
+                num_tents=self.n_splines,
+                task_vars=self.task_vars,
+                sanity_check=self.sanity_check,
+            )
+            self.sample = self.data_gd[:]
+            self.robs = self.sample["robs"].detach().cpu().numpy()
+        else:
+            raise NotImplementedError(
+                "balance_strategy=True and idxs_subsamp is not None is not implemented yet"
+            )
 
         self.strategy = self.trial_data["strategy"]
         self.rewarded = self.trial_data["rewarded"]
