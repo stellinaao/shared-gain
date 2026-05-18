@@ -9,12 +9,13 @@ from utils.paths import MODELS_DIR
 
 from joblib import Parallel, delayed
 
-subj_ids = ["MR83"]  # ["MR82", "MR83", "MM012"]
-metrics = ["r2test_taskvar", "r2test_affine", "qi"]
+subj_ids = ["MR82", "MR83", "MM012"]
+metrics = ["r2test_taskvar"]  # , "r2test_affine", "qi"]
 
 regions = ["all", "ACC", "M2", "DMS", "DLS"]
 strategies = ["both", "mb", "mf"]
 epochs = [
+    # {"key": "full", "alignment": "choice", "tpre": 0.5, "tpost": 1},
     {"key": "choice", "alignment": "choice", "tpre": 0.5, "tpost": 0.5},
     {"key": "reward", "alignment": "reward", "tpre": 0, "tpost": 1},
     {"key": "iti", "alignment": "trial_start", "tpre": 1.5, "tpost": -0.5},
@@ -22,6 +23,63 @@ epochs = [
 epochs_key = [epoch["key"] for epoch in epochs]
 
 n_cv = 5
+
+
+def get_metrics_neurons(subj_id, reg, strategy, metric):
+    sess_ids = session_ids[np.where(subject_ids == subj_id)[0][0]]
+    metrics = {
+        epoch: np.empty((len(sess_ids), n_cv), dtype=object) for epoch in epochs_key
+    }
+
+    for i, sess_id in enumerate(sess_ids):
+        file_path = (
+            MODELS_DIR
+            / "fit"
+            / subj_id
+            / sess_id
+            / "tributaries"
+            / "balance_and_norm"
+            / "results_dict.pkl"
+        )
+
+        if not file_path.is_file():
+            continue
+
+        with open(file_path, "rb") as f:
+            res_dict = pickle.load(f)
+
+        for epoch in epochs_key:
+            if strategy == "both":
+                try:
+                    families = res_dict[reg][epoch][strategy]["families"]
+                except KeyError:
+                    # region doesn't exist for this session
+                    break
+                if len(families) == 0:
+                    # region doesn't exist for this session
+                    break
+            else:
+                try:
+                    families = res_dict[reg][epoch][strategy]["families"]
+                except KeyError:
+                    # region doesn't exist for this session
+                    break
+
+            for j, family in enumerate(families):
+                family.eval()
+                if metric == "r2test_taskvar":
+                    try:
+                        metrics_ = family.res_taskvar["r2test"]
+                    except AttributeError:
+                        metrics_ = np.nan
+                elif metric == "r2test_affine":
+                    try:
+                        metrics_ = family.res_affine["r2test"]
+                    except AttributeError:
+                        metrics_ = np.nan
+                metrics[epoch][i][j] = metrics_
+                # print(np.shape(metrics[epoch][i][j]))
+    return metrics
 
 
 def get_metrics(subj_id, reg, strategy, metric):
@@ -34,8 +92,8 @@ def get_metrics(subj_id, reg, strategy, metric):
             / "fit"
             / subj_id
             / sess_id
-            / "river_n_tributaries"
-            / "no_cid_enforcement"
+            / "tributaries"
+            / "balance_and_norm"
             / "results_dict.pkl"
         )
 
@@ -47,7 +105,11 @@ def get_metrics(subj_id, reg, strategy, metric):
 
         for epoch in epochs_key:
             if strategy == "both":
-                families = res_dict[reg][epoch][strategy]["families"]
+                try:
+                    families = res_dict[reg][epoch][strategy]["families"]
+                except KeyError:
+                    # region doesn't exist for this session
+                    break
                 if len(families) == 0:
                     # region doesn't exist for this session
                     break
@@ -76,23 +138,42 @@ def get_metrics(subj_id, reg, strategy, metric):
     return metrics
 
 
-def get_metrics_3x3(subj_id, metric):
+def get_metrics_3x3(subj_id, metric, do_neurons=True):
     metrics = {}
     for reg in regions:
         metrics[reg] = {}
         for strategy in strategies:
             print(f"collecting metrics for {subj_id}, {metric}, {reg}, {strategy}")
             metrics[reg][strategy] = {}
-            metrics[reg][strategy] = get_metrics(subj_id, reg, strategy, metric)
+            metrics[reg][strategy] = (
+                get_metrics_neurons(subj_id, reg, strategy, metric)
+                if do_neurons
+                else get_metrics(subj_id, reg, strategy, metric)
+            )
 
-        if np.array(
-            [
-                np.isnan(metrics[reg][strategy][epoch])
-                for epoch in epochs_key
-                for strategy in strategies
-            ]
-        ).all():
+        if (
+            do_neurons
+            and np.array(
+                [
+                    list(metrics_sess).count(None) == len(metrics_sess)
+                    for metrics_sess in metrics[reg]["both"][epochs_key[0]]
+                ]
+            ).all()
+        ):
             metrics.pop(reg, None)
+
+        elif (
+            not do_neurons
+            and np.array(
+                [
+                    np.isnan(metrics[reg][strategy][epoch])
+                    for epoch in epochs_key
+                    for strategy in strategies
+                ]
+            ).all()
+        ):
+            metrics.pop(reg, None)
+
     print(f"DONE for {subj_id}, {metric}")
     return metrics
 
@@ -180,14 +261,14 @@ def plot_metrics_3x3_bar(subj_id, metrics, metric, do_save=True):
             FIGURES_DIR
             / "reg_strategy_epoch"
             / subj_id
-            / "no_cid_enforcement"
+            / "balance_and_norm"
             / f"{metric}_bars.png"
         )
         fpath_svg = (
             FIGURES_DIR
             / "reg_strategy_epoch"
             / subj_id
-            / "no_cid_enforcement"
+            / "balance_and_norm"
             / f"{metric}_bars.svg"
         )
         fpath_png.parent.mkdir(parents=True, exist_ok=True)
@@ -208,14 +289,21 @@ def plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True):
             for epoch in epochs:
                 metrics_epoch = metrics[reg][strategy][epoch]
 
+                print(
+                    reg,
+                    epoch,
+                    np.shape(metrics_epoch),
+                    np.shape(np.ravel(metrics_epoch)),
+                )
                 ax.hist(
                     np.ravel(metrics_epoch),
-                    bins=np.linspace(0, 0.8, 25),
+                    bins=np.linspace(-2, 1, 31),
                     color=colors_epoch[epoch],
                     histtype="stepfilled",
                     alpha=0.5,
                 )
 
+            ax.axvline(x=0, color="#666666", linestyle="--", linewidth=0.5)
             ax.set_xlabel(metric)
             ax.set_ylabel("freq")
 
@@ -223,8 +311,20 @@ def plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True):
     if do_save:
         from utils.paths import FIGURES_DIR
 
-        fpath_png = FIGURES_DIR / "reg_strategy_epoch" / subj_id / f"{metric}_hist.png"
-        fpath_svg = FIGURES_DIR / "reg_strategy_epoch" / subj_id / f"{metric}_hist.svg"
+        fpath_png = (
+            FIGURES_DIR
+            / "reg_strategy_epoch"
+            / subj_id
+            / "balance_and_norm"
+            / f"{metric}_hist.png"
+        )
+        fpath_svg = (
+            FIGURES_DIR
+            / "reg_strategy_epoch"
+            / subj_id
+            / "balance_and_norm"
+            / f"{metric}_hist.svg"
+        )
         fpath_png.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(fpath_png, dpi=300, bbox_inches="tight")
         fig.savefig(fpath_svg, dpi=300, bbox_inches="tight")
@@ -232,7 +332,7 @@ def plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True):
 
 def fit(subj_id, metric, force_redo=False):
     print(f"STARTING {subj_id}, {metric}")
-    save_dir = MODELS_DIR / "fit" / subj_id / "metrics" / "no_cid_enforcement"
+    save_dir = MODELS_DIR / "fit" / subj_id / "metrics" / "balance_and_norm"
     save_path = save_dir / f"{metric}.pkl"
     if save_path.is_file() and not force_redo:
         with open(save_path, "rb") as f:
@@ -243,13 +343,14 @@ def fit(subj_id, metric, force_redo=False):
         with open(save_path, "wb") as f:
             pickle.dump(metrics, f)
 
-    print(f"PLOTTING {subj_id}, {metric}")
+    # print(f"PLOTTING {subj_id}, {metric}")
     # plot_metrics_3x3_sess(subj_id, metrics, metric, do_save=True)
-    plot_metrics_3x3_bar(subj_id, metrics, metric, do_save=True)
-    plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True)
+    # plot_metrics_3x3_bar(subj_id, metrics, metric, do_save=True)
+    # plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True)
 
 
+subj_ids = ["MR82", "MR83", "MM012"]
 subj_metric = [(subj_id, metric) for subj_id in subj_ids for metric in metrics]
 Parallel(n_jobs=2)(
-    delayed(fit)(subj_id, metric, force_redo=False) for subj_id, metric in subj_metric
+    delayed(fit)(subj_id, metric, force_redo=True) for subj_id, metric in subj_metric
 )

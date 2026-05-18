@@ -1,21 +1,22 @@
 """
-fit_tributaries.py
+fit_tributaries_encoder.py
 
-Fit (1) one LVM with balanced strategies and (2) two LVMs with one strategy,
+Fit (1) one encoder with balanced strategies and (2) two encoders with one strategy,
 to every session, on different epochs.
 
 Author: Stellina X. Ao
-Created: 2026-05-06
-Last Modified: 2026-05-06
+Created: 2026-05-17
+Last Modified: 2026-05-17
 Python Version: 3.11.14
 """
 
 import pickle
 import numpy as np
 from sg.fitter import LVMFamily
+from core.data import subject_ids, session_ids
 from utils.paths import MODELS_DIR
 
-from itertools import product
+from joblib import Parallel, delayed
 
 subj_ids = ["MR82"]  # ["MR82", "MR83", "MM012"]
 regions = ["all", "ACC", "M2", "DMS", "DLS"]
@@ -35,30 +36,16 @@ epoch_ref = {"key": "ref", "alignment": "choice", "tpre": 0.5, "tpost": 1.5}
 
 n_cv = 5
 
-# FIT ALL TRIALS
-# subsample for an even number of mb and mf trials
-# search through all 16 regl latents
-# fit everything (encoder + lvm)
-# fit to different epochs
-
-# FIT MB/MF
-# use the same split
-# use the same regl constant
-# fit everything (encoder + lvm)
-# fit to different epochs
-
 
 def gs_regl(subj_id, sess_id, region, epoch):
     # find the best regl constants first
     best_regl_consts = None
     best_score = -np.inf
     print(
-        f"Finding regl consts for {subj_id}, {sess_id}, region {region}, epoch {epoch['alignment']}"
+        f"Finding regl consts for {subj_id}, {sess_id}, region {region}, epoch {epoch['key']}"
     )
 
-    for regl_tv, regl in product(
-        np.logspace(-3, 0, 4, base=10), np.logspace(-3, 0, 4, base=10)
-    ):
+    for regl_tv in np.logspace(-3, 0, 4, base=10):
         family = LVMFamily(
             subj_id=subj_id,
             sess_id=sess_id,
@@ -78,27 +65,18 @@ def gs_regl(subj_id, sess_id, region, epoch):
             balance_strategy=True,  # subsample for an even number of mb and mf trials
             seed=1234,
             tv_reg={"l2": regl_tv},
-            reg={"l2": regl},
         )
-        family.fit_all()
+        family.fit_all(fit_lvms=False, update_cids=True)
 
         # the entire session is trash, return
         if not family.enough_trials:
             return None
-        if not family.lvms_fit:
-            continue
 
         family.eval()
 
-        if (
-            best_regl_consts is None
-            or best_score
-            < family.res_taskvar["r2test"].mean() + family.res_affine["r2test"].mean()
-        ):
-            best_regl_consts = (regl_tv, regl)
-            best_score = (
-                family.res_taskvar["r2test"].mean() + family.res_affine["r2test"].mean()
-            )
+        if best_regl_consts is None or best_score < family.res_taskvar["r2test"].mean():
+            best_regl_consts = regl_tv
+            best_score = family.res_taskvar["r2test"].mean()
     return best_regl_consts
 
 
@@ -127,7 +105,7 @@ def fit(subj_id, sess_id, no_dupl=True):
             results_dict[region][epoch["key"]]["both"] = {
                 "families": [],
             }
-            # search through all 16 regl latents
+            # search through 4 regl latents
             try:
                 best_regl_consts = gs_regl(subj_id, sess_id, region, epoch)
             except ValueError:  # region doesn't exist for this session
@@ -144,7 +122,7 @@ def fit(subj_id, sess_id, no_dupl=True):
             seeds = np.zeros((5,), dtype=np.int32)
             while counter < n_cv:
                 print(
-                    f"Fitting for {subj_id}, {sess_id}, region {region}, strategy both, epoch {epoch['alignment']}, number {counter}"
+                    f"Fitting for {subj_id}, {sess_id}, region {region}, strategy both, epoch {epoch['key']}, number {counter}"
                 )
 
                 family = LVMFamily(
@@ -165,15 +143,11 @@ def fit(subj_id, sess_id, no_dupl=True):
                     norm_activity=True,
                     balance_strategy=True,
                     seed=seed_sample,
-                    tv_reg={"l2": best_regl_consts[0]},
-                    reg={"l2": best_regl_consts[1]},
+                    tv_reg={"l2": best_regl_consts},
                 )
                 family.fit_all(fit_lvms=False, update_cids=False)
 
                 seed_sample += 1  # gotta do this before it potentially terminates
-
-                if not family.lvms_fit:
-                    continue
 
                 family.eval()
                 results_dict[region][epoch["key"]]["both"]["families"].append(family)
@@ -190,7 +164,7 @@ def fit(subj_id, sess_id, no_dupl=True):
                 # fit everything
                 for i, seed in enumerate(seeds):
                     print(
-                        f"Fitting for {subj_id}, {sess_id}, region {region}, strategy {strategy}, epoch {epoch['alignment']}, number {i}"
+                        f"Fitting for {subj_id}, {sess_id}, region {region}, strategy {strategy}, epoch {epoch['key']}, number {i}"
                     )
 
                     # use the same split and cids
@@ -230,9 +204,8 @@ def fit(subj_id, sess_id, no_dupl=True):
                         mf_only=True if strategy == "mf" else False,
                         seed=seed,
                         tv_reg={
-                            "l2": best_regl_consts[0]
+                            "l2": best_regl_consts
                         },  # use the same regularization constant
-                        reg={"l2": best_regl_consts[1]},
                     )
                     family.fit_all(
                         fit_lvms=False, update_cids=False
@@ -259,14 +232,14 @@ def fit(subj_id, sess_id, no_dupl=True):
 # subj_id = "MR82"
 # sess_id = "20251027_152036"
 
-# fit(subj_id, sess_id, no_dupl=False)
+# fit(subj_id, sess_id, no_dupl=True)
 
-# subj_sess = [
-#     (subj_id, sess_id)
-#     for subj_id in ["MR82", "MR83", "MM012"]
-#     for sess_id in session_ids[np.where(subject_ids == subj_id)[0][0]]
-# ]
+subj_sess = [
+    (subj_id, sess_id)
+    for subj_id in ["MR82", "MR83", "MM012"]
+    for sess_id in session_ids[np.where(subject_ids == subj_id)[0][0]]
+]
 
-# Parallel(n_jobs=6)(
-#     delayed(fit)(subj_id, sess_id, no_dupl=False) for (subj_id, sess_id) in subj_sess
-# )
+Parallel(n_jobs=6)(
+    delayed(fit)(subj_id, sess_id, no_dupl=True) for (subj_id, sess_id) in subj_sess
+)

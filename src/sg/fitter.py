@@ -188,18 +188,67 @@ class Encoder:
             mb_mask = self.trial_data["strategy"] == 1
             mf_mask = self.trial_data["strategy"] == -1
 
-            num_trial = min(mb_mask.sum(), mf_mask.sum())
+            mb_cond_masks = {
+                "left_corr": (mb_mask)
+                & (self.trial_data["response"] == 1)
+                & (self.trial_data["rewarded"] == 1),
+                "right_corr": (mb_mask)
+                & (self.trial_data["response"] == -1)
+                & (self.trial_data["rewarded"] == 1),
+                "left_incorr": (mb_mask)
+                & (self.trial_data["response"] == 1)
+                & (self.trial_data["rewarded"] == 0),
+                "right_incorr": (mb_mask)
+                & (self.trial_data["response"] == -1)
+                & (self.trial_data["rewarded"] == 0),
+            }
+
+            mf_cond_masks = {
+                "left_corr": (mf_mask)
+                & (self.trial_data["response"] == 1)
+                & (self.trial_data["rewarded"] == 1),
+                "right_corr": (mf_mask)
+                & (self.trial_data["response"] == -1)
+                & (self.trial_data["rewarded"] == 1),
+                "left_incorr": (mf_mask)
+                & (self.trial_data["response"] == 1)
+                & (self.trial_data["rewarded"] == 0),
+                "right_incorr": (mf_mask)
+                & (self.trial_data["response"] == -1)
+                & (self.trial_data["rewarded"] == 0),
+            }
+
+            num_trials_cond = [
+                min(mb_cond_masks[key].sum(), mf_cond_masks[key].sum())
+                for key in mb_cond_masks
+            ]
+            num_trial = np.sum(num_trials_cond)
 
             if num_trial * 2 < 20:
                 return
             self.enough_trials = True
 
-            self.idxs_subsamp_mb = np.sort(
-                np.random.choice(np.where(mb_mask)[0], num_trial, replace=False)
-            )
-            self.idxs_subsamp_mf = np.sort(
-                np.random.choice(np.where(mf_mask)[0], num_trial, replace=False)
-            )
+            self.idxs_subsamp_mb = []
+            self.idxs_subsamp_mf = []
+
+            for i, cond in enumerate(mb_cond_masks):
+                self.idxs_subsamp_mb.extend(
+                    np.random.choice(
+                        np.where(mb_cond_masks[cond])[0],
+                        num_trials_cond[i],
+                        replace=False,
+                    )
+                )
+                self.idxs_subsamp_mf.extend(
+                    np.random.choice(
+                        np.where(mf_cond_masks[cond])[0],
+                        num_trials_cond[i],
+                        replace=False,
+                    )
+                )
+
+            self.idxs_subsamp_mb = np.sort(self.idxs_subsamp_mb)
+            self.idxs_subsamp_mf = np.sort(self.idxs_subsamp_mf)
 
             self.idxs_subsamp = np.sort(
                 np.concatenate((self.idxs_subsamp_mb, self.idxs_subsamp_mf))
