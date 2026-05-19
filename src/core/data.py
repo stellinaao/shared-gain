@@ -56,7 +56,7 @@ colors_subj = {
 
 colors_strategy = {"mb": "#D7A007", "mf": "#183488"}
 colors_epoch = {
-    "full": "#6FCB1A",
+    "full": "#FFEE00",
     "choice": "#1F6A92",
     "reward": "#229B46",
     "iti": "#7051B8",
