@@ -35,7 +35,7 @@ def get_betas(subj_id, tv, verbose=False):
         no_families = False
         betas = {
             reg: {
-                epoch: {strategy: [] for strategy in ["mb", "mf"]}
+                epoch: {strategy: [] for strategy in ["both", "mb", "mf"]}
                 for epoch in epoch_keys
             }
             for reg in regions
@@ -64,6 +64,7 @@ def get_betas(subj_id, tv, verbose=False):
             for epoch in epoch_keys:
                 if verbose:
                     print(">>", epoch)
+                families_both = res_dict[reg][epoch]["both"]["families"]
                 families_mb = res_dict[reg][epoch]["mb"]["families"]
                 families_mf = res_dict[reg][epoch]["mf"]["families"]
 
@@ -71,9 +72,11 @@ def get_betas(subj_id, tv, verbose=False):
                     no_families = True
                     break
 
+                family_both = families_both[seed]
                 family_mb = families_mb[seed]
                 family_mf = families_mf[seed]
 
+                beta_both = family_both.mod_taskvar.tv.weight.data[:]
                 beta_mb = family_mb.mod_taskvar.tv.weight.data[:]
                 beta_mf = family_mf.mod_taskvar.tv.weight.data[:]
 
@@ -99,6 +102,9 @@ def get_betas(subj_id, tv, verbose=False):
                 if not tv_labels_done:
                     tv_labels_done = True
 
+                betas[reg][epoch]["both"] = np.array(
+                    [beta_both[tv_idx] for tv_idx in tv_idxs]
+                )
                 betas[reg][epoch]["mb"] = np.array(
                     [beta_mb[tv_idx] for tv_idx in tv_idxs]
                 )
@@ -224,8 +230,10 @@ def plot_betas_hist2d(subj_id, betas_sess, tv):
     fig.savefig(fpath_svg, dpi=300, bbox_inches="tight")
 
 
-def plot_betas_hist(subj_id, betas_sess, tv):
+def plot_betas_hist(subj_id, betas_sess, tv, clump=True):
     from core.data import colors_strategy
+
+    colors_reg = {"all": "#666666", "DMS": "#B1CC16", "DLS": "#07B265"}
 
     num_tvs = np.shape(betas_sess[0]["all"]["choice"]["mb"])[0]
 
@@ -239,37 +247,71 @@ def plot_betas_hist(subj_id, betas_sess, tv):
 
             betas_mb = []
             betas_mf = []
+            betas_both = []
             for betas in betas_sess:
                 for tv_idx in range(num_tvs):
                     betas_mb.extend(betas[reg][epoch]["mb"][tv_idx])
                     betas_mf.extend(betas[reg][epoch]["mf"][tv_idx])
+                    betas_both.extend(betas[reg][epoch]["both"][tv_idx])
 
-            ax.hist(
-                betas_mb,
-                bins=np.linspace(-2, 2, 26),
-                color=colors_strategy["mb"],
-                histtype="step",
-                density=True,
-                label=r"$\beta$ mb",
-            )
-            ax.hist(
-                betas_mf,
-                bins=np.linspace(-2, 2, 26),
-                color=colors_strategy["mf"],
-                histtype="step",
-                density=True,
-                label=r"$\beta$ mf",
-            )
+            if clump:
+                ax.hist(
+                    np.concatenate(
+                        (
+                            betas_mb,
+                            betas_mf,
+                        )
+                    ),
+                    bins=np.linspace(-2, 2, 26),
+                    weights=np.ones(len(betas_mb) + len(betas_mf))
+                    / (len(betas_mb) + len(betas_mf)),
+                    color=colors_reg[reg],
+                    label="mb/mf",
+                    histtype="step",
+                )
+                ax.hist(
+                    betas_both,
+                    bins=np.linspace(-2, 2, 26),
+                    weights=np.ones(len(betas_both)) / (len(betas_both)),
+                    color="#222222",
+                    label="both",
+                    histtype="step",
+                )
+            else:
+                ax.hist(
+                    betas_mb,
+                    bins=np.linspace(-2, 2, 26),
+                    weights=np.ones(len(betas_mb)) / len(betas_mb),
+                    color=colors_strategy["mb"],
+                    histtype="step",
+                    label=r"$\beta$ mb",
+                )
+                ax.hist(
+                    betas_mf,
+                    bins=np.linspace(-2, 2, 26),
+                    weights=np.ones(len(betas_mf)) / len(betas_mf),
+                    color=colors_strategy["mf"],
+                    histtype="step",
+                    label=r"$\beta$ mf",
+                )
 
             ax.legend()
             ax.set_xlim([-2, 2])
 
     fig.suptitle(tv)
+
+    clump_str = "_clump" if clump else ""
     fpath_png = (
-        FIGURES_DIR / "beta_strategy" / subj_id / f"{tv}_beta_strategy_hist-{seed}.png"
+        FIGURES_DIR
+        / "beta_strategy"
+        / subj_id
+        / f"{tv}_beta_strategy_hist{clump_str}-{seed}.png"
     )
     fpath_svg = (
-        FIGURES_DIR / "beta_strategy" / subj_id / f"{tv}_beta_strategy_hist-{seed}.svg"
+        FIGURES_DIR
+        / "beta_strategy"
+        / subj_id
+        / f"{tv}_beta_strategy_hist{clump_str}-{seed}.svg"
     )
     fpath_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(fpath_png, dpi=300, bbox_inches="tight")
@@ -293,14 +335,14 @@ def fit(subj_id, tv, force_redo=False, verbose=False):
             pickle.dump({"betas_sess": betas_sess, "tv_labels": tv_labels}, f)
 
     print(f"plotting betas for {subj_id}, {tv}")
-    plot_betas_scatter(subj_id, betas_sess, tv, tv_labels)
-    plot_betas_hist2d(subj_id, betas_sess, tv)
-    plot_betas_hist(subj_id, betas_sess, tv)
+    # plot_betas_scatter(subj_id, betas_sess, tv, tv_labels)
+    # plot_betas_hist2d(subj_id, betas_sess, tv)
+    plot_betas_hist(subj_id, betas_sess, tv, clump=True)
     print(f"DONE for {subj_id}, {tv}")
 
 
 subj_tvs = product(subj_ids, tvs)
 
 Parallel(n_jobs=2)(
-    delayed(fit)(subj_id, tv, force_redo=False) for (subj_id, tv) in subj_tvs
+    delayed(fit)(subj_id, tv, force_redo=True) for (subj_id, tv) in subj_tvs
 )
