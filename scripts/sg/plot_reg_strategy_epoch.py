@@ -15,7 +15,7 @@ metrics = ["r2test_taskvar"]  # , "r2test_affine", "qi"]
 regions = ["all", "ACC", "M2", "DMS", "DLS"]
 strategies = ["both", "mb", "mf"]
 epochs = [
-    # {"key": "full", "alignment": "choice", "tpre": 0.5, "tpost": 1},
+    {"key": "full", "alignment": "choice", "tpre": 0.5, "tpost": 1},
     {"key": "choice", "alignment": "choice", "tpre": 0.5, "tpost": 0.5},
     {"key": "reward", "alignment": "reward", "tpre": 0, "tpost": 1},
     {"key": "iti", "alignment": "trial_start", "tpre": 1.5, "tpost": -0.5},
@@ -281,6 +281,14 @@ def plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True):
         ncols=len(metrics), nrows=3, figsize=(5, 4), sharex="all", sharey="all"
     )
 
+    colors_epoch = {
+        "full": "#FFEE00",
+        "choice": "#1F6A92",
+        "reward": "#229B46",
+        "iti": "#7051B8",
+    }
+
+    print(colors_epoch["full"])
     for i, reg in enumerate(metrics):
         for j, strategy in enumerate(metrics[reg]):
             ax = axes[j][i]
@@ -289,17 +297,22 @@ def plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True):
             for epoch in epochs:
                 metrics_epoch = metrics[reg][strategy][epoch]
 
-                print(
-                    reg,
-                    epoch,
-                    np.shape(metrics_epoch),
-                    np.shape(np.ravel(metrics_epoch)),
-                )
+                bleb = []
+
+                for a in range(metrics_epoch.shape[0]):
+                    for b in range(metrics_epoch.shape[1]):
+                        bloob = metrics_epoch[a][b]
+
+                        if bloob is None:
+                            continue
+                        bleb.extend(bloob)
+
                 ax.hist(
-                    np.ravel(metrics_epoch),
+                    bleb,
                     bins=np.linspace(-2, 1, 31),
+                    weights=np.ones(len(bleb)) / len(bleb),
                     color=colors_epoch[epoch],
-                    histtype="stepfilled",
+                    histtype="step",
                     alpha=0.5,
                 )
 
@@ -338,19 +351,21 @@ def fit(subj_id, metric, force_redo=False):
         with open(save_path, "rb") as f:
             metrics = pickle.load(f)
     else:
-        metrics = get_metrics_3x3(subj_id, metric)
+        metrics = get_metrics_3x3(subj_id, metric, do_neurons=True)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         with open(save_path, "wb") as f:
             pickle.dump(metrics, f)
 
-    # print(f"PLOTTING {subj_id}, {metric}")
+    print(f"PLOTTING {subj_id}, {metric}")
     # plot_metrics_3x3_sess(subj_id, metrics, metric, do_save=True)
     # plot_metrics_3x3_bar(subj_id, metrics, metric, do_save=True)
-    # plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True)
+    plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True)
 
 
-subj_ids = ["MR82", "MR83", "MM012"]
+subj_ids = ["MR82", "MR83"]
 subj_metric = [(subj_id, metric) for subj_id in subj_ids for metric in metrics]
-Parallel(n_jobs=2)(
-    delayed(fit)(subj_id, metric, force_redo=True) for subj_id, metric in subj_metric
+Parallel(n_jobs=1)(
+    delayed(fit)(subj_id, metric, force_redo=True)
+    for subj_id, metric in subj_metric
+    if subj_id == "MR83" and metric == "r2test_taskvar"
 )
