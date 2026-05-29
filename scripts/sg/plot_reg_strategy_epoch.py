@@ -282,7 +282,7 @@ def plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True):
     )
 
     colors_epoch = {
-        "full": "#FFEE00",
+        "full": "#7f1900",
         "choice": "#1F6A92",
         "reward": "#229B46",
         "iti": "#7051B8",
@@ -292,9 +292,9 @@ def plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True):
     for i, reg in enumerate(metrics):
         for j, strategy in enumerate(metrics[reg]):
             ax = axes[j][i]
-            epochs = metrics[reg][strategy].keys()
+            # epochs = metrics[reg][strategy].keys()
 
-            for epoch in epochs:
+            for epoch in ["full", "iti"]:
                 metrics_epoch = metrics[reg][strategy][epoch]
 
                 bleb = []
@@ -317,6 +317,7 @@ def plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True):
                 )
 
             ax.axvline(x=0, color="#666666", linestyle="--", linewidth=0.5)
+            ax.set_xticks([-2, -1, 0, 1])
             ax.set_xlabel(metric)
             ax.set_ylabel("freq")
 
@@ -338,6 +339,7 @@ def plot_metrics_3x3_hist(subj_id, metrics, metric, do_save=True):
             / "balance_and_norm"
             / f"{metric}_hist.svg"
         )
+        print(fpath_png)
         fpath_png.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(fpath_png, dpi=300, bbox_inches="tight")
         fig.savefig(fpath_svg, dpi=300, bbox_inches="tight")
@@ -365,7 +367,5 @@ def fit(subj_id, metric, force_redo=False):
 subj_ids = ["MR82", "MR83"]
 subj_metric = [(subj_id, metric) for subj_id in subj_ids for metric in metrics]
 Parallel(n_jobs=1)(
-    delayed(fit)(subj_id, metric, force_redo=True)
-    for subj_id, metric in subj_metric
-    if subj_id == "MR83" and metric == "r2test_taskvar"
+    delayed(fit)(subj_id, metric, force_redo=False) for subj_id, metric in subj_metric
 )

@@ -337,12 +337,12 @@ def fit(subj_id, tv, force_redo=False, verbose=False):
     print(f"plotting betas for {subj_id}, {tv}")
     # plot_betas_scatter(subj_id, betas_sess, tv, tv_labels)
     # plot_betas_hist2d(subj_id, betas_sess, tv)
-    plot_betas_hist(subj_id, betas_sess, tv, clump=True)
+    plot_betas_hist(subj_id, betas_sess, tv, clump=False)
     print(f"DONE for {subj_id}, {tv}")
 
 
 subj_tvs = product(subj_ids, tvs)
 
 Parallel(n_jobs=2)(
-    delayed(fit)(subj_id, tv, force_redo=True) for (subj_id, tv) in subj_tvs
+    delayed(fit)(subj_id, tv, force_redo=False) for (subj_id, tv) in subj_tvs
 )
