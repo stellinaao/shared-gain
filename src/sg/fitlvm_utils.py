@@ -149,6 +149,7 @@ def get_dataset_dm(
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
     tvs = OHE().fit_transform(trial_data[task_vars]).todense()
+    # tvs = np.hstack((tvs, np.arange(203).reshape(-1,1)))
     tvs = tvs[idxs, :]
 
     # tents
@@ -1079,8 +1080,6 @@ def plot_summary(
 
 
 ### LISKA'S CODE
-
-
 def get_data_model(
     psths,
     trial_data,
@@ -1341,10 +1340,7 @@ def fit_model(
     seed=None,
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
 ):
-    # print("pengha")
-    # print("hullo")
     from torch.optim import AdamW
-
     from ndnt.training import EarlyStopping, LBFGSTrainer, Trainer
 
     model.prepare_regularization()
