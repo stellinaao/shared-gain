@@ -52,7 +52,8 @@ def seed(self):
 def get_dataset_dm(
     psths,
     trial_data,
-    regions,
+    strategy_filter=None,
+    regions=["DMS", "DLS"],
     task_vars=["response"],
     num_tents=2,
     norm=True,
@@ -83,15 +84,6 @@ def get_dataset_dm(
         )
 
         robs_ = {}
-        # no zscore
-        # all that matters is that all neurons in dms and m2 get multiplied to the same degree
-        # robs_['DMS']  = zscore(np.sum(psths['DMS'] * (25 / 1000), axis=2))
-        # robs_['DMS']  = [(1/np.mean(cell))*potato*cell for cell in robs_['DMS']]
-        # robs_['M2']   = zscore(np.sum(psths['M2'] * (25 / 1000), axis=2))
-        # robs_['M2']  = [(1/np.mean(cell))*tuber*cell for cell in robs_['M2']]
-        # robs_['ACC']  = zscore(np.sum(psths['ACC']*(25/1000), axis=2))
-        # robs_['DLS']  = zscore(np.sum(psths['DLS']*(25/1000), axis=2))
-
         robs_["DMS"] = np.sum(psths["DMS"] * (25 / 1000), axis=2)
         robs_["DMS"] = [(np.mean(cell)) * potato * cell for cell in robs_["DMS"]]
         robs_["M2"] = np.sum(psths["M2"] * (25 / 1000), axis=2)
@@ -112,12 +104,10 @@ def get_dataset_dm(
                 ]
             ).T
             ** 0.5
-        )  # spks_utils.get_nspikes_choice(unit_spike_times, trial_data, regions, pre=1, post=1)**0.5
+        )  # robs of everything, no idx subsamp atm
     reg_keys = np.concatenate(
         [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
-    )  # spks_utils.get_nspikes_choice(unit_spike_times, trial_data, regions, pre=1, post=1)**0.5
-
-    # robs = spks_utils.get_nspikes_trial(unit_spike_times, trial_data, trial_dur_s, regions)
+    )
 
     if verbosity > 0:
         print(f"originally {sum([len(psths[region]) for region in regions])} units")
@@ -129,17 +119,11 @@ def get_dataset_dm(
     mad = np.median(adiff)  # scalar
     dfs = (adiff / mad) < 5  # shape = (# trials, # cells)
 
-    dfs_vals = adiff / mad
-    # print(dfs.shape, np.sum(dfs))
-    # print((dfs.shape[0]*dfs.shape[1]), torch.sum(dfs), (dfs.shape[0]*dfs.shape[1])-torch.sum(dfs))
-    # print(mad)
-
     # filter for good units
     # good = np.mean(dfs, axis=0) == 1 # at least 80% of the trials were good
     # print(f"good units {np.sum(good)}/{len(good)}")
     # robs = robs[:,good]
     # dfs = dfs[:,good]
-    # dfs = np.ones_like(dfs)
 
     # normalize
     if norm:
@@ -148,16 +132,31 @@ def get_dataset_dm(
         mu = np.mean(robs, axis=0)
         robs = (robs - mu) / s
 
+    if strategy_filter == "mb":
+        idxs = np.where(trial_data["strategy"] == 1)[0]
+    elif strategy_filter == "mf":
+        idxs = np.where(trial_data["strategy"] == -1)[0]
+    elif strategy_filter is None:
+        idxs = np.arange(trial_data.shape[0])
+    else:
+        raise ValueError(
+            f"valid values for strategy_filter are 'mb', 'mf', and None, not {strategy_filter}"
+        )
+
+    robs = robs[idxs, :]
+    dfs = dfs[idxs, :]
+
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
+    print(task_vars)
     tvs = OHE().fit_transform(trial_data[task_vars]).todense()
-    # tvs = np.concatenate((tvs, trial_data[task_vars["analog"]]), axis=1)
-    # print(tvs.shape)
-    # print(f"mozza: {trai}, feta: {tvs.shape}")
+    # tvs = np.hstack((tvs, np.arange(203).reshape(-1,1)))
+    tvs = tvs[idxs, :]
+
     # tents
     from ndnt.utils.NDNutils import tent_basis_generate
 
-    num_trials = len(trial_data)
+    num_trials = robs.shape[0]
     xs = np.linspace(0, num_trials - 1, num_tents)
     tents = tent_basis_generate(xs)
 
@@ -165,7 +164,6 @@ def get_dataset_dm(
         "robs": torch.tensor(robs, dtype=torch.float32),
         "reg_keys": torch.tensor(reg_keys, dtype=torch.float32),
         "dfs": torch.tensor(dfs, dtype=torch.float32),
-        "dfs_val": torch.tensor(dfs_vals, dtype=torch.float32),
         "tv": torch.tensor(tvs, dtype=torch.float32),
         "tents": torch.tensor(tents, dtype=torch.float32),
         "indices": torch.tensor(
@@ -174,7 +172,6 @@ def get_dataset_dm(
     }
 
     data_gd = models.GenericDataset(data_dict, device=device)
-    # data_df = pd.DataFrame(data)
 
     return data_gd, data_dict
 
@@ -1084,15 +1081,14 @@ def plot_summary(
 
 
 ### LISKA'S CODE
-
-
 def get_data_model(
     psths,
     trial_data,
-    regions,
+    strategy_filter=None,
+    regions=["DMS", "DLS"],
     norm=True,
     num_tents=2,
-    task_vars={"digital": ["response"], "analog": []},
+    task_vars=["response", "rewarded"],
     verbosity=0,
     sanity_check=0,
     tuber=None,
@@ -1100,6 +1096,7 @@ def get_data_model(
     data_gd, data_dict = get_dataset_dm(
         psths,
         trial_data,
+        strategy_filter,
         regions,
         norm=norm,
         num_tents=num_tents,
@@ -1110,10 +1107,7 @@ def get_data_model(
 
     train_dl, val_dl, test_dl, indices = get_dataloaders(
         data_gd, batch_size=264, folds=4, use_dropout=True
-    )  # , sanity_check=sanity_check)
-
-    # Mtrain = train_dl.dataset[:]['dfs']>0
-    # Mtest = val_dl.dataset[:]['dfs']>0
+    )
 
     sample = data_gd[:]
     num_trials, num_tv = sample["tv"].shape
@@ -1225,11 +1219,16 @@ def rsquared(y, yhat, dfs=None, eps=1e-10):
     ybar = (y * dfs).sum(dim=0) / dfs.sum(dim=0)  # the average y value
     resids = y - yhat  # the difference between observed and predicted
     residnull = y - ybar  # the difference between observed and observed avg
-    sstot = torch.sum(residnull**2 * dfs, dim=0) + eps  # denom
+    sstot = torch.sum(residnull**2 * dfs, dim=0)  # + eps  # denom
     ssres = torch.sum(resids**2 * dfs, dim=0)  # num
+
+    zero_idxs = np.where(sstot == 0)[0]
+    if len(zero_idxs) > 0:
+        sstot[np.where(sstot == 0)[0]] = np.nan
+
     r2 = 1 - ssres / sstot
 
-    return r2.detach().cpu()
+    return r2.detach().cpu()  # , sstot, ssres
 
 
 def censored_lstsq(A, B, M):
@@ -1342,10 +1341,7 @@ def fit_model(
     seed=None,
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
 ):
-    # print("pengha")
-    # print("hullo")
     from torch.optim import AdamW
-
     from ndnt.training import EarlyStopping, LBFGSTrainer, Trainer
 
     model.prepare_regularization()

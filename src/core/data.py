@@ -54,7 +54,13 @@ colors_subj = {
     "MR83": "#3359D7",
 }
 
-colors_strategy = {"mb": "#E6B906", "mf": "#2F5CE0"}
+colors_strategy = {"mb": "#D7A007", "mf": "#183488"}
+colors_epoch = {
+    "full": "#FFEE00",
+    "choice": "#1F6A92",
+    "reward": "#229B46",
+    "iti": "#7051B8",
+}
 
 colors_region = {
     "ACC": "#140C6A",
@@ -80,6 +86,9 @@ def load_sess(
     tpost=1,
     binwidth_ms=25,
     alignment="choice",
+    tpre_ref=0.5,
+    tpost_ref=1,
+    alignment_ref=None,
     trial_start_pre=0,
     thresh=1,
 ):
@@ -142,7 +151,7 @@ def load_sess(
         trial_data = trial_data[trial_mask]
 
         # get psths
-        psths, trial_mask, zstd_units = get_psths(
+        psths, trial_mask = get_psths(
             spike_times,
             trial_data,
             session_data,
@@ -152,25 +161,58 @@ def load_sess(
             binwidth_ms=binwidth_ms,
             alignment=alignment,
             trial_start_pre=trial_start_pre,
+            do_rem_zstd=False,
             reward_only=False,
             prev_filter=False,
             get_strategy=False,
             mode=mode,
         )
 
-        # update spike_times with the removed units
-        for reg in regions:
-            if len(zstd_units[reg]) > 0:
-                spike_times[reg] = [
-                    st_unit
-                    for i, st_unit in enumerate(spike_times[reg])
-                    if i not in set(zstd_units[reg])
-                ]
+        if alignment_ref is not None:
+            psths_ref, _ = get_psths(
+                spike_times,
+                trial_data,
+                session_data,
+                regions,
+                tpre=tpre_ref,
+                tpost=tpost_ref,
+                binwidth_ms=binwidth_ms,
+                alignment=alignment_ref,
+                trial_start_pre=trial_start_pre,
+                do_rem_zstd=False,  # so that there are no indexing issues later
+                reward_only=False,
+                prev_filter=False,
+                get_strategy=False,
+                mode=mode,
+            )
+        else:
+            psths_ref = None
+
+        # update spike_times and psths_ref with the removed units
+        # for reg in regions:
+        #     if len(zstd_units[reg]) > 0:
+        #         print(len(zstd_units[reg]))
+        #         assert len(spike_times[reg]) == len(psths_ref[reg])
+        #         spike_times[reg] = [
+        #             st_unit
+        #             for i, st_unit in enumerate(spike_times[reg])
+        #             if i not in set(zstd_units[reg])
+        #         ]
+        #         psths_ref[reg] = [
+        #             psth
+        #             for i, psth in enumerate(psths_ref[reg])
+        #             if i not in set(zstd_units[reg])
+        #         ]
+        #         assert len(spike_times[reg]) == len(psths_ref[reg])
 
         trial_data = trial_data[trial_mask]
 
         psths, spike_times = rem_low_fr(
-            psths, spike_times, thresh=thresh, binwidth_ms=binwidth_ms
+            psths,
+            spike_times,
+            psths_ref=psths_ref,
+            thresh=thresh,
+            binwidth_ms=binwidth_ms,
         )
 
         return spike_times, trial_data, psths, session_data, regions
@@ -514,7 +556,8 @@ def get_psths(
     else:
         if do_rem_zstd:
             [psths], units_to_rem = rem_zstd([psths], regions)
-        return psths, mask, units_to_rem
+            return psths, mask, units_to_rem
+        return psths, mask
 
 
 def get_zstd_units(psths_all, regions):
@@ -630,9 +673,11 @@ def get_choice_ts(trial_data, mode="both"):
     elif mode == "rewarded":
         choice_ts = {
             "corr": trial_data[(lc_mask) | (rc_mask)]["trial_start_time"]
-            + trial_data[(lc_mask) | (rc_mask)]["response_time"],
+            + trial_data[(lc_mask) | (rc_mask)]["response_time"]
+            + 0.5,
             "incorr": trial_data[(li_mask) | (ri_mask)]["trial_start_time"]
-            + trial_data[(li_mask) | (ri_mask)]["response_time"],
+            + trial_data[(li_mask) | (ri_mask)]["response_time"]
+            + 0.5,
         }
     elif mode == "strategy":
         choice_ts = {
@@ -679,12 +724,15 @@ def balance_strategy(trial_data, mb_idx, mf_idx):
 
 
 # UTILS
-def rem_low_fr(psths, spike_times, thresh=1, binwidth_ms=25):
+def rem_low_fr(psths, spike_times, psths_ref=None, thresh=1, binwidth_ms=25):
     psths_lite = {}
     spike_times_lite = {}
 
+    if psths_ref is None:
+        psths_ref = psths
+
     for region in psths.keys():
-        frs = np.mean(psths[region], axis=(1, 2))
+        frs = np.mean(psths_ref[region], axis=(1, 2))
         low_fr_idxs = np.where(frs < (thresh * binwidth_ms / 1000))[0]
 
         # thresh was hardcoded in the bool op...the messy hardcode strikes again..never forget (1.13.26)

@@ -22,7 +22,6 @@ from sg.fitlvm_utils import (
     fit_gain_model,
     fit_model,
     get_data_model,
-    check_stable_lowd,
 )
 from sg.models import SharedGain
 
@@ -53,21 +52,50 @@ class Encoder:
         self.sanity_check = kwargs.pop("sanity_check", 0)
 
         # trial data
-        self.idxs_subsamp = kwargs.pop("idxs_subsamp", None)
         self.balance_strategy = kwargs.pop("balance_strategy", False)
-        self.mb_only = kwargs.pop("mb_only", False)
-        self.mf_only = kwargs.pop("mf_only", False)
-        if self.mb_only and self.mf_only:
-            raise ValueError("gosh pick a side!")
-        if self.mb_only or self.mf_only:
-            self.subsample_strategy = kwargs.pop("subsample_strategy", True)
+
+        self.idxs_subsamp = kwargs.pop(
+            "idxs_subsamp", None
+        )  # with relation to the balanced trial_data
+
+        if self.idxs_subsamp is not None:
+            self.idxs_subsamp_balance = kwargs.pop(
+                "idxs_subsamp_balance", None
+            )  # idxs are in relation to the og, full trial_data
+            self.mb_only = kwargs.pop("mb_only", False)
+            self.mf_only = kwargs.pop("mf_only", False)
+        else:
+            self.mb_only = False
+            self.mf_only = False
+
         self.enough_trials = False
+
+        if not self.balance_strategy and self.idxs_subsamp is not None:
+            raise NotImplementedError(
+                "logic for balance_strategy = False and idxs_subsamp is not None not yet implemented"
+            )
+
+        if self.idxs_subsamp is not None and self.idxs_subsamp_balance is None:
+            raise ValueError("must pass idxs_subsamp_balance if passing idxs_subsamp")
+
+        if self.mb_only and self.mf_only:
+            raise ValueError("both mb_only and mf_only? gosh pick a side...")
+
+        if self.idxs_subsamp is not None and (not self.mb_only and not self.mf_only):
+            raise ValueError(
+                "you've got to have at least one strategy you're subsampling..."
+            )
 
         # neural data
         self.tpre = kwargs.pop("tpre", 0.5)
         self.tpost = kwargs.pop("tpost", 1)
-        self.binwidth_ms = kwargs.pop("binwidth_ms", 25)
         self.alignment = kwargs.pop("alignment", "choice")
+
+        self.tpre_ref = kwargs.pop("tpre_ref", 0.5)
+        self.tpost_ref = kwargs.pop("tpost_ref", 1)
+        self.alignment_ref = kwargs.pop("alignment_ref", "choice")
+
+        self.binwidth_ms = kwargs.pop("binwidth_ms", 25)
         self.trial_start_pre = kwargs.pop("trial_start_pre", 0)
         self.thresh = kwargs.pop("thresh", 1)
 
@@ -101,16 +129,18 @@ class Encoder:
         self.baseline_fit = False
         self.taskvar_fit = False
 
-    def fit_all(self):
+    def fit_all(self, cids=None, update_cids=True):
         self.get_data()
         if self.enough_trials:
             self.fit_baseline()
             self.fit_taskvar()
-            self.get_cids()
-            self.update_cids()
+            if cids is None:
+                self.get_cids()
+            if update_cids:
+                self.update_cids(cids)
 
     def seed(self):
-        random.seed(self.seed_val)
+        random.seed(int(self.seed_val))
         np.random.seed(self.seed_val)
         torch.manual_seed(self.seed_val)
         torch.cuda.manual_seed(self.seed_val)
@@ -128,123 +158,182 @@ class Encoder:
             sess_id=self.sess_id,
             tpre=self.tpre,
             tpost=self.tpost,
-            binwidth_ms=self.binwidth_ms,
             alignment=self.alignment,
+            tpre_ref=self.tpre_ref,
+            tpost_ref=self.tpost_ref,
+            alignment_ref=self.alignment_ref,
+            binwidth_ms=self.binwidth_ms,
             trial_start_pre=self.trial_start_pre,
             thresh=self.thresh,
         )
 
+        # region subsample check
         if self.regions is None:
             # i.e., fit to everything
             self.regions = regions
         else:
             # check that the regions specified in self.regions are actually valid
             if not set(self.regions).issubset(set(regions)):
-                raise ValueError(f"{self.regions} must be a subste of {regions}")
+                raise ValueError(f"{self.regions} must be a subset of {regions}")
             else:
                 self.psths = {reg: self.psths[reg] for reg in self.regions}
                 self.spike_times = {reg: self.spike_times[reg] for reg in self.regions}
 
+        # sanity check check
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
 
-        # update trial_data and psths if needed
-        if self.mb_only:
-            mb_mask = self.trial_data["strategy"] == 1
-
-            if not self.subsample_strategy:
-                if mb_mask.sum() < 20:
-                    return
-                self.enough_trials = True
-                self.trial_data = self.trial_data[mb_mask]
-                self.psths = {
-                    region: self.psths[region][:, mb_mask, :] for region in self.regions
-                }
-            else:
-                mf_mask = self.trial_data["strategy"] == -1
-
-                num_trial = min(mb_mask.sum(), mf_mask.sum())
-                if num_trial < 20:
-                    return
-                self.enough_trials = True
-                self.idxs_subsamp = np.sort(
-                    np.random.choice(np.where(mb_mask)[0], num_trial, replace=False)
-                )
-
-                self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
-                self.psths = {
-                    region: self.psths[region][:, self.idxs_subsamp, :]
-                    for region in self.regions
-                }
-
-        elif self.mf_only:
-            mf_mask = self.trial_data["strategy"] == -1
-            if not self.subsample_strategy:
-                if mf_mask.sum() < 20:
-                    return
-                self.enough_trials = True
-                self.trial_data = self.trial_data[mf_mask]
-                self.psths = {
-                    region: self.psths[region][:, mf_mask, :] for region in self.regions
-                }
-            else:
-                mb_mask = self.trial_data["strategy"] == 1
-
-                num_trial = min(mb_mask.sum(), mf_mask.sum())
-
-                if num_trial < 20:
-                    return
-                self.enough_trials = True
-                self.idxs_subsamp = np.sort(
-                    np.random.choice(np.where(mf_mask)[0], num_trial, replace=False)
-                )
-
-                self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
-                self.psths = {
-                    region: self.psths[region][:, self.idxs_subsamp, :]
-                    for region in self.regions
-                }
-
-        elif self.balance_strategy:
+        # get idxs_subsamp if specified
+        if self.balance_strategy and self.idxs_subsamp is None:
             mb_mask = self.trial_data["strategy"] == 1
             mf_mask = self.trial_data["strategy"] == -1
 
-            num_trial = min(mb_mask.sum(), mf_mask.sum())
+            mb_cond_masks = {
+                "left_corr": (mb_mask)
+                & (self.trial_data["response"] == 1)
+                & (self.trial_data["rewarded"] == 1),
+                "right_corr": (mb_mask)
+                & (self.trial_data["response"] == -1)
+                & (self.trial_data["rewarded"] == 1),
+                "left_incorr": (mb_mask)
+                & (self.trial_data["response"] == 1)
+                & (self.trial_data["rewarded"] == 0),
+                "right_incorr": (mb_mask)
+                & (self.trial_data["response"] == -1)
+                & (self.trial_data["rewarded"] == 0),
+            }
+
+            mf_cond_masks = {
+                "left_corr": (mf_mask)
+                & (self.trial_data["response"] == 1)
+                & (self.trial_data["rewarded"] == 1),
+                "right_corr": (mf_mask)
+                & (self.trial_data["response"] == -1)
+                & (self.trial_data["rewarded"] == 1),
+                "left_incorr": (mf_mask)
+                & (self.trial_data["response"] == 1)
+                & (self.trial_data["rewarded"] == 0),
+                "right_incorr": (mf_mask)
+                & (self.trial_data["response"] == -1)
+                & (self.trial_data["rewarded"] == 0),
+            }
+
+            num_trials_cond = [
+                min(mb_cond_masks[key].sum(), mf_cond_masks[key].sum())
+                for key in mb_cond_masks
+            ]
+            num_trial = np.sum(num_trials_cond)
 
             if num_trial * 2 < 20:
                 return
             self.enough_trials = True
-            self.idxs_subsamp_mb = np.random.choice(
-                np.where(mb_mask)[0], num_trial, replace=False
-            )
-            self.idxs_subsamp_mf = np.random.choice(
-                np.where(mf_mask)[0], num_trial, replace=False
-            )
+
+            self.idxs_subsamp_mb = []
+            self.idxs_subsamp_mf = []
+
+            for i, cond in enumerate(mb_cond_masks):
+                self.idxs_subsamp_mb.extend(
+                    np.random.choice(
+                        np.where(mb_cond_masks[cond])[0],
+                        num_trials_cond[i],
+                        replace=False,
+                    )
+                )
+                self.idxs_subsamp_mf.extend(
+                    np.random.choice(
+                        np.where(mf_cond_masks[cond])[0],
+                        num_trials_cond[i],
+                        replace=False,
+                    )
+                )
+
+            self.idxs_subsamp_mb = np.sort(self.idxs_subsamp_mb)
+            self.idxs_subsamp_mf = np.sort(self.idxs_subsamp_mf)
 
             self.idxs_subsamp = np.sort(
                 np.concatenate((self.idxs_subsamp_mb, self.idxs_subsamp_mf))
             )
 
-            self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
-            self.psths = {
-                region: self.psths[region][:, self.idxs_subsamp, :]
-                for region in self.regions
-            }
-        elif self.idxs_subsamp is not None:
+            self.idxs_subsamp_balance = self.idxs_subsamp
+
+        elif self.balance_strategy and self.idxs_subsamp is not None:
             if len(self.idxs_subsamp) < 20:
                 return
             self.enough_trials = True
 
             self.idxs_subsamp = np.sort(self.idxs_subsamp)
+            self.idxs_subsamp_balance = np.sort(self.idxs_subsamp_balance)
 
-            self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
-            self.psths = {
-                region: self.psths[region][:, self.idxs_subsamp, :]
-                for region in self.regions
-            }
         else:
             if self.trial_data.shape[0] > 20:
                 self.enough_trials = True
+
+        if self.balance_strategy:
+            trial_data_balance = self.trial_data.iloc[self.idxs_subsamp_balance]
+            psths_balance = {
+                region: self.psths[region][:, self.idxs_subsamp_balance, :]
+                for region in self.regions
+            }
+
+            (
+                self.data_gd,
+                self.train_dl,
+                self.val_dl,
+                self.test_dl,
+                self.indices,
+                self.num_trials,
+                self.num_tv,
+                self.num_units,
+            ) = get_data_model(
+                psths_balance,
+                trial_data_balance,
+                strategy_filter=None
+                if not (self.mb_only or self.mf_only)
+                else ("mb" if self.mb_only else "mf"),
+                regions=self.regions,
+                norm=self.norm_activity,
+                num_tents=self.n_splines,
+                task_vars=self.task_vars,
+                sanity_check=self.sanity_check,
+            )
+            self.sample = self.data_gd[:]
+            self.robs = self.sample["robs"].detach().cpu().numpy()
+
+            # update trial_data and psths with idxs_subsamp
+            if self.idxs_subsamp is not None:
+                self.trial_data = self.trial_data.iloc[self.idxs_subsamp]
+                self.psths = {
+                    region: self.psths[region][:, self.idxs_subsamp, :]
+                    for region in self.regions
+                }
+
+        # full case, no trial indexing
+        elif not self.balance_strategy and self.idxs_subsamp is None:
+            (
+                self.data_gd,
+                self.train_dl,
+                self.val_dl,
+                self.test_dl,
+                self.indices,
+                self.num_trials,
+                self.num_tv,
+                self.num_units,
+            ) = get_data_model(
+                self.psths,
+                self.trial_data,
+                strategy_filter=None,
+                regions=self.regions,
+                norm=self.norm_activity,
+                num_tents=self.n_splines,
+                task_vars=self.task_vars,
+                sanity_check=self.sanity_check,
+            )
+            self.sample = self.data_gd[:]
+            self.robs = self.sample["robs"].detach().cpu().numpy()
+        else:
+            raise NotImplementedError(
+                "balance_strategy=True and idxs_subsamp is not None is not implemented yet"
+            )
 
         self.strategy = self.trial_data["strategy"]
         self.rewarded = self.trial_data["rewarded"]
@@ -252,27 +341,6 @@ class Encoder:
         self.rewarded_prev = self.trial_data["rewarded_prev"]
         self.response_prev = self.trial_data["response_prev"]
         self.block_side = self.trial_data["block_side"]
-
-        (
-            self.data_gd,
-            self.train_dl,
-            self.val_dl,
-            self.test_dl,
-            self.indices,
-            self.num_trials,
-            self.num_tv,
-            self.num_units,
-        ) = get_data_model(
-            self.psths,
-            self.trial_data,
-            self.regions,
-            norm=self.norm_activity,
-            num_tents=self.n_splines,
-            task_vars=self.task_vars,
-            sanity_check=self.sanity_check,
-        )
-        self.sample = self.data_gd[:]
-        self.robs = self.sample["robs"].detach().cpu().numpy()
 
     def fit_baseline(self):
         self.mod_baseline = SharedGain(
@@ -321,21 +389,28 @@ class Encoder:
         self.taskvar_fit = True
 
     def get_cids(self):
+        res_baseline = eval_model(self.mod_baseline, self.data_gd, self.test_dl.dataset)
         res_taskvar = eval_model(self.mod_taskvar, self.data_gd, self.test_dl.dataset)
-        self.cids_tv = np.where(res_taskvar["r2test"] > 0)[0]
-        self.cids_pca = check_stable_lowd(
-            self.data_gd,
-            self.train_dl.dataset[:]["dfs"] > 0,
-            self.val_dl.dataset[:]["dfs"] > 0,
-            self.num_units,
-            rank=4,
-        )
-        # it was this stinker that kept letting things through
-        self.cids = np.intersect1d(
-            self.cids_tv, self.cids_pca
-        )  # changed from union to intersection
+        self.cids_tv_zero = np.where(res_taskvar["r2test"] > 0)[0]
+        self.cids_tv_baseline = np.where(
+            res_taskvar["r2test"] > res_baseline["r2test"]
+        )[0]
+        self.cids = np.intersect1d(self.cids_tv_zero, self.cids_tv_baseline)
+        # self.cids_pca = check_stable_lowd(
+        #     self.data_gd,
+        #     self.train_dl.dataset[:]["dfs"] > 0,
+        #     self.val_dl.dataset[:]["dfs"] > 0,
+        #     self.num_units,
+        #     rank=4,
+        # )
+        # # it was this stinker that kept letting things through
+        # self.cids = np.intersect1d(
+        #     self.cids_tv, self.cids_pca
+        # )  # changed from union to intersection
 
-    def update_cids(self):
+    def update_cids(self, cids=None):
+        if cids is not None:
+            self.cids = cids
         # housekeeping
         self.data_gd[:]["robs"] = self.data_gd[:]["robs"][:, self.cids]
         self.sample["robs"] = self.sample["robs"][:, self.cids]
@@ -413,25 +488,26 @@ class LVMFamily(Encoder):
         self.ae_affine_fit = False
         self.lvms_fit = False
 
-    def fit_all(self):
-        super().fit_all()
+    def fit_all(self, cids=None, update_cids=True, fit_lvms=True):
+        super().fit_all(cids=cids, update_cids=update_cids)
 
-        if self.enough_trials and self.num_units > 0:
-            if not self.no_mult:
-                self.fit_ae_gain()
-            if not self.no_addt:
-                self.fit_ae_offset()
-            if not self.no_mult and not self.no_addt:
-                self.fit_ae_affine()
-            elif self.no_mult:
-                self.mod_ae_affine = self.mod_ae_offset
-            elif self.no_addt:
-                self.mod_ae_affine = self.mod_ae_gain
-            else:
-                print("BOOHOO something is catastrophically wrong")
-                return
+        if fit_lvms:
+            if self.enough_trials and self.num_units > 0:
+                if not self.no_mult:
+                    self.fit_ae_gain()
+                if not self.no_addt:
+                    self.fit_ae_offset()
+                if not self.no_mult and not self.no_addt:
+                    self.fit_ae_affine()
+                elif self.no_mult:
+                    self.mod_ae_affine = self.mod_ae_offset
+                elif self.no_addt:
+                    self.mod_ae_affine = self.mod_ae_gain
+                else:
+                    print("BOOHOO something is catastrophically wrong")
+                    return
 
-            self.ae2lvm()
+                self.ae2lvm()
 
     def fit_ae_gain(self):
         # self.tv_reg = {"l2": 1}
@@ -685,21 +761,24 @@ class LVMFamily(Encoder):
                 self.res_offset = eval_model(
                     self.mod_offset, self.data_gd, self.test_dl.dataset
                 )
-            if self.ae_affine_fit and self.lvms_fit:
+            if self.lvms_fit:
                 self.res_affine = eval_model(
                     self.mod_affine, self.data_gd, self.test_dl.dataset
                 )
             self.get_qi()
 
     def get_qi(self):
-        if self.no_mult:
-            r2_lvm = self.res_offset["r2test"].mean()
-        elif self.no_addt:
-            r2_lvm = self.res_gain["r2test"].mean()
+        if self.lvms_fit and self.taskvar_fit:
+            if self.no_mult:
+                r2_lvm = self.res_offset["r2test"].mean()
+            elif self.no_addt:
+                r2_lvm = self.res_gain["r2test"].mean()
+            elif self.lvms_fit:
+                r2_lvm = self.res_affine["r2test"].mean()
+            r2_taskvar = self.res_taskvar["r2test"].mean()
+            self.qi = (r2_lvm - r2_taskvar) / (1 - r2_taskvar)
         else:
-            r2_lvm = self.res_affine["r2test"].mean()
-        r2_taskvar = self.res_taskvar["r2test"].mean()
-        self.qi = (r2_lvm - r2_taskvar) / (1 - r2_taskvar)
+            self.qi = np.nan
 
 
 """
