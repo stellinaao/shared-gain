@@ -92,6 +92,7 @@ def get_dataset_dm(
         robs_["DLS"] = np.sum(psths["DLS"] * (25 / 1000), axis=2)
 
         # no sqrt to account for the zscoring
+        print(regions)
         robs = np.concatenate([robs_[region] for region in regions]).T  # ** 0.5
         print(robs.shape)
 
@@ -148,10 +149,10 @@ def get_dataset_dm(
 
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
-    print(task_vars)
     tvs = OHE().fit_transform(trial_data[task_vars]).todense()
     # tvs = np.hstack((tvs, np.arange(203).reshape(-1,1)))
     tvs = tvs[idxs, :]
+    print(type(tvs))
 
     # tents
     from ndnt.utils.NDNutils import tent_basis_generate
