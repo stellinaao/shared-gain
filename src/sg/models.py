@@ -1,519 +1,244 @@
-"""
-models.py
+import numpy as np
+import matplotlib.pyplot as plt
 
-Datasets and base LVMs.
+from sklearn.preprocessing import OneHotEncoder as OHE
+from sklearn.linear_model import RidgeCV
+from sklearn.metrics import r2_score
 
-Author: John Liska, Declan Rowley
-Python Version: 3.11.14
-"""
-
-from copy import deepcopy
-
-import torch
-from torch import nn
-from torch.utils.data import Dataset
-
-from ndnt.metrics.mse_loss import MseLoss_datafilter
-from ndnt.modules import layers
+from sg.fitlvm_utils import get_data_model
+from core.data import load_sess, get_tavg_sc_cond
+from squiggs.neuron_viewer import NeuronViewer
+from squiggs.renderers import FitRenderer
+from utils.paths import FIGURES_DIR
 
 
-def to_device(x, device="cpu"):
-    if torch.is_tensor(x):
-        return x.to(device) if x.device != device else x
-    elif isinstance(x, dict):
-        return {k: to_device(v, device=device) for k, v in x.items()}
-    elif isinstance(x, list):
-        return [to_device(v, device=device) for v in x]
-    return x
-
-
-class GenericDataset(Dataset):
-    """
-    Generic Dataset can be used to create a quick pytorch dataset from a dictionary of tensors
-
-    Inputs:
-        Data: Dictionary of tensors. Each key will be a covariate for the dataset.
-    """
-
-    def __init__(self, data, device):
-        self.covariates = data
-        self.requested_covariates = list(self.covariates.keys())
-        self.device = device
-
-    def to(self, device):
-        self.covariates = to_device(self.covariates, device)
-        return self
-
-    def __len__(self):
-        return self.covariates["tv"].shape[0]
-
-    def __getitem__(self, index):
-        return {
-            cov: self.covariates[cov][index, ...] for cov in self.requested_covariates
-        }
-
-
-class Encoder(nn.Module):
-    """
-    Base class for all models.
-    """
-
-    def __init__(self):
-        super().__init__()
-
-        self.loss = MseLoss_datafilter()
-        self.relu = nn.ReLU()
-
-    def compute_reg_loss(self):
-        rloss = 0
-        if self.tv is not None:
-            rloss += self.tv.compute_reg_loss()
-
-        if hasattr(self, "readout_gain"):
-            rloss += self.readout_gain.compute_reg_loss()
-            rloss += 0.01 * (self.relu(-self.readout_gain.weight) ** 2).mean()
-
-        if hasattr(self, "latent_gain"):
-            rloss += self.latent_gain.compute_reg_loss()
-
-        if hasattr(self, "readout_offset"):
-            rloss += self.readout_offset.compute_reg_loss()
-            # rloss += .01*(self.relu(-self.readout_offset.weight)**2).mean() # penalty for any negative loadings
-
-        if hasattr(self, "latent_offset"):
-            rloss += self.latent_offset.compute_reg_loss()
-
-        if hasattr(self, "gain_mu"):
-            rloss += self.gain_mu.compute_reg_loss()
-            # rloss += .01*(self.gain_mu.weight.mean()**2) # penalize gain to be mean zero (really, 1 after offset)
-            rloss += (
-                0.01 * (self.gain_mu.weight.var(dim=0).mean() - 1.0) ** 2
-            )  # penalize variance to be 1
-
-        if hasattr(self, "offset_mu"):
-            rloss += self.offset_mu.compute_reg_loss()
-            rloss += 0.01 * (self.offset_mu.weight.mean() ** 2)  # mean 0
-            rloss += (
-                0.01 * (self.offset_mu.weight.var(dim=0).mean() - 1.0) ** 2
-            )  # penalize variance to be 1
-
-        if self.drift is not None:
-            rloss += self.drift.compute_reg_loss()
-
-        return rloss
-
-    def prepare_regularization(self, normalize_reg=False):
-        if self.tv is not None:
-            self.tv.reg.normalize = normalize_reg
-            self.tv.reg.build_reg_modules()
-
-        if hasattr(self, "gain_mu"):
-            self.gain_mu.reg.normalize = normalize_reg
-            self.gain_mu.reg.build_reg_modules()
-
-        if hasattr(self, "offset_mu"):
-            self.offset_mu.reg.normalize = normalize_reg
-            self.offset_mu.reg.build_reg_modules()
-
-        if hasattr(self, "readout_gain"):
-            self.readout_gain.reg.normalize = normalize_reg
-            self.readout_gain.reg.build_reg_modules()
-
-        if hasattr(self, "latent_gain"):
-            self.latent_gain.reg.normalize = normalize_reg
-            self.latent_gain.reg.build_reg_modules()
-
-        if hasattr(self, "readout_offset"):
-            self.readout_offset.reg.normalize = normalize_reg
-            self.readout_offset.reg.build_reg_modules()
-
-        if hasattr(self, "latent_offset"):
-            self.latent_offset.reg.normalize = normalize_reg
-            self.latent_offset.reg.build_reg_modules()
-
-        if self.drift is not None:
-            self.drift.reg.normalize = normalize_reg
-            self.drift.reg.build_reg_modules()
-
-    def training_step(self, batch, batch_idx=None):  # batch_indx not used, right?
-        y = batch["robs"][:, self.cids]
-
-        y_hat = self(batch)
-
-        if "dfs" in batch:
-            dfs = batch["dfs"][:, self.cids]
-            loss = self.loss(y_hat, y, dfs)
-        else:
-            loss = self.loss(y_hat, y)
-
-        regularizers = self.compute_reg_loss()
-
-        return {
-            "loss": loss + regularizers,
-            "train_loss": loss,
-            "reg_loss": regularizers,
-        }
-
-    def validation_step(self, batch, batch_idx=None, reduced=True):
-        y = batch["robs"][:, self.cids]
-
-        y_hat = self(batch)
-
-        if "dfs" in batch:
-            dfs = batch["dfs"][:, self.cids]
-            loss = self.loss(y_hat, y, dfs)
-        else:
-            loss = self.loss(y_hat, y)
-
-        return {"loss": loss, "val_loss": loss, "reg_loss": None}
-
-
-class SharedLatentGain(Encoder):
+class Encoder:
     def __init__(
         self,
-        tv_dims,
-        num_units=None,
-        num_trials=None,
-        cids=None,
-        num_latent=None,
-        num_latent_mult=1,
-        num_latent_addt=1,
-        num_tents=10,
-        include_tv=True,
-        include_gain=True,
-        include_offset=True,
-        tents_as_input=False,
-        output_nonlinearity="Identity",
-        tv_act_func="lin",
-        tv_reg_vals={"l2": 0.0},
-        gain_reg_vals={"l2": 0.0},
-        offset_reg_vals={"l2": 0.0},
-        reg_vals={"l2": 0.001},
-        readout_reg_vals={"l2": 0.001},
+        subj_id: str = None,
+        sess_id: str = None,
+        **kwargs,
     ):
-        super().__init__()
+        self.subj_id = subj_id
+        self.sess_id = sess_id
 
-        if cids is None:
-            self.cids = list(range(num_units))
-        else:
-            self.cids = cids
-            num_units = len(cids)
+        self.task_vars = kwargs.pop(
+            "task_vars",
+            [
+                "response",
+                "rewarded",
+                "block_side",
+                "response_prev",
+                "rewarded_prev",
+            ],
+        )
+        self.num_tents = kwargs.pop("num_tents", 5)
+        self.norm = kwargs.pop("norm", True)
 
-        if include_tv:
-            self.tv = layers.NDNLayer(
-                input_dims=[tv_dims, 1, 1, 1],
-                num_filters=num_units,
-                NLtype=tv_act_func,
-                pos_constraint=True,
-                norm_type=0,
-                bias=False,
-                reg_vals=tv_reg_vals,
+        self.tpre = kwargs.pop("tpre", 0.5)
+        self.tpost = kwargs.pop("tpost", 1)
+        self.alignment = kwargs.pop("alignment", "choice")
+
+        self.tpre_ref = kwargs.pop("tpre_ref", 0.5)
+        self.tpost_ref = kwargs.pop("tpost_ref", 1)
+        self.alignment_ref = kwargs.pop("alignment_ref", "choice")
+
+        self.binwidth_ms = kwargs.pop("binwidth_ms", 25)
+        self.thresh = kwargs.pop("thresh", 1)
+
+        if len(kwargs) > 0:
+            extra_kwargs = ", ".join('"%s' % k for k in list(kwargs.keys()))
+            raise ValueError("Extra arguments %s" % extra_kwargs)
+
+    def get_data(self):
+        (
+            self.spike_times,
+            self.trial_data,
+            self.psths,
+            self.session_data,
+            self.regions,
+        ) = load_sess(
+            subj_id=self.subj_id,
+            sess_id=self.sess_id,
+            tpre=self.tpre,
+            tpost=self.tpost,
+            alignment=self.alignment,
+            tpre_ref=self.tpre_ref,
+            tpost_ref=self.tpost_ref,
+            alignment_ref=self.alignment_ref,
+            binwidth_ms=self.binwidth_ms,
+            thresh=self.thresh,
+        )
+
+    def build_dm(self):
+        if not (hasattr(self, "psths")):
+            self.get_data()
+
+        (self.data_gd, _, _, _, _, self.num_trials, self.num_tv, self.num_units) = (
+            get_data_model(
+                self.psths,
+                self.trial_data,
+                strategy_filter=None,
+                regions=self.regions,
+                norm=self.norm,
+                num_tents=self.num_tents,
+                task_vars=self.task_vars,
+                sanity_check=0,
             )
-        else:
-            self.tv = None
+        )
 
-        self.bias = nn.Parameter(torch.zeros(num_units, dtype=torch.float32))
+        self.sample = self.data_gd[:]
 
-        self.output_nl = getattr(nn, output_nonlinearity)()
+        self.robs = self.sample["robs"].detach().cpu().numpy()
 
-        """ neuron drift """
-        if num_tents > 1 and not tents_as_input:
-            self.drift = layers.NDNLayer(
-                input_dims=[num_tents, 1, 1, 1],
-                num_filters=num_units,
-                NLtype="lin",
-                norm_type=0,
-                bias=False,
-                reg_vals=None,
+        self.tvs = np.asarray(self.sample["tv"].detach().cpu().numpy())
+        self.tents = self.sample["tents"].detach().cpu().numpy()
+        self.dm = np.hstack((self.tents, self.tvs))
+
+        ohe = OHE().fit(self.trial_data[self.task_vars])
+        self.tv_names = np.concatenate(
+            (
+                [f"tents_{i}" for i in range(self.tents.shape[1])],
+                ohe.get_feature_names_out(),
             )
-        else:
-            self.drift = None
+        )
 
-        """ LATENT VAR """
-        self.num_latent = num_latent
-        if self.num_latent is None:
-            self.num_latent_mult = num_latent_mult
-            self.num_latent_addt = num_latent_addt
-        else:
-            self.num_latent_mult = num_latent
-            self.num_latent_addt = num_latent
+    def fit_baseline(self):
+        if not (hasattr(self, "dm") and hasattr(self, "robs")):
+            self.build_dm()
 
-        """ neuron gain """
-        if include_gain:
-            self.gain_mu = layers.NDNLayer(
-                input_dims=[1, 1, 1, num_trials],
-                num_filters=self.num_latent_mult,
-                NLtype="lin",
-                bias=False,
-                reg_vals=gain_reg_vals,
+        self.baseline_model = RidgeCV(
+            alphas=np.logspace(-5, 5, 11, base=10),
+            alpha_per_target=True,
+        ).fit(self.tents, self.robs)
+
+    def baseline_predict(self):
+        if not hasattr(self, "robs_predict"):
+            self.robs_predict = {}
+        if not hasattr(self, "baseline_model"):
+            self.fit_baseline()
+
+        self.robs_predict["baseline"] = self.baseline_model.predict(self.tents)
+
+    def fit_encoder(self):
+        if not (hasattr(self, "dm") and hasattr(self, "robs")):
+            self.build_dm()
+
+        self.encoder = RidgeCV(
+            alphas=np.logspace(-5, 5, 11, base=10),
+            alpha_per_target=True,
+        ).fit(self.dm, self.robs)
+
+    def encoder_predict(self):
+        if not hasattr(self, "robs_predict"):
+            self.robs_predict = {}
+        if not hasattr(self, "encoder"):
+            self.fit_encoder()
+        self.robs_predict["encoder"] = self.encoder.predict(self.dm)
+
+    def get_r2(self, n_folds=10, p_train=0.8):
+        if not hasattr(self, "robs"):
+            self.build_dm()
+
+        self.scores_cv = {
+            "baseline": np.zeros((n_folds, self.num_units)),
+            "encoder": np.zeros((n_folds, self.num_units)),
+        }
+
+        for i in range(n_folds):
+            train_idxs = np.sort(
+                np.random.choice(
+                    self.num_trials, int(self.num_trials * p_train), replace=False
+                )
             )
-            self.gain_mu.weight_scale = 1.0
+            test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
-            self.logvar_g = nn.Parameter(torch.ones(1, dtype=torch.float32))
+            baseline_model = RidgeCV(
+                alphas=np.logspace(-5, 5, 11, base=10), alpha_per_target=True
+            ).fit(self.tents[train_idxs], self.robs[train_idxs])
 
-            self.readout_gain = layers.NDNLayer(
-                input_dims=[num_latent_mult, 1, 1, 1],
-                num_filters=num_units,
-                NLtype="lin",
-                norm_type=0,
-                bias=False,
-                reg_vals=readout_reg_vals,
-            )
-
-            self.readout_gain.weight_scale = 1.0
-
-        """ neuron offset """
-        if include_offset:
-            self.offset_mu = layers.NDNLayer(
-                input_dims=[1, 1, 1, num_trials],
-                num_filters=self.num_latent_addt,
-                NLtype="lin",
-                bias=False,
-                reg_vals=offset_reg_vals,
-            )
-            self.offset_mu.weight.data[:] = 0.0
-            self.offset_mu.weight_scale = 1.0
-
-            self.logvar_h = nn.Parameter(torch.ones(1, dtype=torch.float32))
-
-            self.readout_offset = layers.NDNLayer(
-                input_dims=[num_latent_addt, 1, 1, 1],
-                num_filters=num_units,
-                NLtype="lin",
-                norm_type=0,
-                bias=False,
-                reg_vals=readout_reg_vals,
-            )
-
-            self.readout_offset.weight_scale = 1.0
-
-    def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
-        """
-        Will a single z be enough to compute the expectation
-        for the loss??
-        :param mu: (Tensor) Mean of the latent Gaussian
-        :param logvar: (Tensor) Standard deviation of the latent Gaussian
-        :return:
-        """
-        if self.training:
-            # x = mu.new(*mu.shape).normal_()
-            x = torch.randn_like(mu)
-            std = torch.exp(0.5 * logvar)
-            x = x * std + mu
-        else:
-            x = mu
-        # eps = torch.randn_like(std)
-        return x
-
-    # the bigger gold nugget
-    def forward(self, input):
-        x = 0
-        if self.tv is not None:
-            x = x + self.tv(input["tv"])
-
-        if hasattr(self, "gain_mu"):
-            zg = self.reparameterize(
-                self.gain_mu.weight[input["indices"], :], self.logvar_g
+            self.scores_cv["baseline"][i] = r2_score(
+                self.robs[test_idxs],
+                baseline_model.predict(self.tents[test_idxs]),
+                multioutput="raw_values",
             )
 
-            g = self.readout_gain(zg)
-            x = x * self.relu(1 + g)
+            encoder = RidgeCV(
+                alphas=np.logspace(-5, 5, 11, base=10),
+                alpha_per_target=True,
+            ).fit(self.dm[train_idxs], self.robs[train_idxs])
 
-        if hasattr(self, "offset_mu"):
-            zh = self.reparameterize(
-                self.offset_mu.weight[input["indices"], :], self.logvar_h
+            self.scores_cv["encoder"][i] = r2_score(
+                self.robs[test_idxs],
+                encoder.predict(self.dm[test_idxs]),
+                multioutput="raw_values",
             )
 
-            h = self.readout_offset(zh)
-            x = x + h
+        self.scores = {
+            "baseline": np.median(self.scores_cv["baseline"], axis=0),
+            "encoder": np.median(self.scores_cv["encoder"], axis=0),
+        }
 
-        if self.drift is not None:
-            x = x + self.drift(input["tents"])
+    def verify(self):
+        _, axes = plt.subplots(ncols=3, nrows=1, figsize=(6, 2), tight_layout=True)
 
-        x = x + self.bias
-        x = self.output_nl(x)
+        # baseline vs encoder r2
+        self.plot_r2_comp(axes[0])
 
-        return x
+        # sctavg vs beta weight
+        self.plot_sctavg_weights(axes[1:3])
 
-    def need_proximal(self):
-        return False
+    def plot_r2_comp(self, ax=None):
+        if not hasattr(self, "scores"):
+            self.get_r2()
 
+        if ax is None:
+            _, ax = plt.figure(tight_layout=True)
 
-class SharedGain(Encoder):
-    def __init__(
-        self,
-        tv_dims,
-        num_units=None,
-        cids=None,
-        num_latent=None,
-        num_latent_mult=0,
-        num_latent_addt=0,
-        num_tents=10,
-        include_tv=True,
-        include_gain=True,
-        include_offset=True,
-        tents_as_input=False,
-        output_nonlinearity="Identity",
-        tv_act_func="lin",
-        tv_reg_vals={"l2": 0.0},
-        reg_vals={"l2": 0.001},
-        latent_noise=True,
-    ):
-        super().__init__()
+        ax.scatter(self.scores["baseline"], self.scores["encoder"], s=0.5, alpha=0.5)
+        ax.plot([-0.5, 1], [-0.5, 1], color="#666666", linestyle="--", linewidth=0.5)
+        ax.axhline(y=0, color="k", linewidth=0.5)
+        ax.axvline(x=0, color="k", linewidth=0.5)
 
-        if cids is None:
-            self.cids = list(range(num_units))
-        else:
-            self.cids = cids
-            num_units = len(cids)
+        ax.set_xlabel(r"$r^2$, baseline")
+        ax.set_ylabel(r"$r^2$, encoder")
 
-        self.tv_dims = tv_dims
-        self.name = "GAMAutoencoder"
+    def plot_sctavg_weights(self, axes, cond="response"):
+        if cond not in ["response"]:
+            raise NotImplementedError(f"cond={cond} is not currently supported.")
 
-        if include_tv:
-            self.tv = layers.NDNLayer(
-                input_dims=[tv_dims, 1, 1, 1],
-                num_filters=num_units,  # sets output_dims as one of its potentially many jobs
-                pos_constraint=True,
-                NLtype=tv_act_func,
-                norm_type=0,
-                bias=False,
-                reg_vals=tv_reg_vals,
+        if axes is None:
+            fig, axes = plt.subplots(
+                ncols=2, nrows=1, figsize=(4, 2), tight_layout=True
             )
-        else:
-            self.tv = None
 
-        NCTot = deepcopy(num_units)
+        if not hasattr(self, "encoder"):
+            self.fit_encoder()
 
-        self.bias = nn.Parameter(torch.zeros(num_units, dtype=torch.float32))
-        self.output_nl = getattr(nn, output_nonlinearity)()
+        sc_tavg = get_tavg_sc_cond(self.robs, self.trial_data, cond=cond)
 
-        """ neuron drift """
-        if num_tents > 1 and not tents_as_input:
-            self.drift = layers.NDNLayer(
-                input_dims=[num_tents, 1, 1, 1],
-                num_filters=num_units,
-                NLtype="lin",
-                norm_type=0,
-                bias=False,
-                reg_vals=reg_vals,
+        if cond == "response":
+            axes[0].scatter(
+                sc_tavg["right"], self.encoder.coef_[:, 5], s=0.5, alpha=0.5
             )
-        else:
-            self.drift = None
+            axes[0].set_xlabel("avg norm sc, right")
+            axes[0].set_ylabel("beta weight, right")
 
-        self.tents_as_input = tents_as_input
-        if tents_as_input:
-            latent_input_dims = num_tents
-        else:
-            latent_input_dims = NCTot
+            axes[1].scatter(sc_tavg["left"], self.encoder.coef_[:, 6], s=0.5, alpha=0.5)
+            axes[1].set_xlabel("avg norm sc, left")
+            axes[1].set_ylabel("beta weight, left")
 
-        """ LATENT VAR """
-        self.num_latent = num_latent
-        if self.num_latent is None:
-            self.num_latent_mult = num_latent_mult
-            self.num_latent_addt = num_latent_addt
-        else:
-            self.num_latent_mult = num_latent
-            self.num_latent_addt = num_latent
-        """ latent variable gain"""
-        if include_gain:
-            self.latent_gain = layers.NDNLayer(
-                input_dims=[latent_input_dims, 1, 1, 1],
-                num_filters=self.num_latent_mult,
-                NLtype="lin",
-                norm_type=1,
-                bias=False,
-                reg_vals=reg_vals,
-            )
-            self.latent_gain.weight_scale = 1.0
-
-            self.readout_gain = layers.NDNLayer(
-                input_dims=[self.num_latent_mult, 1, 1, 1],
-                num_filters=num_units,
-                NLtype="lin",
-                norm_type=0,
-                bias=False,
-                reg_vals=reg_vals,
-            )
-            self.readout_gain.weight_scale = 1.0
-
-            if latent_noise:
-                self.logvar_g = nn.Parameter(
-                    torch.ones(self.num_latent_mult, dtype=torch.float32)
+    def view_fits(self, model="encoder"):
+        if not hasattr(self, "robs_predict") or model not in self.robs_predict.keys():
+            if model == "encoder":
+                self.encoder_predict()
+            elif model == "baseline":
+                self.baseline_predict()
+            else:
+                raise ValueError(
+                    f"valid arguments for model are 'encoder' and 'baseline,' not {model}"
                 )
 
-        """ latent variable offset"""
-        if include_offset:
-            self.latent_offset = layers.NDNLayer(
-                input_dims=[latent_input_dims, 1, 1, 1],
-                num_filters=self.num_latent_addt,
-                NLtype="lin",
-                norm_type=1,
-                bias=False,
-                reg_vals=reg_vals,
-            )
-            self.latent_offset.weight_scale = 1.0
+        r = FitRenderer(y=self.robs, yhat=self.robs_predict[model], mode="lite")
 
-            self.readout_offset = layers.NDNLayer(
-                input_dims=[self.num_latent_addt, 1, 1, 1],
-                num_filters=num_units,
-                NLtype="lin",
-                norm_type=0,
-                bias=False,
-                reg_vals=reg_vals,
-            )
-            self.readout_offset.weight_scale = 1.0
-
-            if latent_noise:
-                self.logvar_g = nn.Parameter(
-                    torch.ones(self.num_latent_addt, dtype=torch.float32)
-                )
-
-    # the gold nugget
-    def forward(self, input):
-        x = 0
-        if self.tv is not None:
-            x = x + self.tv(input["tv"])
-
-        if self.tents_as_input:
-            robs = input["tents"]
-        else:
-            robs = input["robs"][:, self.cids]
-            if "latentdfs" in input:
-                robs = robs * input["latentdfs"][:, self.cids]
-
-        if hasattr(self, "latent_gain"):
-            zg = self.latent_gain(
-                robs
-            )  # TODO: understand robs when tents_as_inputs is T/F
-            if hasattr(self, "logvar_g") and self.training:
-                std = torch.exp(0.5 * self.logvar_g)
-                eps = torch.randn_like(zg)
-                zg = eps * std + zg  # adding noise
-
-            g = self.readout_gain(zg)
-            x = x * self.relu(
-                1 + g
-            )  # relu in the gain op to multiply by positives only
-
-        if hasattr(self, "latent_offset"):
-            zh = self.latent_offset(robs)
-            if hasattr(self, "logvar_h") and self.training:
-                std = torch.exp(0.5 * self.logvar_h)
-                eps = torch.randn_like(zh)
-                zh = eps * std + zh
-            h = self.readout_offset(zh)
-            x = (
-                x + h
-            )  # but no relu in the addt op because we can subtract as well as add
-
-        if self.drift is not None:
-            x = x + self.drift(input["tents"])
-
-        x = x + self.bias
-        x = self.output_nl(x)
-
-        return x
-
-    def need_proximal(self):
-        return False
+        _ = NeuronViewer(num_units=self.num_units, render_func=r, fig_dir=FIGURES_DIR)

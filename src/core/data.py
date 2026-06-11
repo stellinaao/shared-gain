@@ -693,6 +693,20 @@ def get_choice_ts(trial_data, mode="both"):
     return choice_ts
 
 
+# ROBS
+def get_tavg_sc_cond(robs, trial_data, cond):
+    if cond == "response":
+        left_mask = trial_data.response == 1
+        right_mask = trial_data.response == -1
+
+        sc_tavg = {
+            "left": robs[left_mask].mean(axis=0),
+            "right": robs[right_mask].mean(axis=0),
+        }
+
+    return sc_tavg
+
+
 # BALANCING
 def balance_strategy(trial_data, mb_idx, mf_idx):
     """

@@ -14,7 +14,7 @@ from copy import deepcopy
 
 
 # from archive import spks_utils
-from sg import models
+from sg import models_liska
 
 sys.path.insert(0, "/mnt/Data/Repos/")
 sys.path.append("../")
@@ -31,7 +31,7 @@ from scipy.io import loadmat
 from sklearn.preprocessing import OneHotEncoder as OHE
 from torch.utils.data import DataLoader, Subset
 
-from sg.models import GenericDataset, SharedLatentGain
+from sg.models_liska import GenericDataset, SharedLatentGain
 
 """
 Model fitting procedure for the shared gain / offset model
@@ -92,6 +92,7 @@ def get_dataset_dm(
         robs_["DLS"] = np.sum(psths["DLS"] * (25 / 1000), axis=2)
 
         # no sqrt to account for the zscoring
+        print(regions)
         robs = np.concatenate([robs_[region] for region in regions]).T  # ** 0.5
         print(robs.shape)
 
@@ -148,7 +149,6 @@ def get_dataset_dm(
 
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
-    print(task_vars)
     tvs = OHE().fit_transform(trial_data[task_vars]).todense()
     # tvs = np.hstack((tvs, np.arange(203).reshape(-1,1)))
     tvs = tvs[idxs, :]
@@ -171,7 +171,7 @@ def get_dataset_dm(
         ),  # indices (trial indices)
     }
 
-    data_gd = models.GenericDataset(data_dict, device=device)
+    data_gd = models_liska.GenericDataset(data_dict, device=device)
 
     return data_gd, data_dict
 
@@ -221,7 +221,7 @@ def check_stable_lowd(data_gd, Mtrain, Mtest, num_units, rank=1, verbosity=0):
 # Step 1: Fit baseline model
 # > Baseline model: has no task vars, can capture slow drift in firing rate for each unit using b0-splines
 def fit_baseline(train_dl, val_dl, num_tv, num_units, ntents=5):
-    mod_baseline = models.SharedGain(
+    mod_baseline = models_liska.SharedGain(
         num_tv,
         num_units=num_units,
         cids=None,
@@ -249,7 +249,7 @@ def fit_baseline(train_dl, val_dl, num_tv, num_units, ntents=5):
 # Step 2: Fit model with task vars and slow drift
 # > Task vars & slow drift: Used to identify units driven by task vars
 def fit_tvs(train_dl, val_dl, num_tv, num_units, mod_baseline, ntents=5):
-    mod_tv = models.SharedGain(
+    mod_tv = models_liska.SharedGain(
         tv_dims=num_tv,
         num_units=num_units,
         cids=None,
@@ -351,7 +351,7 @@ def fit_ae_gain(
     num_latents=1,
     max_iter=10,
 ):
-    mod_ae_gain = models.SharedGain(
+    mod_ae_gain = models_liska.SharedGain(
         num_tv,
         num_units=num_units,
         cids=cids,
@@ -406,7 +406,7 @@ def fit_ae_offset(
     num_latents=1,
     max_iter=10,
 ):
-    mod_ae_offset = models.SharedGain(
+    mod_ae_offset = models_liska.SharedGain(
         num_tv,
         num_units=num_units,
         cids=cids,
@@ -465,7 +465,7 @@ def fit_ae_affine(
     num_latents=1,
     max_iter=10,
 ):
-    mod_ae_affine = models.SharedGain(
+    mod_ae_affine = models_liska.SharedGain(
         num_tv,
         num_units=num_units,
         cids=cids,
