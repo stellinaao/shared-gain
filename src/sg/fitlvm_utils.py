@@ -152,7 +152,6 @@ def get_dataset_dm(
     tvs = OHE().fit_transform(trial_data[task_vars]).todense()
     # tvs = np.hstack((tvs, np.arange(203).reshape(-1,1)))
     tvs = tvs[idxs, :]
-    print(type(tvs))
 
     # tents
     from ndnt.utils.NDNutils import tent_basis_generate
