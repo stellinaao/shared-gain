@@ -703,6 +703,14 @@ def get_tavg_sc_cond(robs, trial_data, cond):
             "left": robs[left_mask].mean(axis=0),
             "right": robs[right_mask].mean(axis=0),
         }
+    elif cond == "rewarded":
+        corr_mask = trial_data.rewarded == 1
+        incorr_mask = trial_data.rewarded == 0
+
+        sc_tavg = {
+            "corr": robs[corr_mask].mean(axis=0),
+            "incorr": robs[incorr_mask].mean(axis=0),
+        }
 
     return sc_tavg
 

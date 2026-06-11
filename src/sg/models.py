@@ -179,14 +179,15 @@ class Encoder:
             "encoder": np.median(self.scores_cv["encoder"], axis=0),
         }
 
-    def verify(self):
-        _, axes = plt.subplots(ncols=3, nrows=1, figsize=(6, 2), tight_layout=True)
+    def verify(self, cond="response"):
+        _, axes = plt.subplots(ncols=5, nrows=1, figsize=(7.5, 1.5), tight_layout=True)
 
         # baseline vs encoder r2
         self.plot_r2_comp(axes[0])
 
         # sctavg vs beta weight
-        self.plot_sctavg_weights(axes[1:3])
+        self.plot_sctavg_weights(axes[1:3], cond="response")
+        self.plot_sctavg_weights(axes[3:5], cond="rewarded")
 
     def plot_r2_comp(self, ax=None):
         if not hasattr(self, "scores"):
@@ -204,7 +205,7 @@ class Encoder:
         ax.set_ylabel(r"$r^2$, encoder")
 
     def plot_sctavg_weights(self, axes, cond="response"):
-        if cond not in ["response"]:
+        if cond not in ["response", "rewarded"]:
             raise NotImplementedError(f"cond={cond} is not currently supported.")
 
         if axes is None:
@@ -218,15 +219,21 @@ class Encoder:
         sc_tavg = get_tavg_sc_cond(self.robs, self.trial_data, cond=cond)
 
         if cond == "response":
-            axes[0].scatter(
-                sc_tavg["right"], self.encoder.coef_[:, 5], s=0.5, alpha=0.5
-            )
-            axes[0].set_xlabel("avg norm sc, right")
-            axes[0].set_ylabel("beta weight, right")
+            keys = ["left", "right"]
+            idxs = [6, 5]
+        elif cond == "rewarded":
+            keys = ["corr", "incorr"]
+            idxs = [8, 7]
 
-            axes[1].scatter(sc_tavg["left"], self.encoder.coef_[:, 6], s=0.5, alpha=0.5)
-            axes[1].set_xlabel("avg norm sc, left")
-            axes[1].set_ylabel("beta weight, left")
+        for i in range(2):
+            axes[i].scatter(
+                sc_tavg[keys[i]], self.encoder.coef_[:, idxs[i]], s=0.5, alpha=0.5
+            )
+            axes[i].axhline(y=0, color="k", linewidth=0.5)
+            axes[i].axvline(x=0, color="k", linewidth=0.5)
+
+            axes[i].set_xlabel(f"avg norm sc, {keys[i]}")
+            axes[i].set_ylabel(f"beta weight, {keys[i]}")
 
     def view_fits(self, model="encoder"):
         if not hasattr(self, "robs_predict") or model not in self.robs_predict.keys():
