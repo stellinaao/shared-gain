@@ -242,3 +242,157 @@ class Encoder:
         r = FitRenderer(y=self.robs, yhat=self.robs_predict[model], mode="lite")
 
         _ = NeuronViewer(num_units=self.num_units, render_func=r, fig_dir=FIGURES_DIR)
+
+
+class ShuffledEncoder:
+    def __init__(
+        self,
+        subj_id,
+        sess_id,
+        **kwargs,
+    ):
+        self.subj_id = subj_id
+        self.sess_id = sess_id
+
+        self.kwargs = kwargs
+
+        self.encoder_full = Encoder(subj_id, sess_id, **kwargs)
+        self.encoder_full.get_r2()
+
+        self.task_vars = self.encoder_full.task_vars
+
+    def get_cvr2(self, pivot, n_iters=3):
+        # TODO: rerun the shuffle several times
+
+        if pivot not in self.task_vars:
+            raise ValueError(f"pivot {pivot} is not in {self.task_vars}")
+
+        if not hasattr(self, "cvr2"):
+            self.cvr2_unit = {}
+            self.cvr2 = {}
+
+        if not hasattr(self, "encoders_cvr2"):
+            self.encoders_cvr2 = {}
+
+        self.cvr2_unit[pivot] = np.zeros((n_iters, self.encoder_full.num_units))
+        self.cvr2[pivot] = np.zeros((n_iters,))
+
+        for i in range(n_iters):
+            encoder_shuffle = Encoder(self.subj_id, self.sess_id, **self.kwargs)
+            encoder_shuffle.get_data()
+
+            # shuffle all taskvars besides the pivot
+            for tv in encoder_shuffle.task_vars:
+                if not tv == pivot:
+                    encoder_shuffle.trial_data[tv] = (
+                        encoder_shuffle.trial_data[tv]
+                        .sample(frac=1, random_state=i)
+                        .to_numpy()
+                    )
+
+            encoder_shuffle.get_r2()
+
+            # ...
+            self.cvr2_unit[pivot][i] = encoder_shuffle.scores["encoder"]
+            self.cvr2[pivot][i] = self.cvr2_unit[pivot][i].mean()
+
+        self.encoders_cvr2[pivot] = encoder_shuffle
+
+    def get_dr2(self, pivot, n_iters=3):
+        if pivot not in self.task_vars:
+            raise ValueError(f"pivot {pivot} is not in {self.task_vars}")
+
+        if not hasattr(self, "dr2"):
+            self.dr2_unit = {}
+            self.dr2 = {}
+
+        if not hasattr(self, "encoders_dr2"):
+            self.encoders_dr2 = {}
+
+        self.dr2_unit[pivot] = np.zeros((n_iters, self.encoder_full.num_units))
+        self.dr2[pivot] = np.zeros((n_iters,))
+
+        for i in range(n_iters):
+            encoder_shuffle = Encoder(self.subj_id, self.sess_id, **self.kwargs)
+            encoder_shuffle.get_data()
+
+            # shuffle the pivot
+            encoder_shuffle.trial_data[pivot] = (
+                encoder_shuffle.trial_data[pivot]
+                .sample(frac=1, random_state=i)
+                .to_numpy()
+            )
+
+            encoder_shuffle.get_r2()
+
+            # ...
+            self.dr2_unit[pivot][i] = (
+                self.encoder_full.scores["encoder"] - encoder_shuffle.scores["encoder"]
+            )
+            self.dr2[pivot][i] = self.dr2_unit[pivot][i].mean()
+
+        self.encoders_dr2[pivot] = encoder_shuffle
+
+    def get_cvr2_all(self):
+        pivots = (
+            self.task_vars
+            if not hasattr(self, "cvr2")
+            else np.setdiff1d(self.task_vars, list(self.cvr2.keys()))
+        )
+        for pivot in pivots:
+            self.get_cvr2(pivot)
+
+    def get_dr2_all(self):
+        pivots = (
+            self.task_vars
+            if not hasattr(self, "dr2")
+            else np.setdiff1d(self.task_vars, list(self.dr2.keys()))
+        )
+        for pivot in pivots:
+            self.get_dr2(pivot)
+
+    def plot_cvr2(self):
+        if (
+            not hasattr(self, "cvr2")
+            or len(np.setdiff1d(self.task_vars, list(self.cvr2.keys()))) > 0
+        ):
+            self.get_cvr2_all()
+
+        cvr2_mean = [self.cvr2[pivot].mean() for pivot in self.task_vars]
+        cvr2_std = [self.cvr2[pivot].std() for pivot in self.task_vars]
+
+        fig, ax = plt.subplots(tight_layout=True)
+        ax.bar(self.task_vars, cvr2_mean, width=0.5)
+        ax.errorbar(
+            x=self.task_vars,
+            y=cvr2_mean,
+            yerr=cvr2_std,
+            color="k",
+            fmt=".",
+            capsize=2,
+        )
+        ax.set_ylabel(r"cv $r^2$")
+        ax.tick_params(axis="x", labelrotation=45)
+
+    def plot_dr2(self):
+        if (
+            not hasattr(self, "dr2")
+            or len(np.setdiff1d(self.task_vars, list(self.dr2.keys()))) > 0
+        ):
+            self.get_dr2_all()
+
+        dr2_mean = [self.dr2[pivot].mean() for pivot in self.task_vars]
+        dr2_std = [self.dr2[pivot].std() for pivot in self.task_vars]
+
+        fig, ax = plt.subplots(tight_layout=True)
+        ax.bar(self.task_vars, dr2_mean, width=0.5)
+        ax.errorbar(
+            x=self.task_vars,
+            y=dr2_mean,
+            yerr=dr2_std,
+            color="k",
+            fmt=".",
+            capsize=2,
+        )
+        ax.set_ylabel(r"$\Delta r^2$")
+        ax.tick_params(axis="x", labelrotation=45)
