@@ -23,7 +23,7 @@ from sg.fitlvm_utils import (
     fit_model,
     get_data_model,
 )
-from sg.models import SharedGain
+from sg.models_liska import SharedGain
 
 """
 TODO
