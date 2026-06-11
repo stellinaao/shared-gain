@@ -16,7 +16,7 @@ import pandas as pd
 import torch
 from scipy.stats import rankdata
 
-from sg import models
+from sg import models_liska
 
 
 def save_var(var_name, tag, data):
@@ -89,8 +89,8 @@ def dict_equiv(d1: Dict[str, int], d2: Dict[str, int], verbose: bool = False):
             if not torch.equal(v1, v2):
                 return False
         elif (
-            v1 is models.SharedGain
-            or v1 is models.SharedLatentGain
+            v1 is models_liska.SharedGain
+            or v1 is models_liska.SharedLatentGain
             or k.startswith("cvpca")
         ):
             pass
