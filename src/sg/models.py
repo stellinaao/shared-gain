@@ -70,6 +70,14 @@ class Encoder:
             thresh=self.thresh,
         )
 
+        if (
+            self.regions[0] == "DMS"
+            and self.regions[1] == "DLS"
+            and len(self.regions) == 2
+        ):
+            print("hello")
+            self.regions = ["DLS", "DMS"]
+
     def build_dm(self):
         if not (hasattr(self, "psths")):
             self.get_data()
