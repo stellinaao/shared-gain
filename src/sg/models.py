@@ -121,13 +121,23 @@ class Encoder:
             alpha_per_target=True,
         ).fit(self.tents, self.robs)
 
-    def baseline_predict(self):
+    def baseline_predict(self, pseudo=False):
         if not hasattr(self, "robs_predict"):
             self.robs_predict = {}
-        if not hasattr(self, "baseline_model"):
-            self.fit_baseline()
 
-        self.robs_predict["baseline"] = self.baseline_model.predict(self.tents)
+        if not pseudo:
+            if not hasattr(self, "baseline_model"):
+                self.fit_baseline()
+
+            self.robs_predict["baseline"] = self.baseline_model.predict(self.tents)
+        else:
+            if not hasattr(self, "encoder"):
+                self.fit_encoder()
+
+            dm_tv_ko = deepcopy(self.dm)
+            dm_tv_ko[:, 5:] = 0
+
+            self.robs_predict["ps_baseline"] = self.encoder.predict(dm_tv_ko)
 
     def fit_encoder(self):
         if not (hasattr(self, "dm") and hasattr(self, "robs")):
@@ -234,15 +244,19 @@ class Encoder:
             "encoder": np.median(self.scores_cv["encoder"], axis=0),
         }
 
-    def verify(self, cond="response"):
+    def verify(self, cond="response", subtract_baseline=True):
         _, axes = plt.subplots(ncols=5, nrows=1, figsize=(7.5, 1.5), tight_layout=True)
 
         # baseline vs encoder r2
         self.plot_r2_comp(axes[0])
 
         # sctavg vs beta weight
-        self.plot_sctavg_weights(axes[1:3], cond="response")
-        self.plot_sctavg_weights(axes[3:5], cond="rewarded")
+        self.plot_sctavg_weights(
+            axes[1:3], cond="response", subtract_baseline=subtract_baseline
+        )
+        self.plot_sctavg_weights(
+            axes[3:5], cond="rewarded", subtract_baseline=subtract_baseline
+        )
 
     def plot_r2_comp(self, ax=None):
         if not hasattr(self, "scores"):
@@ -259,7 +273,7 @@ class Encoder:
         ax.set_xlabel(r"$r^2$, baseline")
         ax.set_ylabel(r"$r^2$, encoder")
 
-    def plot_sctavg_weights(self, axes, cond="response"):
+    def plot_sctavg_weights(self, axes, cond="response", subtract_baseline=True):
         if cond not in ["response", "rewarded"]:
             raise NotImplementedError(f"cond={cond} is not currently supported.")
 
@@ -271,8 +285,23 @@ class Encoder:
         if not hasattr(self, "encoder"):
             self.fit_encoder()
 
-        sc_tavg = get_tavg_sc_cond(self.robs, self.trial_data, cond=cond)
+        if subtract_baseline:
+            if (
+                not hasattr(self, "robs_predict")
+                or "ps_baseline" not in self.robs_predict.keys()
+            ):
+                self.baseline_predict(pseudo=True)
+            robs_baseline = self.robs_predict["ps_baseline"]
+        else:
+            robs_baseline = None
 
+        sc_tavg = get_tavg_sc_cond(
+            self.robs,
+            self.trial_data,
+            cond=cond,
+            robs_drift=robs_baseline,
+            subtract_drift=subtract_baseline,
+        )
         if cond == "response":
             keys = ["left", "right"]
             idxs = [6, 5]
