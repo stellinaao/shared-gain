@@ -2,12 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
 
-from sklearn.preprocessing import OneHotEncoder as OHE
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import r2_score
 
-from sg.fitlvm_utils import get_dataset_dm
-from core.data import load_sess, get_tavg_sc_cond
+from core.data import load_sess, get_encoder_io, get_tavg_sc_cond
 from squiggs.neuron_viewer import NeuronViewer
 from squiggs.renderers import FitRenderer
 from utils.paths import FIGURES_DIR
@@ -23,8 +21,8 @@ class Encoder:
         self.subj_id = subj_id
         self.sess_id = sess_id
 
-        self.task_vars = kwargs.pop(
-            "task_vars",
+        self.tv_keys = kwargs.pop(
+            "tv_keys",
             [
                 "response",
                 "rewarded",
@@ -83,35 +81,26 @@ class Encoder:
         if not (hasattr(self, "psths")):
             self.get_data()
 
-        data_gd, _ = get_dataset_dm(
+        (
+            self.tents,
+            self.tvs,
+            self.dm,
+            self.robs,
+            self.dm_names,
+            self.reg_keys,
+        ) = get_encoder_io(
             self.psths,
             self.trial_data,
+            self.regions,
             strategy_filter=None,
-            regions=self.regions,
             norm=self.norm,
             num_tents=self.num_tents,
-            task_vars=self.task_vars,
+            tv_keys=self.tv_keys,
             binwidth_ms=25,
-            sanity_check=0,
         )
 
-        self.sample = data_gd[:]
-        self.num_trials, self.num_tv = self.sample["tv"].shape
-        self.num_units = self.sample["robs"].shape[1]
-
-        self.robs = self.sample["robs"].detach().cpu().numpy()
-
-        self.tvs = np.asarray(self.sample["tv"].detach().cpu().numpy())
-        self.tents = self.sample["tents"].detach().cpu().numpy()
-        self.dm = np.hstack((self.tents, self.tvs))
-
-        ohe = OHE().fit(self.trial_data[self.task_vars])
-        self.tv_names = np.concatenate(
-            (
-                [f"tents_{i}" for i in range(self.tents.shape[1])],
-                ohe.get_feature_names_out(),
-            )
-        )
+        self.num_trials, self.num_tv = self.tvs.shape
+        self.num_units = self.robs.shape[1]
 
     def fit_baseline(self):
         if not (hasattr(self, "dm") and hasattr(self, "robs")):

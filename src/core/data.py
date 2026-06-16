@@ -18,8 +18,11 @@ import re
 import os
 import shutup
 
+from sklearn.preprocessing import OneHotEncoder as OHE
+
 from spks.utils import get_cluster_spike_times
 from damn.alignment import compute_spike_count
+from ndnt.utils.NDNutils import tent_basis_generate
 from utils.paths import DATA_DIR
 
 from joblib import Parallel, delayed
@@ -666,6 +669,73 @@ def get_tavg_sc_cond(robs, trial_data, cond, robs_drift=None, subtract_drift=Fal
             "incorr": robs[incorr_mask].mean(axis=0),
         }
     return sc_tavg
+
+
+def get_encoder_io(
+    psths,
+    trial_data,
+    regions,
+    strategy_filter=None,
+    norm=True,
+    num_tents=5,
+    tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
+    binwidth_ms=25,
+):
+    if strategy_filter == "mb":
+        idxs = np.where(trial_data["strategy"] == 1)[0]
+    elif strategy_filter == "mf":
+        idxs = np.where(trial_data["strategy"] == -1)[0]
+    elif strategy_filter is None:
+        idxs = np.arange(trial_data.shape[0])
+    else:
+        raise ValueError(
+            f"valid values for strategy_filter are 'mb', 'mf', and None, not {strategy_filter}"
+        )
+
+    # robs
+    robs = (
+        np.concatenate(
+            [np.sum(psths[region] * (binwidth_ms / 1000), axis=2) for region in regions]
+        ).T
+        ** 0.5
+    )  # robs of everything, no idx subsamp atm
+
+    if norm:
+        s = np.std(robs, axis=0) + 1e-10
+        mu = np.mean(robs, axis=0)
+        robs = (robs - mu) / s
+
+    num_trials_full = robs.shape[0]
+    robs = robs[idxs, :]
+    num_trials_subsamp = robs.shape[0]
+
+    # reg keys
+    reg_keys = np.concatenate(
+        [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
+    )
+
+    # tvs
+    ohe = OHE().fit(trial_data[tv_keys])
+
+    tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
+    tvs = tvs[idxs, :]
+
+    # tents
+    # uniform splines at same frequency whether subsampled or not
+    num_tents_subsamp = int(num_tents * (num_trials_subsamp / num_trials_full))
+    xs = np.linspace(0, num_trials_subsamp - 1, num_tents_subsamp)
+    tents = tent_basis_generate(xs)
+
+    # design matrix
+    dm = np.hstack((tents, tvs))
+    dm_names = np.concatenate(
+        (
+            [f"tents_{i}" for i in range(tents.shape[1])],
+            ohe.get_feature_names_out(),
+        )
+    )
+
+    return (tents, tvs, dm, robs, dm_names, reg_keys)
 
 
 # BALANCING
