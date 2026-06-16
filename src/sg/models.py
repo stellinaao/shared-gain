@@ -87,7 +87,7 @@ class Encoder:
             self.dm,
             self.robs,
             self.dm_names,
-            self.reg_keys,
+            self.reg_idxs,
         ) = get_encoder_io(
             self.psths,
             self.trial_data,

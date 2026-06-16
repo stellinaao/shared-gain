@@ -710,9 +710,13 @@ def get_encoder_io(
     num_trials_subsamp = robs.shape[0]
 
     # reg keys
-    reg_keys = np.concatenate(
+    reg_mask = np.concatenate(
         [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
     )
+    reg_idxs = {reg: np.where(reg_mask == i)[0] for i, reg in enumerate(regions)}
+    # reg_keys = np.concatenate(
+    #     [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
+    # )
 
     # tvs
     ohe = OHE().fit(trial_data[tv_keys])
@@ -735,7 +739,7 @@ def get_encoder_io(
         )
     )
 
-    return (tents, tvs, dm, robs, dm_names, reg_keys)
+    return (tents, tvs, dm, robs, dm_names, reg_idxs)
 
 
 # BALANCING
