@@ -36,11 +36,11 @@ class Encoder:
                 "rewarded_prev",
             ],
         )
-        self.num_tents = kwargs.pop("num_tents", 5)
+        self.num_tents = kwargs.pop("num_tents", 12)
         self.norm = kwargs.pop("norm", True)
         self.separate_drift = kwargs.pop("separate_drift", False)
         self.strategy_filter = kwargs.pop("strategy_filter", None)
-        self.idxs = kwargs.pop("idxs", None)
+        self.idxs = kwargs.pop("idxs", None)  # takes precedent over strategy_filter
 
         self.tpre = kwargs.pop("tpre", 0.5)
         self.tpost = kwargs.pop("tpost", 1)
@@ -88,15 +88,20 @@ class Encoder:
             self.subsamp_ratio = len(self.idxs) / self.trial_data.shape[0]
             self.num_tents = int(self.num_tents * self.subsamp_ratio)
 
-            self.trial_data = self.trial_data[self.idxs]
-            self.psths = {self.psths[reg][:, self.idxs] for reg in self.psths.keys()}
+            if self.num_tents < 3:
+                raise ValueError(
+                    f"too few trials or tents, resulting in {self.num_tents} tents for the subsampled encoder"
+                )
+
+            self.trial_data = self.trial_data.iloc[self.idxs]
+            self.psths = {reg: self.psths[reg][:, self.idxs, :] for reg in self.regions}
 
     def build_dm(self):
         if not (hasattr(self, "psths")):
             self.get_data()
 
         (
-            (self.tents, self.num_tents),
+            self.tents,
             self.tvs,
             self.dm,
             self.robs,
@@ -106,7 +111,6 @@ class Encoder:
             self.psths,
             self.trial_data,
             self.regions,
-            strategy_filter=self.strategy_filter,
             norm=self.norm,
             num_tents=self.num_tents,
             tv_keys=self.tv_keys,

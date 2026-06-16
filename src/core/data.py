@@ -777,7 +777,7 @@ def get_encoder_io(
     trial_data,
     regions,
     norm=True,
-    num_tents=5,
+    num_tents=10,
     tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
     binwidth_ms=25,
 ):
