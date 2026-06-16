@@ -167,11 +167,14 @@ def load_sess(
             do_rem_zstd=False,
             reward_only=False,
             prev_filter=False,
-            get_strategy=False,
             mode=mode,
         )
 
-        if alignment_ref is not None:
+        if alignment_ref is not None and (
+            not (alignment == alignment_ref)
+            or not (tpre == tpre_ref)
+            or not (tpost == tpost_ref)
+        ):
             psths_ref, _ = get_psths(
                 spike_times,
                 trial_data,
@@ -185,7 +188,6 @@ def load_sess(
                 do_rem_zstd=False,  # so that there are no indexing issues later
                 reward_only=False,
                 prev_filter=False,
-                get_strategy=False,
                 mode=mode,
             )
 
@@ -258,7 +260,6 @@ def load_sess(
             trial_start_pre=trial_start_pre,
             reward_only=False,
             prev_filter=False,
-            get_strategy=False,
             mode=mode,
         )
         # update spike_times with the removed units
