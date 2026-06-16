@@ -22,6 +22,8 @@ from spks.utils import get_cluster_spike_times
 from damn.alignment import compute_spike_count
 from utils.paths import DATA_DIR
 
+from joblib import Parallel, delayed
+
 shutup.please()
 
 # CONSTANTS
@@ -124,7 +126,8 @@ def load_sess(
 
     if mode == "new":
         fpath = DATA_DIR / subj_id / sess_id
-        fpath.exists()
+        if not fpath.exists():
+            raise FileNotFoundError
 
         # load from pkl
         neural_data = pd.read_pickle(fpath / "neural_data.pkl")
@@ -185,6 +188,7 @@ def load_sess(
                 get_strategy=False,
                 mode=mode,
             )
+
         else:
             psths_ref = None
 
@@ -522,12 +526,26 @@ def get_psths(
 
     for region in regions:
         # dimensions will be cells x trials x time
+        # psths[region] = np.squeeze(
+        #     [
+        #         compute_spike_count(ts, unit, tpre, tpost, binwidth_ms / 1000)[0]
+        #         for unit in unit_spike_times[region]
+        #     ]
+        # )
+
         psths[region] = np.squeeze(
-            [
-                compute_spike_count(ts, unit, tpre, tpost, binwidth_ms / 1000)[0]
+            Parallel(n_jobs=8)(
+                delayed(_compute_spike_count_first)(
+                    ts, unit, tpre, tpost, binwidth_ms / 1000
+                )
                 for unit in unit_spike_times[region]
-            ]
+            )
         )
+
+        # psths[region] = Parallel(n_jobs=8)(
+        #         delayed(compute_spike_count)(ts, unit, tpre, tpost, binwidth_ms/1000)[0]
+        #         for unit in unit_spike_times[region]
+        #     )
         # print(len(psths[region]))
         if get_strategy:
             psths_mb[region] = np.squeeze(
@@ -558,6 +576,10 @@ def get_psths(
             [psths], units_to_rem = rem_zstd([psths], regions)
             return psths, mask, units_to_rem
         return psths, mask
+
+
+def _compute_spike_count_first(*args, **kwargs):
+    return compute_spike_count(*args, **kwargs)[0]
 
 
 def get_zstd_units(psths_all, regions):
