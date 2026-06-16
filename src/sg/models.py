@@ -6,7 +6,7 @@ from sklearn.preprocessing import OneHotEncoder as OHE
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import r2_score
 
-from sg.fitlvm_utils import get_data_model
+from sg.fitlvm_utils import get_dataset_dm
 from core.data import load_sess, get_tavg_sc_cond
 from squiggs.neuron_viewer import NeuronViewer
 from squiggs.renderers import FitRenderer
@@ -83,20 +83,21 @@ class Encoder:
         if not (hasattr(self, "psths")):
             self.get_data()
 
-        (self.data_gd, _, _, _, _, self.num_trials, self.num_tv, self.num_units) = (
-            get_data_model(
-                self.psths,
-                self.trial_data,
-                strategy_filter=None,
-                regions=self.regions,
-                norm=self.norm,
-                num_tents=self.num_tents,
-                task_vars=self.task_vars,
-                sanity_check=0,
-            )
+        data_gd, _ = get_dataset_dm(
+            self.psths,
+            self.trial_data,
+            strategy_filter=None,
+            regions=self.regions,
+            norm=self.norm,
+            num_tents=self.num_tents,
+            task_vars=self.task_vars,
+            binwidth_ms=25,
+            sanity_check=0,
         )
 
-        self.sample = self.data_gd[:]
+        self.sample = data_gd[:]
+        self.num_trials, self.num_tv = self.sample["tv"].shape
+        self.num_units = self.sample["robs"].shape[1]
 
         self.robs = self.sample["robs"].detach().cpu().numpy()
 

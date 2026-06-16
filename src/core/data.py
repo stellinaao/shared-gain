@@ -76,9 +76,6 @@ markers_region = {"ACC": "v", "DMS": "^", "M2": "x", "DLS": "*", "M1": "."}
 
 
 # LOAD DATA
-"""PLEASE USE THIS FUNCTION!!!"""
-
-
 def load_sess(
     subj_id=None,
     sess_id=None,
@@ -193,23 +190,6 @@ def load_sess(
 
         else:
             psths_ref = None
-
-        # update spike_times and psths_ref with the removed units
-        # for reg in regions:
-        #     if len(zstd_units[reg]) > 0:
-        #         print(len(zstd_units[reg]))
-        #         assert len(spike_times[reg]) == len(psths_ref[reg])
-        #         spike_times[reg] = [
-        #             st_unit
-        #             for i, st_unit in enumerate(spike_times[reg])
-        #             if i not in set(zstd_units[reg])
-        #         ]
-        #         psths_ref[reg] = [
-        #             psth
-        #             for i, psth in enumerate(psths_ref[reg])
-        #             if i not in set(zstd_units[reg])
-        #         ]
-        #         assert len(spike_times[reg]) == len(psths_ref[reg])
 
         trial_data = trial_data[trial_mask]
 
@@ -456,7 +436,6 @@ def get_psths(
     binwidth_ms=50,
     alignment="choice",
     trial_start_pre=0,  # can be > 0 to account for alignment to some time before trial start
-    # get_strategy=False,
     balance=True,
     reward_only=True,
     do_rem_zstd=True,
@@ -500,30 +479,7 @@ def get_psths(
     else:
         raise ValueError(f"{alignment} alignment not implemented yet")
 
-    # if get_strategy:
-    #     mb_idx = trial_data[
-    #         trial_data["iblock"].isin(session_data["MBblocks"]) & (mask)
-    #     ].index
-    #     mf_idx = trial_data[
-    #         trial_data["iblock"].isin(session_data["MFblocks"]) & (mask)
-    #     ].index
-
-    #     # mb_idx = np.delete(mb_idx, np.where(mb_idx == 0))
-    #     # mf_idx = np.delete(mf_idx, np.where(mf_idx == 0))
-
-    #     if balance:
-    #         mb_idx, mf_idx = balance_strategy(trial_data, mb_idx, mf_idx)
-
-    #     if shuffle:
-    #         pool = np.concatenate((mb_idx, mf_idx))
-    #         mb_idx = np.random.choice(pool, len(mb_idx))
-    #         mf_idx = np.random.choice(pool, len(mf_idx))
-
     psths = {}
-
-    # if get_strategy:
-    #     psths_mb = {}
-    #     psths_mf = {}
 
     tasks = [(reg, unit) for reg in regions for unit in unit_spike_times[reg]]
 
@@ -542,55 +498,6 @@ def get_psths(
         psths[reg] = psths_all[idx : idx + n]
         idx += n
 
-    """
-    for region in regions:
-        # dimensions will be cells x trials x time
-        # psths[region] = np.squeeze(
-        #     [
-        #         compute_spike_count(ts, unit, tpre, tpost, binwidth_ms / 1000)[0]
-        #         for unit in unit_spike_times[region]
-        #     ]
-        # )
-
-        psths[region] = np.squeeze(
-            Parallel(n_jobs=8)(
-                delayed(_compute_spike_count_first)(
-                    ts, unit, tpre, tpost, binwidth_ms / 1000
-                )
-                for unit in unit_spike_times[region]
-            )
-        )
-
-        # psths[region] = Parallel(n_jobs=8)(
-        #         delayed(compute_spike_count)(ts, unit, tpre, tpost, binwidth_ms/1000)[0]
-        #         for unit in unit_spike_times[region]
-        #     )
-        # print(len(psths[region]))
-        if get_strategy:
-            psths_mb[region] = np.squeeze(
-                [
-                    compute_spike_count(
-                        ts.loc[mb_idx], unit, tpre, tpost, binwidth_ms / 1000
-                    )[0]
-                    for unit in unit_spike_times[region]
-                ]
-            )
-            psths_mf[region] = np.squeeze(
-                [
-                    compute_spike_count(
-                        ts.loc[mf_idx], unit, tpre, tpost, binwidth_ms / 1000
-                    )[0]
-                    for unit in unit_spike_times[region]
-                ]
-            )
-    """
-    # if get_strategy:
-    #     if do_rem_zstd:
-    #         [psths, psths_mb, psths_mf], units_to_rem = rem_zstd(
-    #             [psths, psths_mb, psths_mf], regions
-    #         )
-    #     return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask, units_to_rem
-    # else:
     if do_rem_zstd:
         [psths], units_to_rem = rem_zstd([psths], regions)
         return psths, mask, units_to_rem
