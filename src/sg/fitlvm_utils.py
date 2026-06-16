@@ -114,11 +114,13 @@ def get_dataset_dm(
         print(f"originally {sum([len(psths[region]) for region in regions])} units")
 
     # dfs
+    """
     adiff = np.abs(
         robs - np.mean(robs, axis=0)
     )  # abs diff from avg rate of units across all trials, np.mean: shape = (# cells,), adiff: shape = (# trials, # cells)
     mad = np.median(adiff)  # scalar
     dfs = (adiff / mad) < 5  # shape = (# trials, # cells)
+    """
 
     # filter for good units
     # good = np.mean(dfs, axis=0) == 1 # at least 80% of the trials were good
@@ -129,7 +131,6 @@ def get_dataset_dm(
     # normalize
     if norm:
         s = np.std(robs, axis=0) + 1e-10
-        # TODO
         mu = np.mean(robs, axis=0)
         robs = (robs - mu) / s
 
@@ -145,7 +146,7 @@ def get_dataset_dm(
         )
 
     robs = robs[idxs, :]
-    dfs = dfs[idxs, :]
+    """dfs = dfs[idxs, :]"""
 
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
@@ -163,7 +164,7 @@ def get_dataset_dm(
     data_dict = {
         "robs": torch.tensor(robs, dtype=torch.float32),
         "reg_keys": torch.tensor(reg_keys, dtype=torch.float32),
-        "dfs": torch.tensor(dfs, dtype=torch.float32),
+        # "dfs": torch.tensor(dfs, dtype=torch.float32),
         "tv": torch.tensor(tvs, dtype=torch.float32),
         "tents": torch.tensor(tents, dtype=torch.float32),
         "indices": torch.tensor(

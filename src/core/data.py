@@ -18,8 +18,11 @@ import re
 import os
 import shutup
 
+from sklearn.preprocessing import OneHotEncoder as OHE
+
 from spks.utils import get_cluster_spike_times
 from damn.alignment import compute_spike_count
+from ndnt.utils.NDNutils import tent_basis_generate
 from utils.paths import DATA_DIR
 
 from joblib import Parallel, delayed
@@ -76,9 +79,6 @@ markers_region = {"ACC": "v", "DMS": "^", "M2": "x", "DLS": "*", "M1": "."}
 
 
 # LOAD DATA
-"""PLEASE USE THIS FUNCTION!!!"""
-
-
 def load_sess(
     subj_id=None,
     sess_id=None,
@@ -193,23 +193,6 @@ def load_sess(
 
         else:
             psths_ref = None
-
-        # update spike_times and psths_ref with the removed units
-        # for reg in regions:
-        #     if len(zstd_units[reg]) > 0:
-        #         print(len(zstd_units[reg]))
-        #         assert len(spike_times[reg]) == len(psths_ref[reg])
-        #         spike_times[reg] = [
-        #             st_unit
-        #             for i, st_unit in enumerate(spike_times[reg])
-        #             if i not in set(zstd_units[reg])
-        #         ]
-        #         psths_ref[reg] = [
-        #             psth
-        #             for i, psth in enumerate(psths_ref[reg])
-        #             if i not in set(zstd_units[reg])
-        #         ]
-        #         assert len(spike_times[reg]) == len(psths_ref[reg])
 
         trial_data = trial_data[trial_mask]
 
@@ -456,7 +439,6 @@ def get_psths(
     binwidth_ms=50,
     alignment="choice",
     trial_start_pre=0,  # can be > 0 to account for alignment to some time before trial start
-    # get_strategy=False,
     balance=True,
     reward_only=True,
     do_rem_zstd=True,
@@ -500,30 +482,7 @@ def get_psths(
     else:
         raise ValueError(f"{alignment} alignment not implemented yet")
 
-    # if get_strategy:
-    #     mb_idx = trial_data[
-    #         trial_data["iblock"].isin(session_data["MBblocks"]) & (mask)
-    #     ].index
-    #     mf_idx = trial_data[
-    #         trial_data["iblock"].isin(session_data["MFblocks"]) & (mask)
-    #     ].index
-
-    #     # mb_idx = np.delete(mb_idx, np.where(mb_idx == 0))
-    #     # mf_idx = np.delete(mf_idx, np.where(mf_idx == 0))
-
-    #     if balance:
-    #         mb_idx, mf_idx = balance_strategy(trial_data, mb_idx, mf_idx)
-
-    #     if shuffle:
-    #         pool = np.concatenate((mb_idx, mf_idx))
-    #         mb_idx = np.random.choice(pool, len(mb_idx))
-    #         mf_idx = np.random.choice(pool, len(mf_idx))
-
     psths = {}
-
-    # if get_strategy:
-    #     psths_mb = {}
-    #     psths_mf = {}
 
     tasks = [(reg, unit) for reg in regions for unit in unit_spike_times[reg]]
 
@@ -542,55 +501,6 @@ def get_psths(
         psths[reg] = psths_all[idx : idx + n]
         idx += n
 
-    """
-    for region in regions:
-        # dimensions will be cells x trials x time
-        # psths[region] = np.squeeze(
-        #     [
-        #         compute_spike_count(ts, unit, tpre, tpost, binwidth_ms / 1000)[0]
-        #         for unit in unit_spike_times[region]
-        #     ]
-        # )
-
-        psths[region] = np.squeeze(
-            Parallel(n_jobs=8)(
-                delayed(_compute_spike_count_first)(
-                    ts, unit, tpre, tpost, binwidth_ms / 1000
-                )
-                for unit in unit_spike_times[region]
-            )
-        )
-
-        # psths[region] = Parallel(n_jobs=8)(
-        #         delayed(compute_spike_count)(ts, unit, tpre, tpost, binwidth_ms/1000)[0]
-        #         for unit in unit_spike_times[region]
-        #     )
-        # print(len(psths[region]))
-        if get_strategy:
-            psths_mb[region] = np.squeeze(
-                [
-                    compute_spike_count(
-                        ts.loc[mb_idx], unit, tpre, tpost, binwidth_ms / 1000
-                    )[0]
-                    for unit in unit_spike_times[region]
-                ]
-            )
-            psths_mf[region] = np.squeeze(
-                [
-                    compute_spike_count(
-                        ts.loc[mf_idx], unit, tpre, tpost, binwidth_ms / 1000
-                    )[0]
-                    for unit in unit_spike_times[region]
-                ]
-            )
-    """
-    # if get_strategy:
-    #     if do_rem_zstd:
-    #         [psths, psths_mb, psths_mf], units_to_rem = rem_zstd(
-    #             [psths, psths_mb, psths_mf], regions
-    #         )
-    #     return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask, units_to_rem
-    # else:
     if do_rem_zstd:
         [psths], units_to_rem = rem_zstd([psths], regions)
         return psths, mask, units_to_rem
@@ -759,6 +669,77 @@ def get_tavg_sc_cond(robs, trial_data, cond, robs_drift=None, subtract_drift=Fal
             "incorr": robs[incorr_mask].mean(axis=0),
         }
     return sc_tavg
+
+
+def get_encoder_io(
+    psths,
+    trial_data,
+    regions,
+    strategy_filter=None,
+    norm=True,
+    num_tents=5,
+    tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
+    binwidth_ms=25,
+):
+    if strategy_filter == "mb":
+        idxs = np.where(trial_data["strategy"] == 1)[0]
+    elif strategy_filter == "mf":
+        idxs = np.where(trial_data["strategy"] == -1)[0]
+    elif strategy_filter is None:
+        idxs = np.arange(trial_data.shape[0])
+    else:
+        raise ValueError(
+            f"valid values for strategy_filter are 'mb', 'mf', and None, not {strategy_filter}"
+        )
+
+    # robs
+    robs = (
+        np.concatenate(
+            [np.sum(psths[region] * (binwidth_ms / 1000), axis=2) for region in regions]
+        ).T
+        ** 0.5
+    )  # robs of everything, no idx subsamp atm
+
+    if norm:
+        s = np.std(robs, axis=0) + 1e-10
+        mu = np.mean(robs, axis=0)
+        robs = (robs - mu) / s
+
+    num_trials_full = robs.shape[0]
+    robs = robs[idxs, :]
+    num_trials_subsamp = robs.shape[0]
+
+    # reg keys
+    reg_mask = np.concatenate(
+        [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
+    )
+    reg_idxs = {reg: np.where(reg_mask == i)[0] for i, reg in enumerate(regions)}
+    # reg_keys = np.concatenate(
+    #     [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
+    # )
+
+    # tvs
+    ohe = OHE().fit(trial_data[tv_keys])
+
+    tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
+    tvs = tvs[idxs, :]
+
+    # tents
+    # uniform splines at same frequency whether subsampled or not
+    num_tents_subsamp = int(num_tents * (num_trials_subsamp / num_trials_full))
+    xs = np.linspace(0, num_trials_subsamp - 1, num_tents_subsamp)
+    tents = tent_basis_generate(xs)
+
+    # design matrix
+    dm = np.hstack((tents, tvs))
+    dm_names = np.concatenate(
+        (
+            [f"tents_{i}" for i in range(tents.shape[1])],
+            ohe.get_feature_names_out(),
+        )
+    )
+
+    return (tents, tvs, dm, robs, dm_names, reg_idxs)
 
 
 # BALANCING
