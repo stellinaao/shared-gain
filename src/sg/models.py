@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
 from sklearn.preprocessing import OneHotEncoder as OHE
 from sklearn.linear_model import RidgeCV
@@ -34,6 +35,7 @@ class Encoder:
         )
         self.num_tents = kwargs.pop("num_tents", 5)
         self.norm = kwargs.pop("norm", True)
+        self.separate_drift = kwargs.pop("separate_drift", False)
 
         self.tpre = kwargs.pop("tpre", 0.5)
         self.tpost = kwargs.pop("tpost", 1)
@@ -75,7 +77,6 @@ class Encoder:
             and self.regions[1] == "DLS"
             and len(self.regions) == 2
         ):
-            print("hello")
             self.regions = ["DLS", "DMS"]
 
     def build_dm(self):
@@ -120,29 +121,54 @@ class Encoder:
             alpha_per_target=True,
         ).fit(self.tents, self.robs)
 
-    def baseline_predict(self):
+    def baseline_predict(self, pseudo=False):
         if not hasattr(self, "robs_predict"):
             self.robs_predict = {}
-        if not hasattr(self, "baseline_model"):
-            self.fit_baseline()
 
-        self.robs_predict["baseline"] = self.baseline_model.predict(self.tents)
+        if not pseudo:
+            if not hasattr(self, "baseline_model"):
+                self.fit_baseline()
+
+            self.robs_predict["baseline"] = self.baseline_model.predict(self.tents)
+        else:
+            if not hasattr(self, "encoder"):
+                self.fit_encoder()
+
+            dm_tv_ko = deepcopy(self.dm)
+            dm_tv_ko[:, 5:] = 0
+
+            self.robs_predict["ps_baseline"] = self.encoder.predict(dm_tv_ko)
 
     def fit_encoder(self):
         if not (hasattr(self, "dm") and hasattr(self, "robs")):
             self.build_dm()
 
-        self.encoder = RidgeCV(
-            alphas=np.logspace(-5, 5, 11, base=10),
-            alpha_per_target=True,
-        ).fit(self.dm, self.robs)
+        if self.separate_drift:
+            self.fit_baseline()
+            self.baseline_predict()
+
+            self.encoder = RidgeCV(
+                alphas=np.logspace(-5, 5, 11, base=10),
+                alpha_per_target=True,
+            ).fit(self.tvs, self.robs - self.robs_predict["baseline"])
+        else:
+            self.encoder = RidgeCV(
+                alphas=np.logspace(-5, 5, 11, base=10),
+                alpha_per_target=True,
+            ).fit(self.dm, self.robs)
 
     def encoder_predict(self):
         if not hasattr(self, "robs_predict"):
             self.robs_predict = {}
         if not hasattr(self, "encoder"):
             self.fit_encoder()
-        self.robs_predict["encoder"] = self.encoder.predict(self.dm)
+
+        if self.separate_drift:
+            self.robs_predict["encoder"] = self.baseline_model.predict(
+                self.tents
+            ) + self.encoder.predict(self.tvs)
+        else:
+            self.robs_predict["encoder"] = self.encoder.predict(self.dm)
 
     def get_r2(self, n_folds=10, p_train=0.8):
         if not hasattr(self, "robs"):
@@ -150,6 +176,7 @@ class Encoder:
 
         self.scores_cv = {
             "baseline": np.zeros((n_folds, self.num_units)),
+            "ps_baseline": np.zeros((n_folds, self.num_units)),
             "encoder": np.zeros((n_folds, self.num_units)),
         }
 
@@ -171,31 +198,65 @@ class Encoder:
                 multioutput="raw_values",
             )
 
-            encoder = RidgeCV(
-                alphas=np.logspace(-5, 5, 11, base=10),
-                alpha_per_target=True,
-            ).fit(self.dm[train_idxs], self.robs[train_idxs])
+            if self.separate_drift:
+                encoder = RidgeCV(
+                    alphas=np.logspace(-5, 5, 11, base=10),
+                    alpha_per_target=True,
+                ).fit(
+                    self.tvs[train_idxs],
+                    self.robs[train_idxs]
+                    - baseline_model.predict(self.tents[train_idxs]),
+                )
 
-            self.scores_cv["encoder"][i] = r2_score(
-                self.robs[test_idxs],
-                encoder.predict(self.dm[test_idxs]),
-                multioutput="raw_values",
-            )
+                self.scores_cv["encoder"][i] = r2_score(
+                    self.robs[test_idxs],
+                    baseline_model.predict(self.tents[test_idxs])
+                    + encoder.predict(self.tvs[test_idxs]),
+                    multioutput="raw_values",
+                )
+
+                self.scores_cv["ps_baseline"][i] = self.scores_cv["baseline"][i]
+
+            else:
+                encoder = RidgeCV(
+                    alphas=np.logspace(-5, 5, 11, base=10),
+                    alpha_per_target=True,
+                ).fit(self.dm[train_idxs], self.robs[train_idxs])
+
+                self.scores_cv["encoder"][i] = r2_score(
+                    self.robs[test_idxs],
+                    encoder.predict(self.dm[test_idxs]),
+                    multioutput="raw_values",
+                )
+
+                dm_tv_ko = deepcopy(self.dm)
+                dm_tv_ko[:, 5:] = 0
+
+                self.scores_cv["ps_baseline"][i] = r2_score(
+                    self.robs[test_idxs],
+                    encoder.predict(dm_tv_ko[test_idxs]),
+                    multioutput="raw_values",
+                )
 
         self.scores = {
             "baseline": np.median(self.scores_cv["baseline"], axis=0),
+            "ps_baseline": np.median(self.scores_cv["ps_baseline"], axis=0),
             "encoder": np.median(self.scores_cv["encoder"], axis=0),
         }
 
-    def verify(self, cond="response"):
+    def verify(self, cond="response", subtract_baseline=True):
         _, axes = plt.subplots(ncols=5, nrows=1, figsize=(7.5, 1.5), tight_layout=True)
 
         # baseline vs encoder r2
         self.plot_r2_comp(axes[0])
 
         # sctavg vs beta weight
-        self.plot_sctavg_weights(axes[1:3], cond="response")
-        self.plot_sctavg_weights(axes[3:5], cond="rewarded")
+        self.plot_sctavg_weights(
+            axes[1:3], cond="response", subtract_baseline=subtract_baseline
+        )
+        self.plot_sctavg_weights(
+            axes[3:5], cond="rewarded", subtract_baseline=subtract_baseline
+        )
 
     def plot_r2_comp(self, ax=None):
         if not hasattr(self, "scores"):
@@ -212,7 +273,7 @@ class Encoder:
         ax.set_xlabel(r"$r^2$, baseline")
         ax.set_ylabel(r"$r^2$, encoder")
 
-    def plot_sctavg_weights(self, axes, cond="response"):
+    def plot_sctavg_weights(self, axes, cond="response", subtract_baseline=True):
         if cond not in ["response", "rewarded"]:
             raise NotImplementedError(f"cond={cond} is not currently supported.")
 
@@ -224,8 +285,23 @@ class Encoder:
         if not hasattr(self, "encoder"):
             self.fit_encoder()
 
-        sc_tavg = get_tavg_sc_cond(self.robs, self.trial_data, cond=cond)
+        if subtract_baseline:
+            if (
+                not hasattr(self, "robs_predict")
+                or "ps_baseline" not in self.robs_predict.keys()
+            ):
+                self.baseline_predict(pseudo=True)
+            robs_baseline = self.robs_predict["ps_baseline"]
+        else:
+            robs_baseline = None
 
+        sc_tavg = get_tavg_sc_cond(
+            self.robs,
+            self.trial_data,
+            cond=cond,
+            robs_drift=robs_baseline,
+            subtract_drift=subtract_baseline,
+        )
         if cond == "response":
             keys = ["left", "right"]
             idxs = [6, 5]

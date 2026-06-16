@@ -22,6 +22,8 @@ from spks.utils import get_cluster_spike_times
 from damn.alignment import compute_spike_count
 from utils.paths import DATA_DIR
 
+from joblib import Parallel, delayed
+
 shutup.please()
 
 # CONSTANTS
@@ -124,7 +126,8 @@ def load_sess(
 
     if mode == "new":
         fpath = DATA_DIR / subj_id / sess_id
-        fpath.exists()
+        if not fpath.exists():
+            raise FileNotFoundError
 
         # load from pkl
         neural_data = pd.read_pickle(fpath / "neural_data.pkl")
@@ -164,11 +167,14 @@ def load_sess(
             do_rem_zstd=False,
             reward_only=False,
             prev_filter=False,
-            get_strategy=False,
             mode=mode,
         )
 
-        if alignment_ref is not None:
+        if alignment_ref is not None and (
+            not (alignment == alignment_ref)
+            or not (tpre == tpre_ref)
+            or not (tpost == tpost_ref)
+        ):
             psths_ref, _ = get_psths(
                 spike_times,
                 trial_data,
@@ -182,9 +188,9 @@ def load_sess(
                 do_rem_zstd=False,  # so that there are no indexing issues later
                 reward_only=False,
                 prev_filter=False,
-                get_strategy=False,
                 mode=mode,
             )
+
         else:
             psths_ref = None
 
@@ -254,7 +260,6 @@ def load_sess(
             trial_start_pre=trial_start_pre,
             reward_only=False,
             prev_filter=False,
-            get_strategy=False,
             mode=mode,
         )
         # update spike_times with the removed units
@@ -451,7 +456,7 @@ def get_psths(
     binwidth_ms=50,
     alignment="choice",
     trial_start_pre=0,  # can be > 0 to account for alignment to some time before trial start
-    get_strategy=False,
+    # get_strategy=False,
     balance=True,
     reward_only=True,
     do_rem_zstd=True,
@@ -495,39 +500,71 @@ def get_psths(
     else:
         raise ValueError(f"{alignment} alignment not implemented yet")
 
-    if get_strategy:
-        mb_idx = trial_data[
-            trial_data["iblock"].isin(session_data["MBblocks"]) & (mask)
-        ].index
-        mf_idx = trial_data[
-            trial_data["iblock"].isin(session_data["MFblocks"]) & (mask)
-        ].index
+    # if get_strategy:
+    #     mb_idx = trial_data[
+    #         trial_data["iblock"].isin(session_data["MBblocks"]) & (mask)
+    #     ].index
+    #     mf_idx = trial_data[
+    #         trial_data["iblock"].isin(session_data["MFblocks"]) & (mask)
+    #     ].index
 
-        # mb_idx = np.delete(mb_idx, np.where(mb_idx == 0))
-        # mf_idx = np.delete(mf_idx, np.where(mf_idx == 0))
+    #     # mb_idx = np.delete(mb_idx, np.where(mb_idx == 0))
+    #     # mf_idx = np.delete(mf_idx, np.where(mf_idx == 0))
 
-        if balance:
-            mb_idx, mf_idx = balance_strategy(trial_data, mb_idx, mf_idx)
+    #     if balance:
+    #         mb_idx, mf_idx = balance_strategy(trial_data, mb_idx, mf_idx)
 
-        if shuffle:
-            pool = np.concatenate((mb_idx, mf_idx))
-            mb_idx = np.random.choice(pool, len(mb_idx))
-            mf_idx = np.random.choice(pool, len(mf_idx))
+    #     if shuffle:
+    #         pool = np.concatenate((mb_idx, mf_idx))
+    #         mb_idx = np.random.choice(pool, len(mb_idx))
+    #         mf_idx = np.random.choice(pool, len(mf_idx))
 
     psths = {}
 
-    if get_strategy:
-        psths_mb = {}
-        psths_mf = {}
+    # if get_strategy:
+    #     psths_mb = {}
+    #     psths_mf = {}
 
+    tasks = [(reg, unit) for reg in regions for unit in unit_spike_times[reg]]
+
+    psths_all = np.squeeze(
+        Parallel(n_jobs=8)(
+            delayed(_compute_spike_count_first)(
+                ts, unit, tpre, tpost, binwidth_ms / 1000
+            )
+            for _, unit in tasks
+        )
+    )
+
+    idx = 0
+    for reg in regions:
+        n = len(unit_spike_times[reg])
+        psths[reg] = psths_all[idx : idx + n]
+        idx += n
+
+    """
     for region in regions:
         # dimensions will be cells x trials x time
+        # psths[region] = np.squeeze(
+        #     [
+        #         compute_spike_count(ts, unit, tpre, tpost, binwidth_ms / 1000)[0]
+        #         for unit in unit_spike_times[region]
+        #     ]
+        # )
+
         psths[region] = np.squeeze(
-            [
-                compute_spike_count(ts, unit, tpre, tpost, binwidth_ms / 1000)[0]
+            Parallel(n_jobs=8)(
+                delayed(_compute_spike_count_first)(
+                    ts, unit, tpre, tpost, binwidth_ms / 1000
+                )
                 for unit in unit_spike_times[region]
-            ]
+            )
         )
+
+        # psths[region] = Parallel(n_jobs=8)(
+        #         delayed(compute_spike_count)(ts, unit, tpre, tpost, binwidth_ms/1000)[0]
+        #         for unit in unit_spike_times[region]
+        #     )
         # print(len(psths[region]))
         if get_strategy:
             psths_mb[region] = np.squeeze(
@@ -546,18 +583,22 @@ def get_psths(
                     for unit in unit_spike_times[region]
                 ]
             )
+    """
+    # if get_strategy:
+    #     if do_rem_zstd:
+    #         [psths, psths_mb, psths_mf], units_to_rem = rem_zstd(
+    #             [psths, psths_mb, psths_mf], regions
+    #         )
+    #     return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask, units_to_rem
+    # else:
+    if do_rem_zstd:
+        [psths], units_to_rem = rem_zstd([psths], regions)
+        return psths, mask, units_to_rem
+    return psths, mask
 
-    if get_strategy:
-        if do_rem_zstd:
-            [psths, psths_mb, psths_mf], units_to_rem = rem_zstd(
-                [psths, psths_mb, psths_mf], regions
-            )
-        return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask, units_to_rem
-    else:
-        if do_rem_zstd:
-            [psths], units_to_rem = rem_zstd([psths], regions)
-            return psths, mask, units_to_rem
-        return psths, mask
+
+def _compute_spike_count_first(*args, **kwargs):
+    return compute_spike_count(*args, **kwargs)[0]
 
 
 def get_zstd_units(psths_all, regions):
@@ -694,11 +735,14 @@ def get_choice_ts(trial_data, mode="both"):
 
 
 # ROBS
-def get_tavg_sc_cond(robs, trial_data, cond):
+def get_tavg_sc_cond(robs, trial_data, cond, robs_drift=None, subtract_drift=False):
+    print
     if cond == "response":
         left_mask = trial_data.response == 1
         right_mask = trial_data.response == -1
 
+        if subtract_drift:
+            robs = robs - robs_drift
         sc_tavg = {
             "left": robs[left_mask].mean(axis=0),
             "right": robs[right_mask].mean(axis=0),
@@ -707,11 +751,13 @@ def get_tavg_sc_cond(robs, trial_data, cond):
         corr_mask = trial_data.rewarded == 1
         incorr_mask = trial_data.rewarded == 0
 
+        if subtract_drift:
+            robs = robs - robs_drift
+
         sc_tavg = {
             "corr": robs[corr_mask].mean(axis=0),
             "incorr": robs[incorr_mask].mean(axis=0),
         }
-
     return sc_tavg
 
 
