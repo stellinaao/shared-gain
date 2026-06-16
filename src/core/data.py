@@ -671,63 +671,143 @@ def get_tavg_sc_cond(robs, trial_data, cond, robs_drift=None, subtract_drift=Fal
     return sc_tavg
 
 
+def get_strategy_filter_idxs(
+    trial_data,
+    strategy="both",
+    balance_strategy=True,  # conditional balancing
+    num_trial_thresh=20,
+):
+    if not (strategy == "both" or strategy == "mb" or strategy == "mf"):
+        raise ValueError("valid values for strategy are 'both', 'mb', and 'mf'")
+
+    if balance_strategy:
+        mb_mask = trial_data["strategy"] == 1
+        mf_mask = trial_data["strategy"] == -1
+
+        mb_cond_masks = {
+            "left_corr": (mb_mask)
+            & (trial_data["response"] == 1)
+            & (trial_data["rewarded"] == 1),
+            "right_corr": (mb_mask)
+            & (trial_data["response"] == -1)
+            & (trial_data["rewarded"] == 1),
+            "left_incorr": (mb_mask)
+            & (trial_data["response"] == 1)
+            & (trial_data["rewarded"] == 0),
+            "right_incorr": (mb_mask)
+            & (trial_data["response"] == -1)
+            & (trial_data["rewarded"] == 0),
+        }
+
+        mf_cond_masks = {
+            "left_corr": (mf_mask)
+            & (trial_data["response"] == 1)
+            & (trial_data["rewarded"] == 1),
+            "right_corr": (mf_mask)
+            & (trial_data["response"] == -1)
+            & (trial_data["rewarded"] == 1),
+            "left_incorr": (mf_mask)
+            & (trial_data["response"] == 1)
+            & (trial_data["rewarded"] == 0),
+            "right_incorr": (mf_mask)
+            & (trial_data["response"] == -1)
+            & (trial_data["rewarded"] == 0),
+        }
+
+        num_trials_cond = [
+            min(mb_cond_masks[key].sum(), mf_cond_masks[key].sum())
+            for key in mb_cond_masks
+        ]
+        num_trial_strategy = np.sum(num_trials_cond)
+
+        if (
+            (strategy == "mb" or strategy == "mf")
+            and num_trial_strategy < num_trial_thresh
+        ) or ((strategy == "both") and 2 * num_trial_strategy < num_trial_thresh):
+            raise RuntimeError("not enough trials after balancing")
+
+        if strategy == "both" or strategy == "mb":
+            idxs_subsamp_mb = []
+        if strategy == "both" or strategy == "mf":
+            idxs_subsamp_mf = []
+
+        for i, cond in enumerate(mb_cond_masks):
+            if strategy == "both" or strategy == "mb":
+                idxs_subsamp_mb.extend(
+                    np.random.choice(
+                        np.where(mb_cond_masks[cond])[0],
+                        num_trials_cond[i],
+                        replace=False,
+                    )
+                )
+            if strategy == "both" or strategy == "mf":
+                idxs_subsamp_mf.extend(
+                    np.random.choice(
+                        np.where(mf_cond_masks[cond])[0],
+                        num_trials_cond[i],
+                        replace=False,
+                    )
+                )
+
+        if strategy == "both":
+            idxs_subsamp_mb = np.sort(idxs_subsamp_mb)
+            idxs_subsamp_mf = np.sort(idxs_subsamp_mf)
+            idxs_subsamp = np.sort(np.concatenate((idxs_subsamp_mb, idxs_subsamp_mf)))
+
+            return {"both": idxs_subsamp, "mb": idxs_subsamp_mb, "mf": idxs_subsamp_mf}
+
+        elif strategy == "mb":
+            idxs_subsamp_mb = np.sort(idxs_subsamp_mb)
+
+            return {"both": None, "mb": idxs_subsamp_mb, "mf": None}
+
+        elif strategy == "mf":
+            idxs_subsamp_mf = np.sort(idxs_subsamp_mf)
+
+            return {"both": None, "mb": None, "mf": idxs_subsamp_mf}
+
+    else:
+        raise NotImplementedError(
+            "idxs subsampling without balancing is not yet implemented"
+        )
+
+
 def get_encoder_io(
     psths,
     trial_data,
     regions,
-    strategy_filter=None,
     norm=True,
     num_tents=5,
     tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
     binwidth_ms=25,
 ):
-    if strategy_filter == "mb":
-        idxs = np.where(trial_data["strategy"] == 1)[0]
-    elif strategy_filter == "mf":
-        idxs = np.where(trial_data["strategy"] == -1)[0]
-    elif strategy_filter is None:
-        idxs = np.arange(trial_data.shape[0])
-    else:
-        raise ValueError(
-            f"valid values for strategy_filter are 'mb', 'mf', and None, not {strategy_filter}"
-        )
-
     # robs
     robs = (
         np.concatenate(
             [np.sum(psths[region] * (binwidth_ms / 1000), axis=2) for region in regions]
         ).T
         ** 0.5
-    )  # robs of everything, no idx subsamp atm
+    )
 
     if norm:
         s = np.std(robs, axis=0) + 1e-10
         mu = np.mean(robs, axis=0)
         robs = (robs - mu) / s
 
-    num_trials_full = robs.shape[0]
-    robs = robs[idxs, :]
-    num_trials_subsamp = robs.shape[0]
-
     # reg keys
     reg_mask = np.concatenate(
         [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
     )
     reg_idxs = {reg: np.where(reg_mask == i)[0] for i, reg in enumerate(regions)}
-    # reg_keys = np.concatenate(
-    #     [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
-    # )
 
     # tvs
     ohe = OHE().fit(trial_data[tv_keys])
-
     tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
-    tvs = tvs[idxs, :]
 
     # tents
     # uniform splines at same frequency whether subsampled or not
-    num_tents_subsamp = int(num_tents * (num_trials_subsamp / num_trials_full))
-    xs = np.linspace(0, num_trials_subsamp - 1, num_tents_subsamp)
+    num_trials = trial_data.shape[0]
+    xs = np.linspace(0, num_trials - 1, num_tents)
     tents = tent_basis_generate(xs)
 
     # design matrix
