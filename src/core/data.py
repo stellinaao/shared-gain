@@ -455,7 +455,7 @@ def get_psths(
     binwidth_ms=50,
     alignment="choice",
     trial_start_pre=0,  # can be > 0 to account for alignment to some time before trial start
-    get_strategy=False,
+    # get_strategy=False,
     balance=True,
     reward_only=True,
     do_rem_zstd=True,
@@ -499,31 +499,49 @@ def get_psths(
     else:
         raise ValueError(f"{alignment} alignment not implemented yet")
 
-    if get_strategy:
-        mb_idx = trial_data[
-            trial_data["iblock"].isin(session_data["MBblocks"]) & (mask)
-        ].index
-        mf_idx = trial_data[
-            trial_data["iblock"].isin(session_data["MFblocks"]) & (mask)
-        ].index
+    # if get_strategy:
+    #     mb_idx = trial_data[
+    #         trial_data["iblock"].isin(session_data["MBblocks"]) & (mask)
+    #     ].index
+    #     mf_idx = trial_data[
+    #         trial_data["iblock"].isin(session_data["MFblocks"]) & (mask)
+    #     ].index
 
-        # mb_idx = np.delete(mb_idx, np.where(mb_idx == 0))
-        # mf_idx = np.delete(mf_idx, np.where(mf_idx == 0))
+    #     # mb_idx = np.delete(mb_idx, np.where(mb_idx == 0))
+    #     # mf_idx = np.delete(mf_idx, np.where(mf_idx == 0))
 
-        if balance:
-            mb_idx, mf_idx = balance_strategy(trial_data, mb_idx, mf_idx)
+    #     if balance:
+    #         mb_idx, mf_idx = balance_strategy(trial_data, mb_idx, mf_idx)
 
-        if shuffle:
-            pool = np.concatenate((mb_idx, mf_idx))
-            mb_idx = np.random.choice(pool, len(mb_idx))
-            mf_idx = np.random.choice(pool, len(mf_idx))
+    #     if shuffle:
+    #         pool = np.concatenate((mb_idx, mf_idx))
+    #         mb_idx = np.random.choice(pool, len(mb_idx))
+    #         mf_idx = np.random.choice(pool, len(mf_idx))
 
     psths = {}
 
-    if get_strategy:
-        psths_mb = {}
-        psths_mf = {}
+    # if get_strategy:
+    #     psths_mb = {}
+    #     psths_mf = {}
 
+    tasks = [(reg, unit) for reg in regions for unit in unit_spike_times[reg]]
+
+    psths_all = np.squeeze(
+        Parallel(n_jobs=8)(
+            delayed(_compute_spike_count_first)(
+                ts, unit, tpre, tpost, binwidth_ms / 1000
+            )
+            for _, unit in tasks
+        )
+    )
+
+    idx = 0
+    for reg in regions:
+        n = len(unit_spike_times[reg])
+        psths[reg] = psths_all[idx : idx + n]
+        idx += n
+
+    """
     for region in regions:
         # dimensions will be cells x trials x time
         # psths[region] = np.squeeze(
@@ -564,18 +582,18 @@ def get_psths(
                     for unit in unit_spike_times[region]
                 ]
             )
-
-    if get_strategy:
-        if do_rem_zstd:
-            [psths, psths_mb, psths_mf], units_to_rem = rem_zstd(
-                [psths, psths_mb, psths_mf], regions
-            )
-        return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask, units_to_rem
-    else:
-        if do_rem_zstd:
-            [psths], units_to_rem = rem_zstd([psths], regions)
-            return psths, mask, units_to_rem
-        return psths, mask
+    """
+    # if get_strategy:
+    #     if do_rem_zstd:
+    #         [psths, psths_mb, psths_mf], units_to_rem = rem_zstd(
+    #             [psths, psths_mb, psths_mf], regions
+    #         )
+    #     return psths, psths_mb, psths_mf, idx, mb_idx, mf_idx, mask, units_to_rem
+    # else:
+    if do_rem_zstd:
+        [psths], units_to_rem = rem_zstd([psths], regions)
+        return psths, mask, units_to_rem
+    return psths, mask
 
 
 def _compute_spike_count_first(*args, **kwargs):
