@@ -36,7 +36,7 @@ class Encoder:
                 "rewarded_prev",
             ],
         )
-        self.num_tents = kwargs.pop("num_tents", 12)
+        self.num_tents = kwargs.pop("num_tents", 5)
         self.norm = kwargs.pop("norm", True)
         self.separate_drift = kwargs.pop("separate_drift", False)
         self.strategy_filter = kwargs.pop("strategy_filter", None)
@@ -78,6 +78,7 @@ class Encoder:
         )
 
         if self.strategy_filter is not None or self.idxs is not None:
+            print("bora")
             # defined idxs always takes precedence
             if self.idxs is None and self.strategy_filter is not None:
                 self.idxs_all = get_strategy_filter_idxs(
@@ -142,10 +143,20 @@ class Encoder:
             if not hasattr(self, "encoder"):
                 self.fit_encoder()
 
-            dm_tv_ko = deepcopy(self.dm)
-            dm_tv_ko[:, 5:] = 0
+            if self.separate_drift:
+                if (
+                    not hasattr(self, "robs_predict")
+                    or "ps_baseline" not in self.robs_predict.keys()
+                ):
+                    self.baseline_predict(pseudo=False)
 
-            self.robs_predict["ps_baseline"] = self.encoder.predict(dm_tv_ko)
+                self.robs_predict["ps_baseline"] = self.robs_predict["baseline"]
+            else:
+                if not hasattr(self, "dm_tv_ko"):
+                    self.dm_tv_ko = deepcopy(self.dm)
+                    self.dm_tv_ko[:, self.num_tents :] = 0
+
+                self.robs_predict["ps_baseline"] = self.encoder.predict(self.dm_tv_ko)
 
     def fit_encoder(self):
         if not (hasattr(self, "dm") and hasattr(self, "robs")):
@@ -237,12 +248,13 @@ class Encoder:
                     multioutput="raw_values",
                 )
 
-                dm_tv_ko = deepcopy(self.dm)
-                dm_tv_ko[:, 5:] = 0
+                if not hasattr(self, "dm_tv_ko"):
+                    self.dm_tv_ko = deepcopy(self.dm)
+                    self.dm_tv_ko[:, self.num_tents :] = 0
 
                 self.scores_cv["ps_baseline"][i] = r2_score(
                     self.robs[test_idxs],
-                    encoder.predict(dm_tv_ko[test_idxs]),
+                    encoder.predict(self.dm_tv_ko[test_idxs]),
                     multioutput="raw_values",
                 )
 
@@ -312,10 +324,10 @@ class Encoder:
         )
         if cond == "response":
             keys = ["left", "right"]
-            idxs = [6, 5]
+            idxs = [self.num_tents + 2 - 1, self.num_tents + 1 - 1]
         elif cond == "rewarded":
             keys = ["corr", "incorr"]
-            idxs = [8, 7]
+            idxs = [self.num_tents + 4 - 1, self.num_tents + 3 - 1]
 
         for i in range(2):
             axes[i].scatter(
