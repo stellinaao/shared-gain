@@ -77,6 +77,22 @@ colors_region = {
 
 markers_region = {"ACC": "v", "DMS": "^", "M2": "x", "DLS": "*", "M1": "."}
 
+tv_name_map = {
+    "response_1": "response_left",
+    "response_-1": "response_right",
+    "rewarded_0": "rewarded_incorr",
+    "rewarded_1": "rewarded_corr",
+    "block_side_1": "block_side_left",
+    "block_side_-1": "block_side_right",
+    "response_prev_1": "response_prev_left",
+    "response_prev_0": "response_prev_none",
+    "response_prev_-1": "response_prev_right",
+    "rewarded_prev_0": "rewarded_prev_incorr",
+    "rewarded_prev_1": "rewarded_prev_corr",
+    "strategy_-1": "strategy_mf",
+    "strategy_1": "strategy_mb",
+}
+
 
 # LOAD DATA
 def load_sess(
@@ -139,10 +155,11 @@ def load_sess(
         trial_data = pd.read_csv(fpath / "trialdata.csv")
         regions = np.array(list(neural_data.keys()))
 
-        # trial_data addendums
+        # trial_data edits and addendums
         trial_data["trial_start_time"] = session_data["events"].iloc[
             np.where(np.array(session_data["event_labels"]) == "trial_start")[0][0]
         ]["event_timestamps"]
+
         trial_data["block_side"] = np.where(
             trial_data["current_block_side"] == "left", 1, -1
         )
@@ -812,10 +829,15 @@ def get_encoder_io(
 
     # design matrix
     dm = np.hstack((tents, tvs))
+    tv_names = ohe.get_feature_names_out()
+
+    for i, tv_name in enumerate(tv_names):
+        tv_names[i] = tv_name_map[tv_name]
+
     dm_names = np.concatenate(
         (
             [f"tents_{i}" for i in range(tents.shape[1])],
-            ohe.get_feature_names_out(),
+            tv_names,
         )
     )
 
