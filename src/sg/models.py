@@ -78,7 +78,6 @@ class Encoder:
         )
 
         if self.strategy_filter is not None or self.idxs is not None:
-            print("bora")
             # defined idxs always takes precedence
             if self.idxs is None and self.strategy_filter is not None:
                 self.idxs_all = get_strategy_filter_idxs(
@@ -89,8 +88,8 @@ class Encoder:
             self.subsamp_ratio = len(self.idxs) / self.trial_data.shape[0]
             self.num_tents = int(self.num_tents * self.subsamp_ratio)
 
-            if self.num_tents < 3:
-                raise ValueError(
+            if self.num_tents < 2:
+                raise RuntimeError(
                     f"too few trials or tents, resulting in {self.num_tents} tents for the subsampled encoder"
                 )
 
