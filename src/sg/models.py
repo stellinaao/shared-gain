@@ -5,7 +5,12 @@ from copy import deepcopy
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import r2_score
 
-from core.data import load_sess, get_encoder_io, get_tavg_sc_cond
+from core.data import (
+    load_sess,
+    get_strategy_filter_idxs,
+    get_encoder_io,
+    get_tavg_sc_cond,
+)
 from squiggs.neuron_viewer import NeuronViewer
 from squiggs.renderers import FitRenderer
 from utils.paths import FIGURES_DIR
@@ -34,6 +39,8 @@ class Encoder:
         self.num_tents = kwargs.pop("num_tents", 5)
         self.norm = kwargs.pop("norm", True)
         self.separate_drift = kwargs.pop("separate_drift", False)
+        self.strategy_filter = kwargs.pop("strategy_filter", None)
+        self.idxs = kwargs.pop("idxs", None)  # takes precedent over strategy_filter
 
         self.tpre = kwargs.pop("tpre", 0.5)
         self.tpost = kwargs.pop("tpost", 1)
@@ -70,12 +77,25 @@ class Encoder:
             thresh=self.thresh,
         )
 
-        if (
-            self.regions[0] == "DMS"
-            and self.regions[1] == "DLS"
-            and len(self.regions) == 2
-        ):
-            self.regions = ["DLS", "DMS"]
+        if self.strategy_filter is not None or self.idxs is not None:
+            print("bora")
+            # defined idxs always takes precedence
+            if self.idxs is None and self.strategy_filter is not None:
+                self.idxs_all = get_strategy_filter_idxs(
+                    self.trial_data, self.strategy_filter, balance_strategy=True
+                )
+                self.idxs = self.idxs_all[self.strategy_filter]
+
+            self.subsamp_ratio = len(self.idxs) / self.trial_data.shape[0]
+            self.num_tents = int(self.num_tents * self.subsamp_ratio)
+
+            if self.num_tents < 3:
+                raise ValueError(
+                    f"too few trials or tents, resulting in {self.num_tents} tents for the subsampled encoder"
+                )
+
+            self.trial_data = self.trial_data.iloc[self.idxs]
+            self.psths = {reg: self.psths[reg][:, self.idxs, :] for reg in self.regions}
 
     def build_dm(self):
         if not (hasattr(self, "psths")):
@@ -92,7 +112,6 @@ class Encoder:
             self.psths,
             self.trial_data,
             self.regions,
-            strategy_filter=None,
             norm=self.norm,
             num_tents=self.num_tents,
             tv_keys=self.tv_keys,
@@ -124,10 +143,20 @@ class Encoder:
             if not hasattr(self, "encoder"):
                 self.fit_encoder()
 
-            dm_tv_ko = deepcopy(self.dm)
-            dm_tv_ko[:, 5:] = 0
+            if self.separate_drift:
+                if (
+                    not hasattr(self, "robs_predict")
+                    or "ps_baseline" not in self.robs_predict.keys()
+                ):
+                    self.baseline_predict(pseudo=False)
 
-            self.robs_predict["ps_baseline"] = self.encoder.predict(dm_tv_ko)
+                self.robs_predict["ps_baseline"] = self.robs_predict["baseline"]
+            else:
+                if not hasattr(self, "dm_tv_ko"):
+                    self.dm_tv_ko = deepcopy(self.dm)
+                    self.dm_tv_ko[:, self.num_tents :] = 0
+
+                self.robs_predict["ps_baseline"] = self.encoder.predict(self.dm_tv_ko)
 
     def fit_encoder(self):
         if not (hasattr(self, "dm") and hasattr(self, "robs")):
@@ -219,12 +248,13 @@ class Encoder:
                     multioutput="raw_values",
                 )
 
-                dm_tv_ko = deepcopy(self.dm)
-                dm_tv_ko[:, 5:] = 0
+                if not hasattr(self, "dm_tv_ko"):
+                    self.dm_tv_ko = deepcopy(self.dm)
+                    self.dm_tv_ko[:, self.num_tents :] = 0
 
                 self.scores_cv["ps_baseline"][i] = r2_score(
                     self.robs[test_idxs],
-                    encoder.predict(dm_tv_ko[test_idxs]),
+                    encoder.predict(self.dm_tv_ko[test_idxs]),
                     multioutput="raw_values",
                 )
 
@@ -294,10 +324,10 @@ class Encoder:
         )
         if cond == "response":
             keys = ["left", "right"]
-            idxs = [6, 5]
+            idxs = [self.num_tents + 2 - 1, self.num_tents + 1 - 1]
         elif cond == "rewarded":
             keys = ["corr", "incorr"]
-            idxs = [8, 7]
+            idxs = [self.num_tents + 4 - 1, self.num_tents + 3 - 1]
 
         for i in range(2):
             axes[i].scatter(
@@ -340,7 +370,7 @@ class ShuffledEncoder:
         self.encoder_full = Encoder(subj_id, sess_id, **kwargs)
         self.encoder_full.get_r2()
 
-        self.task_vars = self.encoder_full.task_vars
+        self.task_vars = self.encoder_full.tv_keys
 
     def get_cvr2(self, pivot, n_iters=3):
         # TODO: rerun the shuffle several times
@@ -363,7 +393,7 @@ class ShuffledEncoder:
             encoder_shuffle.get_data()
 
             # shuffle all taskvars besides the pivot
-            for tv in encoder_shuffle.task_vars:
+            for tv in encoder_shuffle.tv_keys:
                 if not tv == pivot:
                     encoder_shuffle.trial_data[tv] = (
                         encoder_shuffle.trial_data[tv]

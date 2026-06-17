@@ -179,13 +179,6 @@ class Encoder:
                 self.psths = {reg: self.psths[reg] for reg in self.regions}
                 self.spike_times = {reg: self.spike_times[reg] for reg in self.regions}
 
-        if (
-            self.regions[0] == "DMS"
-            and self.regions[1] == "DLS"
-            and len(self.regions) == 2
-        ):
-            self.regions = ["DLS", "DMS"]
-
         # sanity check check
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
