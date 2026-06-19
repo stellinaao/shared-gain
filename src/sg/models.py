@@ -11,6 +11,8 @@ from core.data import (
     get_encoder_io,
     get_tavg_sc_cond,
 )
+
+
 from squiggs.neuron_viewer import NeuronViewer
 from squiggs.renderers import FitRenderer
 from utils.paths import FIGURES_DIR
@@ -36,11 +38,10 @@ class Encoder:
                 "rewarded_prev",
             ],
         )
-        self.num_tents = kwargs.pop("num_tents", 5)
         self.norm = kwargs.pop("norm", True)
         self.separate_drift = kwargs.pop("separate_drift", False)
-        self.strategy_filter = kwargs.pop("strategy_filter", None)
-        self.idxs = kwargs.pop("idxs", None)  # takes precedent over strategy_filter
+
+        self.num_tents = kwargs.pop("num_tents", 5)
 
         self.tpre = kwargs.pop("tpre", 0.5)
         self.tpost = kwargs.pop("tpost", 1)
@@ -77,29 +78,9 @@ class Encoder:
             thresh=self.thresh,
         )
 
-        if self.strategy_filter is not None or self.idxs is not None:
-            # defined idxs always takes precedence
-            if self.idxs is None and self.strategy_filter is not None:
-                self.idxs_all = get_strategy_filter_idxs(
-                    self.trial_data, self.strategy_filter, balance_strategy=True
-                )
-                self.idxs = self.idxs_all[self.strategy_filter]
-
-            self.subsamp_ratio = len(self.idxs) / self.trial_data.shape[0]
-            self.num_tents = int(self.num_tents * self.subsamp_ratio)
-
-            if self.num_tents < 2:
-                raise RuntimeError(
-                    f"too few trials or tents, resulting in {self.num_tents} tents for the subsampled encoder"
-                )
-
-            self.trial_data = self.trial_data.iloc[self.idxs]
-            self.psths = {reg: self.psths[reg][:, self.idxs, :] for reg in self.regions}
-
     def build_dm(self):
         if not (hasattr(self, "psths")):
             self.get_data()
-
         (
             self.tents,
             self.tvs,
@@ -145,7 +126,7 @@ class Encoder:
             if self.separate_drift:
                 if (
                     not hasattr(self, "robs_predict")
-                    or "ps_baseline" not in self.robs_predict.keys()
+                    or "baseline" not in self.robs_predict.keys()
                 ):
                     self.baseline_predict(pseudo=False)
 
@@ -162,18 +143,25 @@ class Encoder:
             self.build_dm()
 
         if self.separate_drift:
-            self.fit_baseline()
+            if not hasattr(self, "baseline_model"):
+                self.fit_baseline()
             self.baseline_predict()
 
             self.encoder = RidgeCV(
                 alphas=np.logspace(-5, 5, 11, base=10),
                 alpha_per_target=True,
             ).fit(self.tvs, self.robs - self.robs_predict["baseline"])
+
+            self.encoder_weights = np.hstack(
+                (self.baseline_model.coef_, self.encoder.coef_)
+            )
         else:
             self.encoder = RidgeCV(
                 alphas=np.logspace(-5, 5, 11, base=10),
                 alpha_per_target=True,
             ).fit(self.dm, self.robs)
+
+            self.encoder_weights = self.encoder.coef_
 
     def encoder_predict(self):
         if not hasattr(self, "robs_predict"):
@@ -188,7 +176,7 @@ class Encoder:
         else:
             self.robs_predict["encoder"] = self.encoder.predict(self.dm)
 
-    def get_r2(self, n_folds=10, p_train=0.8):
+    def get_r2(self, n_folds=10, p_train=0.75):
         if not hasattr(self, "robs"):
             self.build_dm()
 
@@ -231,6 +219,7 @@ class Encoder:
                     baseline_model.predict(self.tents[test_idxs])
                     + encoder.predict(self.tvs[test_idxs]),
                     multioutput="raw_values",
+                    force_finite=False,
                 )
 
                 self.scores_cv["ps_baseline"][i] = self.scores_cv["baseline"][i]
@@ -279,7 +268,10 @@ class Encoder:
 
     def plot_r2_comp(self, ax=None):
         if not hasattr(self, "scores"):
-            self.get_r2()
+            try:
+                self.get_r2()
+            except NotImplementedError:
+                return
 
         if ax is None:
             _, ax = plt.figure(tight_layout=True)
@@ -314,6 +306,7 @@ class Encoder:
         else:
             robs_baseline = None
 
+        # TODO: FLAG; range of values is different
         sc_tavg = get_tavg_sc_cond(
             self.robs,
             self.trial_data,
@@ -330,7 +323,7 @@ class Encoder:
 
         for i in range(2):
             axes[i].scatter(
-                sc_tavg[keys[i]], self.encoder.coef_[:, idxs[i]], s=0.5, alpha=0.5
+                sc_tavg[keys[i]], self.encoder_weights[:, idxs[i]], s=0.5, alpha=0.5
             )
             axes[i].axhline(y=0, color="k", linewidth=0.5)
             axes[i].axvline(x=0, color="k", linewidth=0.5)
@@ -352,6 +345,116 @@ class Encoder:
         r = FitRenderer(y=self.robs, yhat=self.robs_predict[model], mode="lite")
 
         _ = NeuronViewer(num_units=self.num_units, render_func=r, fig_dir=FIGURES_DIR)
+
+
+class StrategyEncoder(Encoder):
+    def __init__(
+        self,
+        subj_id,
+        sess_id,
+        strategy_filter="mb",
+        idxs=None,
+        **kwargs,
+    ):
+        self.subj_id = subj_id
+        self.sess_id = sess_id
+
+        self.strategy_filter = strategy_filter
+        self.idxs = idxs
+
+        if not (self.strategy_filter == "mb" or self.strategy_filter == "mf"):
+            raise ValueError("strategy_filter must be mb or mf")
+
+        self.encoder_ref = Encoder(subj_id=subj_id, sess_id=sess_id, **kwargs)
+
+        super().__init__(
+            subj_id,
+            sess_id,
+            num_tents=self.encoder_ref.num_tents,
+            separate_drift=True,
+            **kwargs,
+        )
+
+    def get_data(self):
+        super().get_data()
+
+        if self.idxs is None:
+            self.idxs_all = get_strategy_filter_idxs(
+                self.trial_data, self.strategy_filter, balance_strategy=True
+            )
+            self.idxs = self.idxs_all[self.strategy_filter]
+
+        self.trial_data = self.trial_data.iloc[self.idxs]
+        self.psths = {reg: self.psths[reg][:, self.idxs, :] for reg in self.regions}
+
+    def build_dm(self):
+        super().build_dm()
+
+        self.encoder_ref.build_dm()
+        self.tents = self.encoder_ref.tents[self.idxs]
+
+    def fit_baseline(self):
+        if not (hasattr(self, "dm") and hasattr(self, "robs")):
+            self.build_dm()
+
+        self.encoder_ref.fit_baseline()
+        self.baseline_model = self.encoder_ref.baseline_model
+
+    # def baseline_predict(self):
+    #     super().baseline_predict()
+
+    # def fit_encoder(self):
+    #     super().fit_encoder()
+
+    # def encoder_predict(self):
+    #     super().encoder_predict()
+
+    def get_r2(self, n_folds=10, p_train=0.8):
+        if not hasattr(self, "robs"):
+            self.build_dm()
+
+        self.scores_cv = {
+            "baseline": np.zeros((n_folds, self.num_units)),
+            "encoder": np.zeros((n_folds, self.num_units)),
+        }
+
+        self.encoder_ref.get_r2()
+        self.scores_cv["baseline"] = self.encoder_ref.scores_cv["baseline"]
+
+        # encoder
+        for i in range(n_folds):
+            train_idxs = np.sort(
+                np.random.choice(
+                    self.num_trials, int(self.num_trials * p_train), replace=False
+                )
+            )
+            test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
+
+            if (
+                not hasattr(self, "robs_predict")
+                or "baseline" not in self.robs_predict.keys()
+            ):
+                self.baseline_predict()
+
+            encoder = RidgeCV(
+                alphas=np.logspace(-5, 5, 11, base=10),
+                alpha_per_target=True,
+            ).fit(
+                self.tvs[train_idxs],
+                self.robs[train_idxs] - self.robs_predict["baseline"][train_idxs],
+            )
+
+            self.scores_cv["encoder"][i] = r2_score(
+                self.robs[test_idxs],
+                self.robs_predict["baseline"][test_idxs]
+                + encoder.predict(self.tvs[test_idxs]),
+                multioutput="raw_values",
+            )
+
+        self.scores = {
+            "baseline": np.median(self.scores_cv["baseline"], axis=0),
+            "encoder": np.median(self.scores_cv["encoder"], axis=0),
+        }
 
 
 class ShuffledEncoder:
