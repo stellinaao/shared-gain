@@ -120,9 +120,6 @@ class Encoder:
 
             self.robs_predict["baseline"] = self.baseline_model.predict(self.tents)
         else:
-            if not hasattr(self, "encoder"):
-                self.fit_encoder()
-
             if self.separate_drift:
                 if (
                     not hasattr(self, "robs_predict")
@@ -132,6 +129,9 @@ class Encoder:
 
                 self.robs_predict["ps_baseline"] = self.robs_predict["baseline"]
             else:
+                if not hasattr(self, "encoder"):
+                    self.fit_encoder()
+
                 if not hasattr(self, "dm_tv_ko"):
                     self.dm_tv_ko = deepcopy(self.dm)
                     self.dm_tv_ko[:, self.num_tents :] = 0
@@ -302,18 +302,24 @@ class Encoder:
                 or "ps_baseline" not in self.robs_predict.keys()
             ):
                 self.baseline_predict(pseudo=True)
-            robs_baseline = self.robs_predict["ps_baseline"]
+            robs_baseline_a = self.robs_predict["ps_baseline"]
+
             if cond == "response":
                 keys = ["left", "right"]
             elif cond == "rewarded":
                 keys = ["corr", "incorr"]
-            idxs = [np.where(self.dm_names == f"{cond}_{key}")[0][0] for key in keys]
+            idxs = (
+                np.array(
+                    [np.where(self.dm_names == f"{cond}_{key}")[0][0] for key in keys]
+                )
+                - self.num_tents
+            )
 
-            self.dm_pivot_ko = deepcopy(self.dm)
-            self.dm_pivot_ko[:, idxs] = 0
+            self.tv_pivot_ko = deepcopy(self.tvs)
+            self.tv_pivot_ko[:, idxs] = 0
 
-            robs_baseline = self.encoder.predict(self.dm_pivot_ko)
-            print("yippee")
+            robs_baseline_b = self.encoder.predict(self.tv_pivot_ko)
+            robs_baseline = robs_baseline_a + robs_baseline_b
 
         else:
             robs_baseline = None
@@ -404,9 +410,6 @@ class StrategyEncoder(Encoder):
         self.tents = self.encoder_ref.tents[self.idxs]
 
     def fit_baseline(self):
-        if not (hasattr(self, "dm") and hasattr(self, "robs")):
-            self.build_dm()
-
         self.encoder_ref.fit_baseline()
         self.baseline_model = self.encoder_ref.baseline_model
 
