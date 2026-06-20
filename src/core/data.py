@@ -662,14 +662,15 @@ def get_choice_ts(trial_data, mode="both"):
 
 
 # ROBS
-def get_tavg_sc_cond(robs, trial_data, cond, robs_drift=None, subtract_drift=False):
-    print
+def get_tavg_sc_cond(
+    robs, trial_data, cond, robs_to_subtract=None, subtract_robs=False
+):
     if cond == "response":
         left_mask = trial_data.response == 1
         right_mask = trial_data.response == -1
 
-        if subtract_drift:
-            robs = robs - robs_drift
+        if subtract_robs:
+            robs = robs - robs_to_subtract
         sc_tavg = {
             "left": robs[left_mask].mean(axis=0),
             "right": robs[right_mask].mean(axis=0),
@@ -678,8 +679,8 @@ def get_tavg_sc_cond(robs, trial_data, cond, robs_drift=None, subtract_drift=Fal
         corr_mask = trial_data.rewarded == 1
         incorr_mask = trial_data.rewarded == 0
 
-        if subtract_drift:
-            robs = robs - robs_drift
+        if subtract_robs:
+            robs = robs - robs_to_subtract
 
         sc_tavg = {
             "corr": robs[corr_mask].mean(axis=0),

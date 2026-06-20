@@ -202,6 +202,7 @@ class Encoder:
                 self.robs[test_idxs],
                 baseline_model.predict(self.tents[test_idxs]),
                 multioutput="raw_values",
+                force_finite=False,
             )
 
             if self.separate_drift:
@@ -234,6 +235,7 @@ class Encoder:
                     self.robs[test_idxs],
                     encoder.predict(self.dm[test_idxs]),
                     multioutput="raw_values",
+                    force_finite=False,
                 )
 
                 if not hasattr(self, "dm_tv_ko"):
@@ -244,6 +246,7 @@ class Encoder:
                     self.robs[test_idxs],
                     encoder.predict(self.dm_tv_ko[test_idxs]),
                     multioutput="raw_values",
+                    force_finite=False,
                 )
 
         self.scores = {
@@ -296,46 +299,51 @@ class Encoder:
         if not hasattr(self, "encoder"):
             self.fit_encoder()
 
+        if cond == "response":
+            keys = ["left", "right"]
+        elif cond == "rewarded":
+            keys = ["corr", "incorr"]
+        idxs = np.array(
+            [np.where(self.dm_names == f"{cond}_{key}")[0][0] for key in keys]
+        )
+
         if subtract_baseline:
-            if (
-                not hasattr(self, "robs_predict")
-                or "ps_baseline" not in self.robs_predict.keys()
-            ):
-                self.baseline_predict(pseudo=True)
-            robs_baseline_a = self.robs_predict["ps_baseline"]
+            if self.separate_drift:
+                # get baseline explained variance
+                if (
+                    not hasattr(self, "robs_predict")
+                    or "ps_baseline" not in self.robs_predict.keys()
+                ):
+                    self.baseline_predict(pseudo=True)
+                robs_baseline = self.robs_predict["ps_baseline"]
 
-            if cond == "response":
-                keys = ["left", "right"]
-            elif cond == "rewarded":
-                keys = ["corr", "incorr"]
-            idxs = (
-                np.array(
-                    [np.where(self.dm_names == f"{cond}_{key}")[0][0] for key in keys]
-                )
-                - self.num_tents
-            )
+                # get tv explained variance (besides pivot)
+                pivot_idxs = idxs - self.num_tents
 
-            self.tv_pivot_ko = deepcopy(self.tvs)
-            self.tv_pivot_ko[:, idxs] = 0
+                self.tv_pivot_ko = deepcopy(self.tvs)
+                self.tv_pivot_ko[:, pivot_idxs] = 0
 
-            robs_baseline_b = self.encoder.predict(self.tv_pivot_ko)
-            robs_baseline = robs_baseline_a + robs_baseline_b
+                robs_tv = self.encoder.predict(self.tv_pivot_ko)
+                robs_to_subtract = robs_baseline + robs_tv
+
+            else:
+                pivot_idxs = idxs
+
+                self.dm_pivot_ko = deepcopy(self.dm)
+                self.dm_pivot_ko[:, pivot_idxs] = 0
+
+                robs_to_subtract = self.encoder.predict(self.dm_pivot_ko)
 
         else:
-            robs_baseline = None
+            robs_to_subtract = None
 
         sc_tavg = get_tavg_sc_cond(
             self.robs,
             self.trial_data,
             cond=cond,
-            robs_drift=robs_baseline,
-            subtract_drift=subtract_baseline,
+            robs_to_subtract=robs_to_subtract,
+            subtract_robs=subtract_baseline,
         )
-        if cond == "response":
-            keys = ["left", "right"]
-        elif cond == "rewarded":
-            keys = ["corr", "incorr"]
-        idxs = [np.where(self.dm_names == f"{cond}_{key}")[0][0] for key in keys]
 
         for i in range(2):
             axes[i].scatter(
@@ -462,6 +470,7 @@ class StrategyEncoder(Encoder):
                 self.robs_predict["baseline"][test_idxs]
                 + encoder.predict(self.tvs[test_idxs]),
                 multioutput="raw_values",
+                force_finite=False,
             )
 
         self.scores = {
