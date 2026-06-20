@@ -176,7 +176,7 @@ class Encoder:
         else:
             self.robs_predict["encoder"] = self.encoder.predict(self.dm)
 
-    def get_r2(self, n_folds=10, p_train=0.75):
+    def get_r2(self, n_folds=20, p_train=0.8):
         if not hasattr(self, "robs"):
             self.build_dm()
 
@@ -303,10 +303,21 @@ class Encoder:
             ):
                 self.baseline_predict(pseudo=True)
             robs_baseline = self.robs_predict["ps_baseline"]
+            if cond == "response":
+                keys = ["left", "right"]
+            elif cond == "rewarded":
+                keys = ["corr", "incorr"]
+            idxs = [np.where(self.dm_names == f"{cond}_{key}")[0][0] for key in keys]
+
+            self.dm_pivot_ko = deepcopy(self.dm)
+            self.dm_pivot_ko[:, idxs] = 0
+
+            robs_baseline = self.encoder.predict(self.dm_pivot_ko)
+            print("yippee")
+
         else:
             robs_baseline = None
 
-        # TODO: FLAG; range of values is different
         sc_tavg = get_tavg_sc_cond(
             self.robs,
             self.trial_data,
@@ -316,10 +327,9 @@ class Encoder:
         )
         if cond == "response":
             keys = ["left", "right"]
-            idxs = [self.num_tents + 2 - 1, self.num_tents + 1 - 1]
         elif cond == "rewarded":
             keys = ["corr", "incorr"]
-            idxs = [self.num_tents + 4 - 1, self.num_tents + 3 - 1]
+        idxs = [np.where(self.dm_names == f"{cond}_{key}")[0][0] for key in keys]
 
         for i in range(2):
             axes[i].scatter(
@@ -409,7 +419,7 @@ class StrategyEncoder(Encoder):
     # def encoder_predict(self):
     #     super().encoder_predict()
 
-    def get_r2(self, n_folds=10, p_train=0.8):
+    def get_r2(self, n_folds=20, p_train=0.8):
         if not hasattr(self, "robs"):
             self.build_dm()
 
