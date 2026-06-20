@@ -403,6 +403,7 @@ class StrategyEncoder(Encoder):
         super().get_data()
 
         if self.idxs is None:
+            print(self.trial_data.shape)
             self.idxs_all = get_strategy_filter_idxs(
                 self.trial_data, self.strategy_filter, balance_strategy=True
             )
