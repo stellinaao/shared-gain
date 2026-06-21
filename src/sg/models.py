@@ -347,7 +347,14 @@ class Encoder:
 
         for i in range(2):
             axes[i].scatter(
-                sc_tavg[keys[i]], self.encoder_weights[:, idxs[i]], s=0.5, alpha=0.5
+                sc_tavg[keys[i]],
+                self.encoder_weights[:, idxs[i]],
+                s=0.5,
+                alpha=0.5,
+                vmin=1e-5,
+                vmax=1e5,
+                c=self.encoder.alpha_,
+                norm="log",
             )
             axes[i].axhline(y=0, color="k", linewidth=0.5)
             axes[i].axvline(x=0, color="k", linewidth=0.5)
@@ -403,6 +410,7 @@ class StrategyEncoder(Encoder):
         super().get_data()
 
         if self.idxs is None:
+            print(self.trial_data.shape)
             self.idxs_all = get_strategy_filter_idxs(
                 self.trial_data, self.strategy_filter, balance_strategy=True
             )
