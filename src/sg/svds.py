@@ -19,7 +19,7 @@ import cv2
 from utils.paths import PROJECT_ROOT
 from core.data import subject_ids, session_ids
 
-LABELS = ["cam0"]  # , "cam1", "cam2"]  # adjust as needed
+LABELS = ["cam1"]  # , "cam1", "cam2"]  # adjust as needed
 
 
 # ----------------- Helper -----------------

@@ -256,17 +256,20 @@ class Encoder:
         }
 
     def verify(self, cond="response", subtract_baseline=True):
-        _, axes = plt.subplots(ncols=5, nrows=1, figsize=(7.5, 1.5), tight_layout=True)
+        _, axes = plt.subplots(ncols=6, nrows=1, figsize=(9, 1.5), tight_layout=True)
 
         # baseline vs encoder r2
         self.plot_r2_comp(axes[0])
 
+        # p(resp)
+        self.plot_p_resp(axes[1])
+
         # sctavg vs beta weight
         self.plot_sctavg_weights(
-            axes[1:3], cond="response", subtract_baseline=subtract_baseline
+            axes[2:4], cond="response", subtract_baseline=subtract_baseline
         )
         self.plot_sctavg_weights(
-            axes[3:5], cond="rewarded", subtract_baseline=subtract_baseline
+            axes[4:6], cond="rewarded", subtract_baseline=subtract_baseline
         )
 
     def plot_r2_comp(self, ax=None):
@@ -356,11 +359,46 @@ class Encoder:
                 c=self.encoder.alpha_,
                 norm="log",
             )
+
+            mn = min(min(sc_tavg[keys[i]]), min(self.encoder_weights[:, idxs[i]]))
+            mx = max(max(sc_tavg[keys[i]]), max(self.encoder_weights[:, idxs[i]]))
+            axes[i].plot(
+                [1.05 * mn, 1.05 * mx],
+                [1.05 * mn, 1.05 * mx],
+                color="#666666",
+                linewidth=0.7,
+                linestyle="--",
+                zorder=0,
+            )
             axes[i].axhline(y=0, color="k", linewidth=0.5)
             axes[i].axvline(x=0, color="k", linewidth=0.5)
 
             axes[i].set_xlabel(f"avg norm sc, {keys[i]}")
             axes[i].set_ylabel(f"beta weight, {keys[i]}")
+
+    def get_resp_units(self):
+        if not hasattr(self, "scores"):
+            self.get_r2()
+
+        self.resp_idxs = np.where(
+            (self.scores["encoder"] > self.scores["baseline"])
+            & (self.scores["encoder"] > 0)
+        )[0]
+        self.p_resp = len(self.resp_idxs) / self.num_units
+
+    def plot_p_resp(self, ax):
+        if ax is None:
+            _, ax = plt.figure(tight_layout=True)
+
+        if not hasattr(self, "resp_idxs"):
+            self.get_resp_units()
+
+        ax.pie(
+            [self.num_units - len(self.resp_idxs), len(self.resp_idxs)],
+            colors=["#666666", "#F1AeAe"],
+            autopct="%.1f%%",
+            startangle=90,
+        )
 
     def view_fits(self, model="encoder"):
         if not hasattr(self, "robs_predict") or model not in self.robs_predict.keys():
@@ -410,7 +448,7 @@ class StrategyEncoder(Encoder):
         super().get_data()
 
         if self.idxs is None:
-            print(self.trial_data.shape)
+            # print(self.trial_data.shape)
             self.idxs_all = get_strategy_filter_idxs(
                 self.trial_data, self.strategy_filter, balance_strategy=True
             )
