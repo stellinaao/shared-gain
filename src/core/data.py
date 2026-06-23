@@ -155,6 +155,7 @@ def load_sess(
         trial_data = pd.read_csv(fpath / "trialdata.csv")
         regions = np.array(list(neural_data.keys()))
 
+        print(trial_data.shape)
         # trial_data edits and addendums
         trial_data["trial_start_time"] = session_data["events"].iloc[
             np.where(np.array(session_data["event_labels"]) == "trial_start")[0][0]
