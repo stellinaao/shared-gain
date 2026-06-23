@@ -155,7 +155,6 @@ def load_sess(
         trial_data = pd.read_csv(fpath / "trialdata.csv")
         regions = np.array(list(neural_data.keys()))
 
-        print(trial_data.shape)
         # trial_data edits and addendums
         trial_data["trial_start_time"] = session_data["events"].iloc[
             np.where(np.array(session_data["event_labels"]) == "trial_start")[0][0]
@@ -221,6 +220,11 @@ def load_sess(
             thresh=thresh,
             binwidth_ms=binwidth_ms,
         )
+
+        # add svds
+        svds_df = get_svd_df(subj_id, sess_id, trial_data, session_data)
+
+        trial_data = trial_data.join(svds_df)
 
         return spike_times, trial_data, psths, session_data, regions
     elif mode == "old":
@@ -435,6 +439,46 @@ def get_trial_mask(trial_data, strategy_only=True, reward_only=False):
         mask = (mask) & (~(trial_data["strategy"] == 0))
 
     return mask
+
+
+# SVD
+def get_svd_df(subj_id, sess_id, trial_data, session_data):
+    trial_start = session_data["events"]["event_timestamps"][0]
+    movie_frame = session_data["events"]["event_timestamps"][1]
+
+    movements = np.load(
+        DATA_DIR
+        / subj_id
+        / sess_id
+        / f"{subj_id}_DynamicForaging_{sess_id}_cam1_run000_00000000.npy",
+        allow_pickle=True,
+    ).item()
+
+    frame_trial_idxs = get_frame_trial_idxs(trial_start, trial_data, movie_frame)
+
+    svd_tavg = np.zeros((len(frame_trial_idxs), 200))
+    for i, (start, end) in enumerate(frame_trial_idxs):
+        svd_tavg[i] = movements["SVT"][:, start:end].mean(axis=1)
+
+    svd_df = pd.DataFrame(svd_tavg, columns=[f"SVD_{i}" for i in range(200)])
+
+    return svd_df
+
+
+def get_frame_trial_idxs(trial_start, trial_data, movie_frame):
+    frame_trial_idxs = np.zeros((len(trial_start), 2), dtype=np.int32)
+
+    trial_start = np.append(
+        trial_start, trial_start[-1] + trial_data["outcome_time"].iloc[-1]
+    )  # TODO
+
+    for trial_i in range(frame_trial_idxs.shape[0]):
+        start_idx = np.searchsorted(movie_frame, trial_start[trial_i])
+        end_idx = np.searchsorted(movie_frame, trial_start[trial_i + 1])
+
+        frame_trial_idxs[trial_i] = (start_idx, end_idx)
+
+    return frame_trial_idxs
 
 
 # PR
