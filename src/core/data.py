@@ -19,6 +19,7 @@ import os
 import shutup
 
 from sklearn.preprocessing import OneHotEncoder as OHE
+from scipy.stats import zscore
 
 from spks.utils import get_cluster_spike_times
 from damn.alignment import compute_spike_count
@@ -107,6 +108,7 @@ def load_sess(
     tpre_ref=0.5,
     tpost_ref=1,
     alignment_ref=None,
+    add_svd=False,
     trial_start_pre=0,
     thresh=1,
 ):
@@ -222,9 +224,9 @@ def load_sess(
         )
 
         # add svds
-        svds_df = get_svd_df(subj_id, sess_id, trial_data, session_data)
-
-        trial_data = trial_data.join(svds_df)
+        if add_svd:
+            svds_df = get_svd_df(subj_id, sess_id, trial_data, session_data)
+            trial_data = trial_data.join(svds_df)
 
         return spike_times, trial_data, psths, session_data, regions
     elif mode == "old":
@@ -842,6 +844,8 @@ def get_encoder_io(
     norm=True,
     num_tents=10,
     tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
+    add_svd=True,
+    num_svd=10,
     binwidth_ms=25,
 ):
     # robs
@@ -864,8 +868,15 @@ def get_encoder_io(
     reg_idxs = {reg: np.where(reg_mask == i)[0] for i, reg in enumerate(regions)}
 
     # tvs
+    # non-movement
     ohe = OHE().fit(trial_data[tv_keys])
     tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
+
+    # movement
+    if add_svd:
+        svd_keys = [f"SVD_{i}" for i in range(num_svd)]
+        tvs_svd = zscore(trial_data[svd_keys], axis=0)
+        tvs = np.hstack((tvs, tvs_svd))
 
     # tents
     # uniform splines at same frequency whether subsampled or not

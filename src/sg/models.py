@@ -38,6 +38,10 @@ class Encoder:
                 "rewarded_prev",
             ],
         )
+        self.add_svd = kwargs.pop("add_svd", False)
+        if self.add_svd:
+            self.num_svd = kwargs.pop("num_svd", 10)
+
         self.norm = kwargs.pop("norm", True)
         self.separate_drift = kwargs.pop("separate_drift", False)
 
@@ -75,6 +79,7 @@ class Encoder:
             tpost_ref=self.tpost_ref,
             alignment_ref=self.alignment_ref,
             binwidth_ms=self.binwidth_ms,
+            add_svd=self.add_svd,
             thresh=self.thresh,
         )
 
@@ -95,6 +100,8 @@ class Encoder:
             norm=self.norm,
             num_tents=self.num_tents,
             tv_keys=self.tv_keys,
+            add_svd=self.add_svd,
+            num_svd=self.num_svd if self.add_svd else None,
             binwidth_ms=25,
         )
 
@@ -106,7 +113,7 @@ class Encoder:
             self.build_dm()
 
         self.baseline_model = RidgeCV(
-            alphas=np.logspace(-5, 5, 11, base=10),
+            alphas=np.logspace(-5, 10, 16, base=10),
             alpha_per_target=True,
         ).fit(self.tents, self.robs)
 
@@ -148,7 +155,7 @@ class Encoder:
             self.baseline_predict()
 
             self.encoder = RidgeCV(
-                alphas=np.logspace(-5, 5, 11, base=10),
+                alphas=np.logspace(-5, 10, 16, base=10),
                 alpha_per_target=True,
             ).fit(self.tvs, self.robs - self.robs_predict["baseline"])
 
@@ -157,7 +164,7 @@ class Encoder:
             )
         else:
             self.encoder = RidgeCV(
-                alphas=np.logspace(-5, 5, 11, base=10),
+                alphas=np.logspace(-5, 10, 16, base=10),
                 alpha_per_target=True,
             ).fit(self.dm, self.robs)
 
@@ -195,7 +202,7 @@ class Encoder:
             test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
             baseline_model = RidgeCV(
-                alphas=np.logspace(-5, 5, 11, base=10), alpha_per_target=True
+                alphas=np.logspace(-5, 10, 16, base=10), alpha_per_target=True
             ).fit(self.tents[train_idxs], self.robs[train_idxs])
 
             self.scores_cv["baseline"][i] = r2_score(
@@ -207,7 +214,7 @@ class Encoder:
 
             if self.separate_drift:
                 encoder = RidgeCV(
-                    alphas=np.logspace(-5, 5, 11, base=10),
+                    alphas=np.logspace(-5, 10, 16, base=10),
                     alpha_per_target=True,
                 ).fit(
                     self.tvs[train_idxs],
@@ -227,7 +234,7 @@ class Encoder:
 
             else:
                 encoder = RidgeCV(
-                    alphas=np.logspace(-5, 5, 11, base=10),
+                    alphas=np.logspace(-5, 10, 16, base=10),
                     alpha_per_target=True,
                 ).fit(self.dm[train_idxs], self.robs[train_idxs])
 
@@ -256,7 +263,7 @@ class Encoder:
         }
 
     def verify(self, cond="response", subtract_baseline=True):
-        _, axes = plt.subplots(ncols=6, nrows=1, figsize=(9, 1.5), tight_layout=True)
+        _, axes = plt.subplots(ncols=6, nrows=1, figsize=(10, 1.5), tight_layout=True)
 
         # baseline vs encoder r2
         self.plot_r2_comp(axes[0])
@@ -357,6 +364,7 @@ class Encoder:
                 vmin=1e-5,
                 vmax=1e5,
                 c=self.encoder.alpha_,
+                cmap="viridis",
                 norm="log",
             )
 
@@ -373,7 +381,7 @@ class Encoder:
             axes[i].axhline(y=0, color="k", linewidth=0.5)
             axes[i].axvline(x=0, color="k", linewidth=0.5)
 
-            axes[i].set_xlabel(f"avg norm sc, {keys[i]}")
+            axes[i].set_xlabel(f"resid spk count, {keys[i]}")
             axes[i].set_ylabel(f"beta weight, {keys[i]}")
 
     def get_resp_units(self):
@@ -504,7 +512,7 @@ class StrategyEncoder(Encoder):
                 self.baseline_predict()
 
             encoder = RidgeCV(
-                alphas=np.logspace(-5, 5, 11, base=10),
+                alphas=np.logspace(-5, 10, 16, base=10),
                 alpha_per_target=True,
             ).fit(
                 self.tvs[train_idxs],
