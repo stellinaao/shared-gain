@@ -28,6 +28,8 @@ class Encoder:
         self.subj_id = subj_id
         self.sess_id = sess_id
 
+        self.random_state = kwargs.pop("random_state", 1024)
+
         self.tv_keys = kwargs.pop(
             "tv_keys",
             [
@@ -42,7 +44,7 @@ class Encoder:
         if self.add_svd:
             self.num_svd = kwargs.pop("num_svd", 10)
 
-        self.norm = kwargs.pop("norm", True)
+        self.norm = kwargs.pop("norm", False)
         self.separate_drift = kwargs.pop("separate_drift", False)
 
         self.num_tents = kwargs.pop("num_tents", 5)
@@ -61,6 +63,9 @@ class Encoder:
         if len(kwargs) > 0:
             extra_kwargs = ", ".join('"%s' % k for k in list(kwargs.keys()))
             raise ValueError("Extra arguments %s" % extra_kwargs)
+
+    def seed(self):
+        np.random.seed(self.random_state)
 
     def get_data(self):
         (
@@ -113,7 +118,7 @@ class Encoder:
             self.build_dm()
 
         self.baseline_model = RidgeCV(
-            alphas=np.logspace(-5, 10, 16, base=10),
+            alphas=np.logspace(-5, 5, 11, base=10),
             alpha_per_target=True,
         ).fit(self.tents, self.robs)
 
@@ -155,7 +160,7 @@ class Encoder:
             self.baseline_predict()
 
             self.encoder = RidgeCV(
-                alphas=np.logspace(-5, 10, 16, base=10),
+                alphas=np.logspace(-5, 5, 11, base=10),
                 alpha_per_target=True,
             ).fit(self.tvs, self.robs - self.robs_predict["baseline"])
 
@@ -164,7 +169,7 @@ class Encoder:
             )
         else:
             self.encoder = RidgeCV(
-                alphas=np.logspace(-5, 10, 16, base=10),
+                alphas=np.logspace(-5, 5, 11, base=10),
                 alpha_per_target=True,
             ).fit(self.dm, self.robs)
 
@@ -194,6 +199,7 @@ class Encoder:
         }
 
         for i in range(n_folds):
+            np.random.seed(seed=i)
             train_idxs = np.sort(
                 np.random.choice(
                     self.num_trials, int(self.num_trials * p_train), replace=False
@@ -202,7 +208,7 @@ class Encoder:
             test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
             baseline_model = RidgeCV(
-                alphas=np.logspace(-5, 10, 16, base=10), alpha_per_target=True
+                alphas=np.logspace(-5, 5, 11, base=10), alpha_per_target=True
             ).fit(self.tents[train_idxs], self.robs[train_idxs])
 
             self.scores_cv["baseline"][i] = r2_score(
@@ -214,7 +220,7 @@ class Encoder:
 
             if self.separate_drift:
                 encoder = RidgeCV(
-                    alphas=np.logspace(-5, 10, 16, base=10),
+                    alphas=np.logspace(-5, 5, 11, base=10),
                     alpha_per_target=True,
                 ).fit(
                     self.tvs[train_idxs],
@@ -234,7 +240,7 @@ class Encoder:
 
             else:
                 encoder = RidgeCV(
-                    alphas=np.logspace(-5, 10, 16, base=10),
+                    alphas=np.logspace(-5, 5, 11, base=10),
                     alpha_per_target=True,
                 ).fit(self.dm[train_idxs], self.robs[train_idxs])
 
@@ -255,6 +261,8 @@ class Encoder:
                     multioutput="raw_values",
                     force_finite=False,
                 )
+
+        self.seed()
 
         self.scores = {
             "baseline": np.median(self.scores_cv["baseline"], axis=0),
@@ -502,9 +510,12 @@ class StrategyEncoder(Encoder):
 
         # encoder
         for i in range(n_folds):
+            np.random.seed(seed=i)
             train_idxs = np.sort(
                 np.random.choice(
-                    self.num_trials, int(self.num_trials * p_train), replace=False
+                    self.num_trials,
+                    int(self.num_trials * p_train),
+                    replace=False,
                 )
             )
             test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
@@ -516,7 +527,7 @@ class StrategyEncoder(Encoder):
                 self.baseline_predict()
 
             encoder = RidgeCV(
-                alphas=np.logspace(-5, 10, 16, base=10),
+                alphas=np.logspace(-5, 5, 11, base=10),
                 alpha_per_target=True,
             ).fit(
                 self.tvs[train_idxs],
@@ -530,6 +541,8 @@ class StrategyEncoder(Encoder):
                 multioutput="raw_values",
                 force_finite=False,
             )
+
+        self.seed()
 
         self.scores = {
             "baseline": np.median(self.scores_cv["baseline"], axis=0),

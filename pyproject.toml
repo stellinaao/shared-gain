@@ -102,6 +102,7 @@ dependencies = [
     "pyqt6>=6.10.2",
     "pyqt6-qt6>=6.10.2",
     "pyqt6-sip>=13.11.0",
+    "pytest>=9.1.1",
     "python-dateutil>=2.9.0.post0",
     "python-discovery>=1.1.1",
     "pytokens>=0.4.1",
@@ -158,3 +159,9 @@ wfield = { git = "https://github.com/stellinaao/wfield" }
 spks = { git = "https://github.com/stellinaao/spks.git" }
 squiggs = { git = "https://github.com/stellinaao/SQUIGGS" }
 ndnt = { git = "https://github.com/stellinaao/NDNT" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "fast: marks tests as fast unit tests",
+]
