@@ -263,7 +263,10 @@ class Encoder:
         }
 
     def verify(self, cond="response", subtract_baseline=True):
-        _, axes = plt.subplots(ncols=6, nrows=1, figsize=(10, 1.5), tight_layout=True)
+        ncols = 6 if self.tv_keys is not None else 2
+        _, axes = plt.subplots(
+            ncols=ncols, nrows=1, figsize=(ncols * 1.5, 1.5), tight_layout=True
+        )
 
         # baseline vs encoder r2
         self.plot_r2_comp(axes[0])
@@ -272,12 +275,13 @@ class Encoder:
         self.plot_p_resp(axes[1])
 
         # sctavg vs beta weight
-        self.plot_sctavg_weights(
-            axes[2:4], cond="response", subtract_baseline=subtract_baseline
-        )
-        self.plot_sctavg_weights(
-            axes[4:6], cond="rewarded", subtract_baseline=subtract_baseline
-        )
+        if self.tv_keys is not None:
+            self.plot_sctavg_weights(
+                axes[2:4], cond="response", subtract_baseline=subtract_baseline
+            )
+            self.plot_sctavg_weights(
+                axes[4:6], cond="rewarded", subtract_baseline=subtract_baseline
+            )
 
     def plot_r2_comp(self, ax=None):
         if not hasattr(self, "scores"):

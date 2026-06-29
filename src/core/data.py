@@ -869,14 +869,17 @@ def get_encoder_io(
 
     # tvs
     # non-movement
-    ohe = OHE().fit(trial_data[tv_keys])
-    tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
+    if tv_keys is not None:
+        ohe = OHE().fit(trial_data[tv_keys])
+        tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
+    else:
+        tvs = None
 
     # movement
     if add_svd:
         svd_keys = [f"SVD_{i}" for i in range(num_svd)]
         tvs_svd = zscore(trial_data[svd_keys], axis=0)
-        tvs = np.hstack((tvs, tvs_svd))
+        tvs = np.hstack((tvs, tvs_svd)) if tvs is not None else tvs_svd
 
     # tents
     # uniform splines at same frequency whether subsampled or not
@@ -886,7 +889,7 @@ def get_encoder_io(
 
     # design matrix
     dm = np.hstack((tents, tvs))
-    tv_names = ohe.get_feature_names_out()
+    tv_names = ohe.get_feature_names_out() if tv_keys is not None else []
 
     for i, tv_name in enumerate(tv_names):
         tv_names[i] = tv_name_map[tv_name]
