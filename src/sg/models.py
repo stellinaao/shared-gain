@@ -113,7 +113,7 @@ class Encoder:
         self.num_trials, self.num_tv = self.tvs.shape
         self.num_units = self.robs.shape[1]
 
-    def fit_baseline(self):
+    def fit_baseline(self, idxs=None):
         if not (hasattr(self, "dm") and hasattr(self, "robs")):
             self.build_dm()
 
@@ -150,7 +150,7 @@ class Encoder:
 
                 self.robs_predict["ps_baseline"] = self.encoder.predict(self.dm_tv_ko)
 
-    def fit_encoder(self):
+    def fit_encoder(self, idxs=None):
         if not (hasattr(self, "dm") and hasattr(self, "robs")):
             self.build_dm()
 
@@ -188,6 +188,24 @@ class Encoder:
         else:
             self.robs_predict["encoder"] = self.encoder.predict(self.dm)
 
+    def get_scores(self, io, idxs, model=None):
+        train_idxs, test_idxs = idxs
+        dm, robs = io
+
+        if model is None:
+            model = RidgeCV(
+                alphas=np.logspace(-5, 5, 11, base=10), alpha_per_target=True
+            ).fit(dm[train_idxs], robs[train_idxs])
+
+        scores = r2_score(
+            robs[test_idxs],
+            model.predict(dm[test_idxs]),
+            multioutput="raw_values",
+            force_finite=False,
+        )
+
+        return scores, model
+
     def get_r2(self, n_folds=20, p_train=0.8):
         if not hasattr(self, "robs"):
             self.build_dm()
@@ -199,7 +217,9 @@ class Encoder:
         }
 
         for i in range(n_folds):
+            print(self.scores_cv["baseline"].shape)
             np.random.seed(seed=i)
+
             train_idxs = np.sort(
                 np.random.choice(
                     self.num_trials, int(self.num_trials * p_train), replace=False
@@ -207,18 +227,12 @@ class Encoder:
             )
             test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
-            baseline_model = RidgeCV(
-                alphas=np.logspace(-5, 5, 11, base=10), alpha_per_target=True
-            ).fit(self.tents[train_idxs], self.robs[train_idxs])
-
-            self.scores_cv["baseline"][i] = r2_score(
-                self.robs[test_idxs],
-                baseline_model.predict(self.tents[test_idxs]),
-                multioutput="raw_values",
-                force_finite=False,
+            self.scores_cv["baseline"][i], baseline_model = self.get_scores(
+                (self.tents, self.robs), (train_idxs, test_idxs)
             )
 
             if self.separate_drift:
+                # TODO
                 encoder = RidgeCV(
                     alphas=np.logspace(-5, 5, 11, base=10),
                     alpha_per_target=True,
@@ -239,27 +253,16 @@ class Encoder:
                 self.scores_cv["ps_baseline"][i] = self.scores_cv["baseline"][i]
 
             else:
-                encoder = RidgeCV(
-                    alphas=np.logspace(-5, 5, 11, base=10),
-                    alpha_per_target=True,
-                ).fit(self.dm[train_idxs], self.robs[train_idxs])
-
-                self.scores_cv["encoder"][i] = r2_score(
-                    self.robs[test_idxs],
-                    encoder.predict(self.dm[test_idxs]),
-                    multioutput="raw_values",
-                    force_finite=False,
+                self.scores_cv["encoder"][i], encoder = self.get_scores(
+                    (self.dm, self.robs), (train_idxs, test_idxs)
                 )
 
                 if not hasattr(self, "dm_tv_ko"):
                     self.dm_tv_ko = deepcopy(self.dm)
                     self.dm_tv_ko[:, self.num_tents :] = 0
 
-                self.scores_cv["ps_baseline"][i] = r2_score(
-                    self.robs[test_idxs],
-                    encoder.predict(self.dm_tv_ko[test_idxs]),
-                    multioutput="raw_values",
-                    force_finite=False,
+                self.scores_cv["ps_baseline"][i], _ = self.get_scores(
+                    (self.dm_tv_ko, self.robs), (train_idxs, test_idxs), model=encoder
                 )
 
         self.seed()
@@ -303,10 +306,11 @@ class Encoder:
 
         ax.scatter(self.scores["baseline"], self.scores["encoder"], s=0.5, alpha=0.5)
         ax.plot([-0.5, 1], [-0.5, 1], color="#666666", linestyle="--", linewidth=0.5)
+        ax.plot([-0.5, 1], [-0.5, 1], color="#666666", linestyle="--", linewidth=0.5)
         ax.axhline(y=0, color="k", linewidth=0.5)
         ax.axvline(x=0, color="k", linewidth=0.5)
 
-        ax.set_xlabel(r"$r^2$, baseline")
+        ax.set_xlabel(r"$r^2$, drift")  # FLAG: changed to tv to plot tv vs tv+drift
         ax.set_ylabel(r"$r^2$, encoder")
 
     def plot_sctavg_weights(self, axes, cond="response", subtract_baseline=True):

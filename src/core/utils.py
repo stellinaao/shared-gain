@@ -141,3 +141,8 @@ def ndims_list(lst):
     if not iterable(lst):
         return 0
     return 1 + ndims_list(lst[0])
+
+
+def pprint_flat(dct: dict = None):
+    for key, val in dct.items():
+        print(f"{key:<20} {val}")
