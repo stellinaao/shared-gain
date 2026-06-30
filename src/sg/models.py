@@ -188,7 +188,13 @@ class Encoder:
         else:
             self.robs_predict["encoder"] = self.encoder.predict(self.dm)
 
-    def get_scores(self, io, idxs, model=None):
+    def get_scores(self, is_encoder, **kwargs):
+        if self.separate_drift and is_encoder:
+            return self._get_scores_sd(**kwargs)
+        else:
+            return self._get_scores_nosd(**kwargs)
+
+    def _get_scores_nosd(self, io, idxs, model=None):
         train_idxs, test_idxs = idxs
         dm, robs = io
 
@@ -206,6 +212,27 @@ class Encoder:
 
         return scores, model
 
+    def _get_scores_sd(self, io, idxs, baseline_model):
+        train_idxs, test_idxs = idxs
+        tents, tvs, robs = io
+
+        encoder = RidgeCV(
+            alphas=np.logspace(-5, 5, 11, base=10),
+            alpha_per_target=True,
+        ).fit(
+            tvs[train_idxs],
+            robs[train_idxs] - baseline_model.predict(tents[train_idxs]),
+        )
+
+        scores = r2_score(
+            robs[test_idxs],
+            baseline_model.predict(tents[test_idxs]) + encoder.predict(tvs[test_idxs]),
+            multioutput="raw_values",
+            force_finite=False,
+        )
+
+        return scores, encoder
+
     def get_r2(self, n_folds=20, p_train=0.8):
         if not hasattr(self, "robs"):
             self.build_dm()
@@ -217,7 +244,6 @@ class Encoder:
         }
 
         for i in range(n_folds):
-            print(self.scores_cv["baseline"].shape)
             np.random.seed(seed=i)
 
             train_idxs = np.sort(
@@ -228,11 +254,13 @@ class Encoder:
             test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
             self.scores_cv["baseline"][i], baseline_model = self.get_scores(
-                (self.tents, self.robs), (train_idxs, test_idxs)
+                is_encoder=False,
+                io=(self.tents, self.robs),
+                idxs=(train_idxs, test_idxs),
             )
 
             if self.separate_drift:
-                # TODO
+                """
                 encoder = RidgeCV(
                     alphas=np.logspace(-5, 5, 11, base=10),
                     alpha_per_target=True,
@@ -249,12 +277,21 @@ class Encoder:
                     multioutput="raw_values",
                     force_finite=False,
                 )
+                """
+                self.scores_cv["encoder"][i], _ = self.get_scores(
+                    is_encoder=True,
+                    io=(self.tents, self.tvs, self.robs),
+                    idxs=(train_idxs, test_idxs),
+                    baseline_model=baseline_model,
+                )
 
                 self.scores_cv["ps_baseline"][i] = self.scores_cv["baseline"][i]
 
             else:
                 self.scores_cv["encoder"][i], encoder = self.get_scores(
-                    (self.dm, self.robs), (train_idxs, test_idxs)
+                    is_encoder=True,
+                    io=(self.dm, self.robs),
+                    idxs=(train_idxs, test_idxs),
                 )
 
                 if not hasattr(self, "dm_tv_ko"):
@@ -262,7 +299,10 @@ class Encoder:
                     self.dm_tv_ko[:, self.num_tents :] = 0
 
                 self.scores_cv["ps_baseline"][i], _ = self.get_scores(
-                    (self.dm_tv_ko, self.robs), (train_idxs, test_idxs), model=encoder
+                    is_encoder=False,
+                    io=(self.dm_tv_ko, self.robs),
+                    idxs=(train_idxs, test_idxs),
+                    model=encoder,
                 )
 
         self.seed()
@@ -472,7 +512,6 @@ class StrategyEncoder(Encoder):
         super().get_data()
 
         if self.idxs is None:
-            # print(self.trial_data.shape)
             self.idxs_all = get_strategy_filter_idxs(
                 self.trial_data, self.strategy_filter, balance_strategy=True
             )
