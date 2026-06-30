@@ -10,6 +10,13 @@ repos:
     -   id: check-case-conflict
     -   id: check-executables-have-shebangs
     -   id: check-shebang-scripts-are-executable
+-   repo: local
+    hooks:
+    -   id: pytest-fast
+        name: pytest (fast tests only)
+        entry: bash -c 'pytest -m fast; code=$?; [ $code -eq 5 ] && exit 0 || exit $code'
+        language: system
+        pass_filenames: false
 -   repo: https://github.com/kynan/nbstripout
     rev: 0.7.1
     hooks:

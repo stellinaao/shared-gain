@@ -19,7 +19,7 @@ import cv2
 from utils.paths import PROJECT_ROOT
 from core.data import subject_ids, session_ids
 
-LABELS = ["cam0"]  # , "cam1", "cam2"]  # adjust as needed
+LABELS = ["cam1"]  # , "cam1", "cam2"]  # adjust as needed
 
 
 # ----------------- Helper -----------------
@@ -64,7 +64,10 @@ def build_video_svd_data(subj_id=None, sess_id=None, subj_idx=None, sess_idx=Non
     # Load video paths (keep as list-of-lists for backward compatibility)
     vidpaths = []
     for label in LABELS:
-        paths = [vidfolder / f"{subj_id}_{sess_id}_{label}_00000000.avi"]
+        paths = [
+            vidfolder
+            / f"{subj_id}_DynamicForaging_{sess_id}_{label}_run000_00000000.avi"
+        ]
         # Ensure it's a list even if WindowsALFPath is returned
         if not isinstance(paths, (list, tuple, np.ndarray)):
             paths = [paths]
@@ -180,7 +183,8 @@ def get_video_SVD(files, overwrite=False):
             # n = len(dat)
             # print("len(dat):", n)
 
-            chunkidx = chunk_indices(last_valid_frame(dat), chunksize=256)
+            n_frames = last_valid_frame(dat)
+            chunkidx = chunk_indices(n_frames, chunksize=256)
             # # probe last 20 frames
             # for i in [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]:
             #     try:
@@ -193,7 +197,9 @@ def get_video_SVD(files, overwrite=False):
             for on, off in tqdm(chunkidx, desc="Computing average."):
                 frame_average.append(dat[on:off].mean(axis=0))
             frame_average = np.stack(frame_average).mean(axis=0)
-            U, SVT = approximate_svd(dat, frame_average, nframes_per_bin=2)
+            U, SVT = approximate_svd(
+                dat, frame_average, n_frames=n_frames, nframes_per_bin=2
+            )
             np.save(svd_file, dict(U=U, SVT=SVT))
             del dat, U, SVT
             gc.collect()
@@ -222,7 +228,10 @@ def get_motion_energy_SVD(files, overwrite=False):
 
             print(f"Computing motion energy SVD for {current_file}")
             dat = load_stack(str(current_file))
-            U, SVT = approximate_svd(dat, np.zeros_like(dat[0]), nframes_per_bin=2)
+            n_frames = last_valid_frame(dat)
+            U, SVT = approximate_svd(
+                dat, np.zeros_like(dat[0]), n_frames=n_frames, nframes_per_bin=2
+            )
             np.save(svd_file, dict(U=U, SVT=SVT))
             del dat, U, SVT
             gc.collect()

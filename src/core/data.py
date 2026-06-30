@@ -19,6 +19,7 @@ import os
 import shutup
 
 from sklearn.preprocessing import OneHotEncoder as OHE
+from scipy.stats import zscore
 
 from spks.utils import get_cluster_spike_times
 from damn.alignment import compute_spike_count
@@ -107,6 +108,7 @@ def load_sess(
     tpre_ref=0.5,
     tpost_ref=1,
     alignment_ref=None,
+    add_svd=False,
     trial_start_pre=0,
     thresh=1,
 ):
@@ -220,6 +222,11 @@ def load_sess(
             thresh=thresh,
             binwidth_ms=binwidth_ms,
         )
+
+        # add svds
+        if add_svd:
+            svds_df = get_svd_df(subj_id, sess_id, trial_data, session_data)
+            trial_data = trial_data.join(svds_df)
 
         return spike_times, trial_data, psths, session_data, regions
     elif mode == "old":
@@ -434,6 +441,46 @@ def get_trial_mask(trial_data, strategy_only=True, reward_only=False):
         mask = (mask) & (~(trial_data["strategy"] == 0))
 
     return mask
+
+
+# SVD
+def get_svd_df(subj_id, sess_id, trial_data, session_data):
+    trial_start = session_data["events"]["event_timestamps"][0]
+    movie_frame = session_data["events"]["event_timestamps"][1]
+
+    movements = np.load(
+        DATA_DIR
+        / subj_id
+        / sess_id
+        / f"{subj_id}_DynamicForaging_{sess_id}_cam1_run000_00000000.npy",
+        allow_pickle=True,
+    ).item()
+
+    frame_trial_idxs = get_frame_trial_idxs(trial_start, trial_data, movie_frame)
+
+    svd_tavg = np.zeros((len(frame_trial_idxs), 200))
+    for i, (start, end) in enumerate(frame_trial_idxs):
+        svd_tavg[i] = movements["SVT"][:, start:end].mean(axis=1)
+
+    svd_df = pd.DataFrame(svd_tavg, columns=[f"SVD_{i}" for i in range(200)])
+
+    return svd_df
+
+
+def get_frame_trial_idxs(trial_start, trial_data, movie_frame):
+    frame_trial_idxs = np.zeros((len(trial_start), 2), dtype=np.int32)
+
+    trial_start = np.append(
+        trial_start, trial_start[-1] + trial_data["outcome_time"].iloc[-1]
+    )  # TODO
+
+    for trial_i in range(frame_trial_idxs.shape[0]):
+        start_idx = np.searchsorted(movie_frame, trial_start[trial_i])
+        end_idx = np.searchsorted(movie_frame, trial_start[trial_i + 1])
+
+        frame_trial_idxs[trial_i] = (start_idx, end_idx)
+
+    return frame_trial_idxs
 
 
 # PR
@@ -797,6 +844,8 @@ def get_encoder_io(
     norm=True,
     num_tents=10,
     tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
+    add_svd=True,
+    num_svd=10,
     binwidth_ms=25,
 ):
     # robs
@@ -819,8 +868,18 @@ def get_encoder_io(
     reg_idxs = {reg: np.where(reg_mask == i)[0] for i, reg in enumerate(regions)}
 
     # tvs
-    ohe = OHE().fit(trial_data[tv_keys])
-    tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
+    # non-movement
+    if tv_keys is not None:
+        ohe = OHE().fit(trial_data[tv_keys])
+        tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
+    else:
+        tvs = None
+
+    # movement
+    if add_svd:
+        svd_keys = [f"SVD_{i}" for i in range(num_svd)]
+        tvs_svd = zscore(trial_data[svd_keys], axis=0)
+        tvs = np.hstack((tvs, tvs_svd)) if tvs is not None else tvs_svd
 
     # tents
     # uniform splines at same frequency whether subsampled or not
@@ -830,7 +889,7 @@ def get_encoder_io(
 
     # design matrix
     dm = np.hstack((tents, tvs))
-    tv_names = ohe.get_feature_names_out()
+    tv_names = ohe.get_feature_names_out() if tv_keys is not None else []
 
     for i, tv_name in enumerate(tv_names):
         tv_names[i] = tv_name_map[tv_name]

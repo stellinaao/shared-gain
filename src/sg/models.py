@@ -28,6 +28,8 @@ class Encoder:
         self.subj_id = subj_id
         self.sess_id = sess_id
 
+        self.random_state = kwargs.pop("random_state", 1024)
+
         self.tv_keys = kwargs.pop(
             "tv_keys",
             [
@@ -38,7 +40,11 @@ class Encoder:
                 "rewarded_prev",
             ],
         )
-        self.norm = kwargs.pop("norm", True)
+        self.add_svd = kwargs.pop("add_svd", False)
+        if self.add_svd:
+            self.num_svd = kwargs.pop("num_svd", 10)
+
+        self.norm = kwargs.pop("norm", False)
         self.separate_drift = kwargs.pop("separate_drift", False)
 
         self.num_tents = kwargs.pop("num_tents", 5)
@@ -58,6 +64,9 @@ class Encoder:
             extra_kwargs = ", ".join('"%s' % k for k in list(kwargs.keys()))
             raise ValueError("Extra arguments %s" % extra_kwargs)
 
+    def seed(self):
+        np.random.seed(self.random_state)
+
     def get_data(self):
         (
             self.spike_times,
@@ -75,6 +84,7 @@ class Encoder:
             tpost_ref=self.tpost_ref,
             alignment_ref=self.alignment_ref,
             binwidth_ms=self.binwidth_ms,
+            add_svd=self.add_svd,
             thresh=self.thresh,
         )
 
@@ -95,6 +105,8 @@ class Encoder:
             norm=self.norm,
             num_tents=self.num_tents,
             tv_keys=self.tv_keys,
+            add_svd=self.add_svd,
+            num_svd=self.num_svd if self.add_svd else None,
             binwidth_ms=25,
         )
 
@@ -187,6 +199,7 @@ class Encoder:
         }
 
         for i in range(n_folds):
+            np.random.seed(seed=i)
             train_idxs = np.sort(
                 np.random.choice(
                     self.num_trials, int(self.num_trials * p_train), replace=False
@@ -249,6 +262,8 @@ class Encoder:
                     force_finite=False,
                 )
 
+        self.seed()
+
         self.scores = {
             "baseline": np.median(self.scores_cv["baseline"], axis=0),
             "ps_baseline": np.median(self.scores_cv["ps_baseline"], axis=0),
@@ -256,18 +271,25 @@ class Encoder:
         }
 
     def verify(self, cond="response", subtract_baseline=True):
-        _, axes = plt.subplots(ncols=5, nrows=1, figsize=(7.5, 1.5), tight_layout=True)
+        ncols = 6 if self.tv_keys is not None else 2
+        _, axes = plt.subplots(
+            ncols=ncols, nrows=1, figsize=(ncols * 1.5, 1.5), tight_layout=True
+        )
 
         # baseline vs encoder r2
         self.plot_r2_comp(axes[0])
 
+        # p(resp)
+        self.plot_p_resp(axes[1])
+
         # sctavg vs beta weight
-        self.plot_sctavg_weights(
-            axes[1:3], cond="response", subtract_baseline=subtract_baseline
-        )
-        self.plot_sctavg_weights(
-            axes[3:5], cond="rewarded", subtract_baseline=subtract_baseline
-        )
+        if self.tv_keys is not None:
+            self.plot_sctavg_weights(
+                axes[2:4], cond="response", subtract_baseline=subtract_baseline
+            )
+            self.plot_sctavg_weights(
+                axes[4:6], cond="rewarded", subtract_baseline=subtract_baseline
+            )
 
     def plot_r2_comp(self, ax=None):
         if not hasattr(self, "scores"):
@@ -354,13 +376,49 @@ class Encoder:
                 vmin=1e-5,
                 vmax=1e5,
                 c=self.encoder.alpha_,
+                cmap="viridis",
                 norm="log",
+            )
+
+            mn = min(min(sc_tavg[keys[i]]), min(self.encoder_weights[:, idxs[i]]))
+            mx = max(max(sc_tavg[keys[i]]), max(self.encoder_weights[:, idxs[i]]))
+            axes[i].plot(
+                [1.05 * mn, 1.05 * mx],
+                [1.05 * mn, 1.05 * mx],
+                color="#666666",
+                linewidth=0.7,
+                linestyle="--",
+                zorder=0,
             )
             axes[i].axhline(y=0, color="k", linewidth=0.5)
             axes[i].axvline(x=0, color="k", linewidth=0.5)
 
-            axes[i].set_xlabel(f"avg norm sc, {keys[i]}")
+            axes[i].set_xlabel(f"resid spk count, {keys[i]}")
             axes[i].set_ylabel(f"beta weight, {keys[i]}")
+
+    def get_resp_units(self):
+        if not hasattr(self, "scores"):
+            self.get_r2()
+
+        self.resp_idxs = np.where(
+            (self.scores["encoder"] > self.scores["baseline"])
+            & (self.scores["encoder"] > 0)
+        )[0]
+        self.p_resp = len(self.resp_idxs) / self.num_units
+
+    def plot_p_resp(self, ax):
+        if ax is None:
+            _, ax = plt.figure(tight_layout=True)
+
+        if not hasattr(self, "resp_idxs"):
+            self.get_resp_units()
+
+        ax.pie(
+            [self.num_units - len(self.resp_idxs), len(self.resp_idxs)],
+            colors=["#666666", "#F1AeAe"],
+            autopct="%.1f%%",
+            startangle=90,
+        )
 
     def view_fits(self, model="encoder"):
         if not hasattr(self, "robs_predict") or model not in self.robs_predict.keys():
@@ -410,7 +468,7 @@ class StrategyEncoder(Encoder):
         super().get_data()
 
         if self.idxs is None:
-            print(self.trial_data.shape)
+            # print(self.trial_data.shape)
             self.idxs_all = get_strategy_filter_idxs(
                 self.trial_data, self.strategy_filter, balance_strategy=True
             )
@@ -452,9 +510,12 @@ class StrategyEncoder(Encoder):
 
         # encoder
         for i in range(n_folds):
+            np.random.seed(seed=i)
             train_idxs = np.sort(
                 np.random.choice(
-                    self.num_trials, int(self.num_trials * p_train), replace=False
+                    self.num_trials,
+                    int(self.num_trials * p_train),
+                    replace=False,
                 )
             )
             test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
@@ -480,6 +541,8 @@ class StrategyEncoder(Encoder):
                 multioutput="raw_values",
                 force_finite=False,
             )
+
+        self.seed()
 
         self.scores = {
             "baseline": np.median(self.scores_cv["baseline"], axis=0),
