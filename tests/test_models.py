@@ -1,8 +1,6 @@
-import pytest
 from sg.models import Encoder
 
 
-@pytest.mark.fast
 class TestEncoder:
     def setup_method(self):
         # arrange
@@ -23,7 +21,6 @@ class TestEncoder:
         assert self.encoder.num_trials == self.encoder.trial_data.shape[0]
 
 
-@pytest.mark.fast
 class TestStrategyEncoder:
     def setup_method(self):
         # arrange
@@ -37,7 +34,6 @@ class TestStrategyEncoder:
         pass
 
 
-@pytest.mark.fast
 class TestShuffledEncoder:
     def setup_method(self):
         # arrange

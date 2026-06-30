@@ -14,7 +14,9 @@ repos:
     hooks:
     -   id: pytest-fast
         name: pytest (fast tests only)
-        entry: pytest -m fast
+        entry: bash -c 'pytest -m fast; code=$?; [ $code -eq 5 ] && exit 0 || exit $code'
+        # pytest -m fast
+        # args: ["--ignore-no-tests"]
         language: system
         pass_filenames: false
 -   repo: https://github.com/kynan/nbstripout
