@@ -503,7 +503,7 @@ class Encoder:
         )
 
         r = PETHWeightRenderer(
-            weights=self.encoder.coef_[self.reg_idxs[reg], :],
+            weights=self.encoder_weights[self.reg_idxs[reg], :],
             weight_names=self.dm_names,
             robs=self.robs[:, self.reg_idxs[reg]],
             sc_tavg=sc_tavg,
@@ -526,6 +526,7 @@ class StrategyEncoder(Encoder):
         subj_id,
         sess_id,
         strategy_filter="mb",
+        balance_strategy=True,
         idxs=None,
         **kwargs,
     ):
@@ -533,6 +534,7 @@ class StrategyEncoder(Encoder):
         self.sess_id = sess_id
 
         self.strategy_filter = strategy_filter
+        self.balance_strategy = balance_strategy
         self.idxs = idxs
 
         if not (self.strategy_filter == "mb" or self.strategy_filter == "mf"):
@@ -553,7 +555,9 @@ class StrategyEncoder(Encoder):
 
         if self.idxs is None:
             self.idxs_all = get_strategy_filter_idxs(
-                self.trial_data, self.strategy_filter, balance_strategy=True
+                self.trial_data,
+                self.strategy_filter,
+                balance_strategy=self.balance_strategy,
             )
             self.idxs = self.idxs_all[self.strategy_filter]
 

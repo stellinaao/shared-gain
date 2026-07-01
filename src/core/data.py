@@ -745,10 +745,10 @@ def get_strategy_filter_idxs(
     if not (strategy == "both" or strategy == "mb" or strategy == "mf"):
         raise ValueError("valid values for strategy are 'both', 'mb', and 'mf'")
 
-    if balance_strategy:
-        mb_mask = trial_data["strategy"] == 1
-        mf_mask = trial_data["strategy"] == -1
+    mb_mask = trial_data["strategy"] == 1
+    mf_mask = trial_data["strategy"] == -1
 
+    if balance_strategy:
         mb_cond_masks = {
             "left_corr": (mb_mask)
             & (trial_data["response"] == 1)
@@ -832,9 +832,11 @@ def get_strategy_filter_idxs(
             return {"both": None, "mb": None, "mf": idxs_subsamp_mf}
 
     else:
-        raise NotImplementedError(
-            "idxs subsampling without balancing is not yet implemented"
-        )
+        return {
+            "both": np.arange(len(trial_data)),
+            "mb": np.where(mb_mask)[0],
+            "mf": np.where(mf_mask)[0],
+        }
 
 
 def get_encoder_io(
