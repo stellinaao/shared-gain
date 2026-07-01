@@ -570,9 +570,9 @@ class StrategyEncoder(Encoder):
         self.encoder_ref.build_dm()
         self.tents = self.encoder_ref.tents[self.idxs]
 
-    def fit_baseline(self):
-        self.encoder_ref.fit_baseline()
-        self.baseline_model = self.encoder_ref.baseline_model
+    # def fit_baseline(self):
+    #     self.encoder_ref.fit_baseline()
+    #     self.baseline_model = self.encoder_ref.baseline_model
 
     # def baseline_predict(self):
     #     super().baseline_predict()
@@ -583,58 +583,58 @@ class StrategyEncoder(Encoder):
     # def encoder_predict(self):
     #     super().encoder_predict()
 
-    def get_r2(self, n_folds=20, p_train=0.8):
-        if not hasattr(self, "robs"):
-            self.build_dm()
+    # def get_r2(self, n_folds=20, p_train=0.8):
+    #     if not hasattr(self, "robs"):
+    #         self.build_dm()
 
-        self.scores_cv = {
-            "baseline": np.zeros((n_folds, self.num_units)),
-            "encoder": np.zeros((n_folds, self.num_units)),
-        }
+    #     self.scores_cv = {
+    #         "baseline": np.zeros((n_folds, self.num_units)),
+    #         "encoder": np.zeros((n_folds, self.num_units)),
+    #     }
 
-        self.encoder_ref.get_r2()
-        self.scores_cv["baseline"] = self.encoder_ref.scores_cv["baseline"]
+    #     self.encoder_ref.get_r2()
+    #     self.scores_cv["baseline"] = self.encoder_ref.scores_cv["baseline"]
 
-        # encoder
-        for i in range(n_folds):
-            np.random.seed(seed=i)
-            train_idxs = np.sort(
-                np.random.choice(
-                    self.num_trials,
-                    int(self.num_trials * p_train),
-                    replace=False,
-                )
-            )
-            test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
+    #     # encoder
+    #     for i in range(n_folds):
+    #         np.random.seed(seed=i)
+    #         train_idxs = np.sort(
+    #             np.random.choice(
+    #                 self.num_trials,
+    #                 int(self.num_trials * p_train),
+    #                 replace=False,
+    #             )
+    #         )
+    #         test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
-            if (
-                not hasattr(self, "robs_predict")
-                or "baseline" not in self.robs_predict.keys()
-            ):
-                self.baseline_predict()
+    #         if (
+    #             not hasattr(self, "robs_predict")
+    #             or "baseline" not in self.robs_predict.keys()
+    #         ):
+    #             self.baseline_predict()
 
-            encoder = RidgeCV(
-                alphas=np.logspace(-5, 5, 11, base=10),
-                alpha_per_target=True,
-            ).fit(
-                self.tvs[train_idxs],
-                self.robs[train_idxs] - self.robs_predict["baseline"][train_idxs],
-            )
+    #         encoder = RidgeCV(
+    #             alphas=np.logspace(-5, 5, 11, base=10),
+    #             alpha_per_target=True,
+    #         ).fit(
+    #             self.tvs[train_idxs],
+    #             self.robs[train_idxs] - self.robs_predict["baseline"][train_idxs],
+    #         )
 
-            self.scores_cv["encoder"][i] = r2_score(
-                self.robs[test_idxs],
-                self.robs_predict["baseline"][test_idxs]
-                + encoder.predict(self.tvs[test_idxs]),
-                multioutput="raw_values",
-                force_finite=False,
-            )
+    #         self.scores_cv["encoder"][i] = r2_score(
+    #             self.robs[test_idxs],
+    #             self.robs_predict["baseline"][test_idxs]
+    #             + encoder.predict(self.tvs[test_idxs]),
+    #             multioutput="raw_values",
+    #             force_finite=False,
+    #         )
 
-        self.seed()
+    #     self.seed()
 
-        self.scores = {
-            "baseline": np.median(self.scores_cv["baseline"], axis=0),
-            "encoder": np.median(self.scores_cv["encoder"], axis=0),
-        }
+    #     self.scores = {
+    #         "baseline": np.median(self.scores_cv["baseline"], axis=0),
+    #         "encoder": np.median(self.scores_cv["encoder"], axis=0),
+    #     }
 
 
 class ShuffledEncoder:
