@@ -146,3 +146,7 @@ def ndims_list(lst):
 def pprint_flat(dct: dict = None):
     for key, val in dct.items():
         print(f"{key:<20} {val}")
+
+
+def beta_str(regr, val):
+    return rf"$\beta_{{\mathrm{{{regr}\_{val}}}}}$"
