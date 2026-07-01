@@ -10,11 +10,13 @@ from core.data import (
     get_strategy_filter_idxs,
     get_encoder_io,
     get_tavg_sc_cond,
+    get_choice_ts,
+    get_psths_cond,
 )
 
 
 from squiggs.neuron_viewer import NeuronViewer
-from squiggs.renderers import FitRenderer
+from squiggs.renderers import FitRenderer, PETHWeightRenderer
 from utils.paths import FIGURES_DIR
 
 
@@ -483,6 +485,34 @@ class Encoder:
             yhat=self.robs_predict[model][:, self.reg_idxs[reg]],
             rsquared=self.scores[model][self.reg_idxs[reg]],
             mode="lite",
+        )
+
+        return NeuronViewer(
+            num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
+        )
+
+    def view_weights(self, reg="DLS", mode="response"):
+        if reg not in self.regions:
+            raise ValueError(f"{reg} must be in {self.regions}")
+
+        if not hasattr(self, "encoder"):
+            self.fit_encoder()
+
+        sc_tavg = get_tavg_sc_cond(
+            self.robs[:, self.reg_idxs[reg]], self.trial_data, cond=mode
+        )
+
+        r = PETHWeightRenderer(
+            weights=self.encoder.coef_[self.reg_idxs[reg], :],
+            weight_names=self.dm_names,
+            robs=self.robs[:, self.reg_idxs[reg]],
+            sc_tavg=sc_tavg,
+            event_times=get_choice_ts(self.trial_data, mode=mode),
+            spike_times=self.spike_times[reg],
+            peths=get_psths_cond(self.psths[reg], self.trial_data, mode=mode),
+            pres=self.tpre,
+            posts=self.tpost,
+            binwidth_s=self.binwidth_ms / 1000,
         )
 
         return NeuronViewer(
