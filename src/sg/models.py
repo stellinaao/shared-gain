@@ -350,7 +350,7 @@ class Encoder:
         ax.axhline(y=0, color="k", linewidth=0.5)
         ax.axvline(x=0, color="k", linewidth=0.5)
 
-        ax.set_xlabel(r"$r^2$, drift")  # FLAG: changed to tv to plot tv vs tv+drift
+        ax.set_xlabel(r"$r^2$, drift")
         ax.set_ylabel(r"$r^2$, encoder")
 
     def plot_sctavg_weights(self, axes, cond="response", subtract_baseline=True):
@@ -464,7 +464,10 @@ class Encoder:
             startangle=90,
         )
 
-    def view_fits(self, model="encoder"):
+    def view_fits(self, reg="DLS", model="encoder"):
+        if reg not in self.regions:
+            raise ValueError(f"{reg} must be in {self.regions}")
+
         if not hasattr(self, "robs_predict") or model not in self.robs_predict.keys():
             if model == "encoder":
                 self.encoder_predict()
@@ -475,9 +478,16 @@ class Encoder:
                     f"valid arguments for model are 'encoder' and 'baseline,' not {model}"
                 )
 
-        r = FitRenderer(y=self.robs, yhat=self.robs_predict[model], mode="lite")
+        r = FitRenderer(
+            y=self.robs[:, self.reg_idxs[reg]],
+            yhat=self.robs_predict[model][:, self.reg_idxs[reg]],
+            rsquared=self.scores[model][self.reg_idxs[reg]],
+            mode="lite",
+        )
 
-        _ = NeuronViewer(num_units=self.num_units, render_func=r, fig_dir=FIGURES_DIR)
+        return NeuronViewer(
+            num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
+        )
 
 
 class StrategyEncoder(Encoder):
