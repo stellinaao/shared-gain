@@ -2,7 +2,53 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-""" ACROSS SESSIONS """
+from sklearn.linear_model import LinearRegression
+from scipy.stats import pearsonr
+
+""" DISTRO RELATIONSHIP (2) """
+
+
+# plot two data distros against each other as a scatter
+def plot_scatter(x, y, xlabel="", ylabel="", title="", add_unity=False, ax=None):
+    if ax is None:
+        _, ax = plt.subplots(figsize=(3, 3), tight_layout=True)
+
+    lr = LinearRegression().fit(x.reshape(-1, 1), y)
+    m = lr.coef_[0]
+    b = lr.intercept_
+    r = pearsonr(x, y).statistic
+
+    mn = 1.05 * min([np.min(x), np.min(y)])
+    mx = 1.05 * max([np.max(x), np.max(y)])
+
+    ax.scatter(x, y, s=0.5, alpha=0.5)
+
+    if add_unity:
+        ax.plot([mn, mx], [mn, mx], linewidth=0.5, linestyle="--", color="#666666")
+    ax.plot(
+        [mn, mx],
+        [m * mn + b, m * mx + b],
+        linewidth=0.5,
+        color="#BA3737",
+        label=f"{m:.3f}x+{b:.3f}",
+    )
+
+    ax.axhline(y=0, linewidth=0.5, color="k")
+    ax.axvline(x=0, linewidth=0.5, color="k")
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    if title == "":
+        title = f"r={r:.3f}"
+    else:
+        title = f"{title}, r={r:.3f}"
+    ax.set_title(title)
+
+    ax.legend()
+
+
+""" DISTROS """
 
 
 # plot data distro as a raincloud
@@ -57,6 +103,9 @@ def plot_raincloud(data, label="", ax=None, log=False):
         ax.spines[spine].set_visible(False)
 
     return ax
+
+
+""" ACROSS SESSIONS """
 
 
 # plot data distro as boxplots across sessions

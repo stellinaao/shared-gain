@@ -78,6 +78,15 @@ colors_region = {
 
 markers_region = {"ACC": "v", "DMS": "^", "M2": "x", "DLS": "*", "M1": "."}
 
+tv_vals = {
+    "response": ["left", "right"],
+    "rewarded": ["incorr", "corr"],
+    "block_side": ["left", "right"],
+    "response_prev": ["left", "right"],
+    "rewarded_prev": ["incorr", "corr"],
+    "strategy": ["mf", "mb"],
+}
+
 tv_name_map = {
     "response_1": "response_left",
     "response_-1": "response_right",
@@ -903,7 +912,9 @@ def get_encoder_io(
         )
     )
 
-    return (tents, tvs, dm, robs, dm_names, reg_idxs)
+    dm_idxs = {dm_name: i for i, dm_name in enumerate(dm_names)}
+
+    return (tents, tvs, dm, robs, dm_names, dm_idxs, reg_idxs)
 
 
 # BALANCING

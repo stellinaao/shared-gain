@@ -12,6 +12,7 @@ from core.data import (
     get_tavg_sc_cond,
     get_choice_ts,
     get_psths_cond,
+    tv_vals,
 )
 
 from core.viz import plot_raincloud
@@ -100,6 +101,7 @@ class Encoder:
             self.dm,
             self.robs,
             self.dm_names,
+            self.dm_idxs,
             self.reg_idxs,
         ) = get_encoder_io(
             self.psths,
@@ -297,6 +299,16 @@ class Encoder:
             "ps_baseline": np.median(self.scores_cv["ps_baseline"], axis=0),
             "encoder": np.median(self.scores_cv["encoder"], axis=0),
         }
+
+    def get_weights(self, regr, val=None):
+        if val is not None:
+            return self.encoder_weights[:, self.dm_idxs[f"{regr}_{val}"]]
+        else:
+            if regr in self.tv_keys:
+                idxs = [self.dm_idxs[f"{regr}_{val}"] for val in tv_vals[regr]]
+            elif regr == "tents":
+                idxs = [self.dm_idxs[f"{regr}_{val}"] for val in range(self.num_tents)]
+            return self.encoder_weights[:, idxs]
 
     def verify(self, r2_comp=True, subtract_baseline=True):
         ncols = 6 if self.tv_keys is not None else 2
