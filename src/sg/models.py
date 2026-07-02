@@ -605,7 +605,15 @@ class StrategyEncoder(Encoder):
 
         self.seed()
 
+        baseline_scores = r2_score(
+            self.robs,
+            self.baseline_model.predict(self.tents),
+            multioutput="raw_values",
+            force_finite=False,
+        )
+
         self.scores = {
+            "baseline": baseline_scores,
             "encoder": np.median(self.scores_cv["encoder"], axis=0),
         }
 
