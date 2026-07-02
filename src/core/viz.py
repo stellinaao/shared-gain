@@ -5,6 +5,60 @@ import seaborn as sns
 """ ACROSS SESSIONS """
 
 
+# plot data distro as a raincloud
+def plot_raincloud(data, label="", ax=None, log=False):
+    if ax is None:
+        _, ax = plt.subplots(figsize=(2.5, 2.5), tight_layout=True)
+
+    cloud_color = "#666666"
+    rain_color = "#246193"
+
+    if log:
+        data = np.log10(data)
+        label = f"log₁₀({label})"
+
+    # half violin (KDE)
+    from scipy.stats import gaussian_kde
+
+    kde = gaussian_kde(data)
+    x = np.linspace(data.min(), data.max(), 300)
+    y = kde(x)
+    y_norm = y / y.max() * 0.3  # scale height
+
+    offset = 0.5
+    ax.fill_between(
+        x, offset, offset + y_norm, alpha=0.5, color=cloud_color
+    )  # 0.6 is to offset to the top of figure
+    ax.plot(x, offset + y_norm, color=cloud_color, linewidth=0.5)
+
+    # jittered strip plot
+    jitter = np.random.uniform(-0.125, 0.125, size=len(data))
+    ax.scatter(data, 0.3 + jitter, s=2, alpha=0.4, color=rain_color)
+
+    # boxplot
+    ax.boxplot(
+        data,
+        vert=False,
+        positions=[0.1],
+        widths=[0.08],
+        patch_artist=True,
+        boxprops=dict(facecolor=rain_color, alpha=0.85),
+        medianprops=dict(color="k", linewidth=1.5),
+        whiskerprops=dict(color="k"),
+        capprops=dict(color="k"),
+        flierprops=dict(marker=".", color=rain_color, markersize=2, alpha=0.4),
+    )
+
+    ax.axvline(x=0, color="#666666", linestyle="--", linewidth=0.5)
+    ax.set_xlabel(label)
+    ax.set_yticks([])
+    ax.set_ylim(0, 1.1)
+    for spine in ["left", "top", "right"]:
+        ax.spines[spine].set_visible(False)
+
+    return ax
+
+
 # plot data distro as boxplots across sessions
 def plot_boxplots_sess(data_sess, sess_ids, data_label):
     fig, ax = plt.subplots(figsize=(6, 3), tight_layout=True)

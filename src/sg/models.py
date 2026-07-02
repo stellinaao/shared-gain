@@ -14,6 +14,7 @@ from core.data import (
     get_psths_cond,
 )
 
+from core.viz import plot_raincloud
 
 from squiggs.neuron_viewer import NeuronViewer
 from squiggs.renderers import FitRenderer, PETHWeightRenderer
@@ -262,24 +263,6 @@ class Encoder:
             )
 
             if self.separate_drift:
-                """
-                encoder = RidgeCV(
-                    alphas=np.logspace(-5, 5, 11, base=10),
-                    alpha_per_target=True,
-                ).fit(
-                    self.tvs[train_idxs],
-                    self.robs[train_idxs]
-                    - baseline_model.predict(self.tents[train_idxs]),
-                )
-
-                self.scores_cv["encoder"][i] = r2_score(
-                    self.robs[test_idxs],
-                    baseline_model.predict(self.tents[test_idxs])
-                    + encoder.predict(self.tvs[test_idxs]),
-                    multioutput="raw_values",
-                    force_finite=False,
-                )
-                """
                 self.scores_cv["encoder"][i], _ = self.get_scores(
                     is_encoder=True,
                     io=(self.tents, self.tvs, self.robs),
@@ -315,17 +298,20 @@ class Encoder:
             "encoder": np.median(self.scores_cv["encoder"], axis=0),
         }
 
-    def verify(self, cond="response", subtract_baseline=True):
+    def verify(self, r2_comp=True, subtract_baseline=True):
         ncols = 6 if self.tv_keys is not None else 2
         _, axes = plt.subplots(
             ncols=ncols, nrows=1, figsize=(ncols * 1.5, 1.5), tight_layout=True
         )
 
         # baseline vs encoder r2
-        self.plot_r2_comp(axes[0])
+        if r2_comp:
+            self.plot_r2_comp(axes[0])
+        else:
+            self.plot_r2_distro(axes[0])
 
         # p(resp)
-        self.plot_p_resp(axes[1])
+        # self.plot_p_resp(axes[1]) FLAG: out of service for now
 
         # sctavg vs beta weight
         if self.tv_keys is not None:
@@ -335,6 +321,15 @@ class Encoder:
             self.plot_sctavg_weights(
                 axes[4:6], cond="rewarded", subtract_baseline=subtract_baseline
             )
+
+    def plot_r2_distro(self, ax=None):
+        if not hasattr(self, "scores"):
+            self.get_r2()
+
+        if ax is None:
+            _, ax = plt.figure(tight_layout=True)
+
+        plot_raincloud(self.scores["encoder"], label=r"$r^2$, encoder", ax=ax)
 
     def plot_r2_comp(self, ax=None):
         if not hasattr(self, "scores"):
@@ -570,9 +565,9 @@ class StrategyEncoder(Encoder):
         self.encoder_ref.build_dm()
         self.tents = self.encoder_ref.tents[self.idxs]
 
-    # def fit_baseline(self):
-    #     self.encoder_ref.fit_baseline()
-    #     self.baseline_model = self.encoder_ref.baseline_model
+    def fit_baseline(self):
+        self.encoder_ref.fit_baseline()
+        self.baseline_model = self.encoder_ref.baseline_model
 
     # def baseline_predict(self):
     #     super().baseline_predict()
@@ -582,6 +577,40 @@ class StrategyEncoder(Encoder):
 
     # def encoder_predict(self):
     #     super().encoder_predict()
+
+    def get_r2(self, n_folds=20, p_train=0.8):
+        if not hasattr(self, "robs"):
+            self.build_dm()
+
+        self.scores_cv = {
+            "encoder": np.zeros((n_folds, self.num_units)),
+        }
+
+        for i in range(n_folds):
+            np.random.seed(seed=i)
+
+            train_idxs = np.sort(
+                np.random.choice(
+                    self.num_trials, int(self.num_trials * p_train), replace=False
+                )
+            )
+            test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
+
+            self.scores_cv["encoder"][i], _ = self.get_scores(
+                is_encoder=True,
+                io=(self.tents, self.tvs, self.robs),
+                idxs=(train_idxs, test_idxs),
+                baseline_model=self.baseline_model,
+            )
+
+        self.seed()
+
+        self.scores = {
+            "encoder": np.median(self.scores_cv["encoder"], axis=0),
+        }
+
+    def verify(self, subtract_baseline=True):
+        super().verify(r2_comp=False)
 
     # def get_r2(self, n_folds=20, p_train=0.8):
     #     if not hasattr(self, "robs"):
