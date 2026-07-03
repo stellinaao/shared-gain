@@ -82,7 +82,7 @@ tv_vals = {
     "response": ["left", "right"],
     "rewarded": ["incorr", "corr"],
     "block_side": ["left", "right"],
-    "response_prev": ["left", "right"],
+    "response_prev": ["left", "none", "right"],
     "rewarded_prev": ["incorr", "corr"],
     "strategy": ["mf", "mb"],
 }
