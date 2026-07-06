@@ -50,6 +50,7 @@ class Encoder:
 
         self.norm = kwargs.pop("norm", False)
         self.separate_drift = kwargs.pop("separate_drift", False)
+        self.max_reg = kwargs.pop("max_reg", 5)
 
         self.num_tents = kwargs.pop("num_tents", 5)
 
@@ -123,7 +124,9 @@ class Encoder:
             self.build_dm()
 
         self.baseline_model = RidgeCV(
-            alphas=np.logspace(-5, 5, 11, base=10),
+            alphas=np.logspace(
+                -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
+            ),
             alpha_per_target=True,
         ).fit(self.tents, self.robs)
 
@@ -165,7 +168,9 @@ class Encoder:
             self.baseline_predict()
 
             self.encoder = RidgeCV(
-                alphas=np.logspace(-5, 5, 11, base=10),
+                alphas=np.logspace(
+                    -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
+                ),
                 alpha_per_target=True,
             ).fit(self.tvs, self.robs - self.robs_predict["baseline"])
 
@@ -174,7 +179,9 @@ class Encoder:
             )
         else:
             self.encoder = RidgeCV(
-                alphas=np.logspace(-5, 5, 11, base=10),
+                alphas=np.logspace(
+                    -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
+                ),
                 alpha_per_target=True,
             ).fit(self.dm, self.robs)
 
@@ -201,11 +208,16 @@ class Encoder:
 
     def _get_scores_nosd(self, io, idxs, model=None):
         train_idxs, test_idxs = idxs
+        print("train", train_idxs[:5], "test", test_idxs[:5])
         dm, robs = io
+        print("dm", dm.shape, "robs", robs.shape)
 
         if model is None:
             model = RidgeCV(
-                alphas=np.logspace(-5, 5, 11, base=10), alpha_per_target=True
+                alphas=np.logspace(
+                    -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
+                ),
+                alpha_per_target=True,
             ).fit(dm[train_idxs], robs[train_idxs])
 
         scores = r2_score(
@@ -218,11 +230,14 @@ class Encoder:
         return scores, model
 
     def _get_scores_sd(self, io, idxs, baseline_model):
+        print("UNEXPECTED!")
         train_idxs, test_idxs = idxs
         tents, tvs, robs = io
 
         encoder = RidgeCV(
-            alphas=np.logspace(-5, 5, 11, base=10),
+            alphas=np.logspace(
+                -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
+            ),
             alpha_per_target=True,
         ).fit(
             tvs[train_idxs],
@@ -249,6 +264,7 @@ class Encoder:
         }
 
         for i in range(n_folds):
+            print(i)
             np.random.seed(seed=i)
 
             train_idxs = np.sort(
@@ -258,6 +274,7 @@ class Encoder:
             )
             test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
+            print("baseline")
             self.scores_cv["baseline"][i], baseline_model = self.get_scores(
                 is_encoder=False,
                 io=(self.tents, self.robs),
@@ -265,6 +282,7 @@ class Encoder:
             )
 
             if self.separate_drift:
+                print("what is happening here?")
                 self.scores_cv["encoder"][i], _ = self.get_scores(
                     is_encoder=True,
                     io=(self.tents, self.tvs, self.robs),
@@ -275,6 +293,7 @@ class Encoder:
                 self.scores_cv["ps_baseline"][i] = self.scores_cv["baseline"][i]
 
             else:
+                print("encoder")
                 self.scores_cv["encoder"][i], encoder = self.get_scores(
                     is_encoder=True,
                     io=(self.dm, self.robs),
@@ -324,6 +343,11 @@ class Encoder:
 
         # p(resp)
         # self.plot_p_resp(axes[1]) FLAG: out of service for now
+        from core.viz import plot_kdes
+
+        scores_no_ps = deepcopy(self.scores)
+        scores_no_ps.pop("ps_baseline")
+        plot_kdes(scores_no_ps, label=r"$r^2$", ax=axes[1])
 
         # sctavg vs beta weight
         if self.tv_keys is not None:
@@ -663,7 +687,7 @@ class StrategyEncoder(Encoder):
     #             self.baseline_predict()
 
     #         encoder = RidgeCV(
-    #             alphas=np.logspace(-5, 5, 11, base=10),
+    #             alphas=np.logspace(-self.max_reg, self.max_reg, 2*self.max_reg+1, base=10),
     #             alpha_per_target=True,
     #         ).fit(
     #             self.tvs[train_idxs],
