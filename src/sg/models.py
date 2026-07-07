@@ -839,6 +839,18 @@ class ShuffledEncoder:
             fmt=".",
             capsize=2,
         )
+
+        if not hasattr(self.encoder_full, "scores"):
+            self.encoder_full.get_r2()
+        ax.axhline(
+            y=self.encoder_full.scores["encoder"].mean(),
+            color="#666666",
+            linewidth=0.5,
+            linestyle="--",
+            label=r"full $r^2$",
+        )
+        ax.legend(loc="upper right")
+
         ax.set_ylabel(r"cv $r^2$")
         ax.tick_params(axis="x", labelrotation=45)
 
@@ -862,5 +874,80 @@ class ShuffledEncoder:
             fmt=".",
             capsize=2,
         )
+
+        if not hasattr(self.encoder_full, "scores"):
+            self.encoder_full.get_r2()
+        ax.axhline(
+            y=self.encoder_full.scores["encoder"].mean(),
+            color="#666666",
+            linewidth=0.5,
+            linestyle="--",
+            label=r"full $r^2$",
+        )
+        ax.legend(loc="upper right")
+
         ax.set_ylabel(r"$\Delta r^2$")
         ax.tick_params(axis="x", labelrotation=45)
+
+    def plot_bound_r2(self, ax=None):
+        if (
+            not hasattr(self, "cvr2")
+            or len(np.setdiff1d(self.task_vars, list(self.cvr2.keys()))) > 0
+        ):
+            self.get_cvr2_all()
+        if (
+            not hasattr(self, "dr2")
+            or len(np.setdiff1d(self.task_vars, list(self.dr2.keys()))) > 0
+        ):
+            self.get_dr2_all()
+
+        if ax is None:
+            _, ax = plt.subplots(tight_layout=True)
+
+        n = len(self.task_vars)
+        x = np.arange(n)
+
+        cvr2_mean = np.array([self.cvr2[pivot].mean() for pivot in self.task_vars])
+        cvr2_std = np.array([self.cvr2[pivot].std() for pivot in self.task_vars])
+        dr2_mean = np.array([self.dr2[pivot].mean() for pivot in self.task_vars])
+        dr2_std = np.array([self.dr2[pivot].std() for pivot in self.task_vars])
+
+        ax.errorbar(
+            x=x,
+            y=cvr2_mean,
+            yerr=cvr2_std,
+            fmt=".",
+            color="#999999",
+            markersize=1,
+            capsize=2,
+            label="maximal",
+        )
+        ax.errorbar(
+            x=x,
+            y=dr2_mean,
+            yerr=dr2_std,
+            fmt=".",
+            color="#333333",
+            markersize=1,
+            capsize=2,
+            label="unique",
+        )
+
+        if not hasattr(self.encoder_full, "scores"):
+            self.encoder_full.get_r2()
+        ax.axhline(
+            y=self.encoder_full.scores["encoder"].mean(),
+            color="#666666",
+            linewidth=0.5,
+            linestyle="--",
+            label=r"full $r^2$",
+        )
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(self.task_vars)
+        ax.tick_params(axis="x", labelrotation=45)
+        ax.set_ylabel(r"$r^2$")
+
+        ax.legend(loc="upper right")
+
+        return ax

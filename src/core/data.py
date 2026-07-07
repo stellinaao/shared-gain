@@ -484,6 +484,7 @@ def get_frame_trial_idxs(trial_start, trial_data, movie_frame):
     )  # TODO
 
     for trial_i in range(frame_trial_idxs.shape[0]):
+        # do same epoch
         start_idx = np.searchsorted(movie_frame, trial_start[trial_i])
         end_idx = np.searchsorted(movie_frame, trial_start[trial_i + 1])
 
