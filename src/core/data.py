@@ -883,7 +883,7 @@ def get_encoder_io(
     if tv_keys is not None:
         ohe = OHE().fit(trial_data[tv_keys])
         tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
-        tvs = zscore(tvs, axis=0)  # FLAG
+        # tvs = zscore(tvs, axis=0)  # FLAG
     else:
         tvs = None
 
@@ -900,7 +900,7 @@ def get_encoder_io(
     num_trials = trial_data.shape[0]
     xs = np.linspace(0, num_trials - 1, num_tents)
     tents = tent_basis_generate(xs)
-    tents = zscore(tents, axis=0)  # FLAG
+    # tents = zscore(tents, axis=0)  # FLAG
 
     # design matrix
     dm = np.hstack((tents, tvs))

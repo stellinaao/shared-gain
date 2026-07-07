@@ -208,9 +208,9 @@ class Encoder:
 
     def _get_scores_nosd(self, io, idxs, model=None):
         train_idxs, test_idxs = idxs
-        print("train", train_idxs[:5], "test", test_idxs[:5])
+        # print("train", train_idxs[:5], "test", test_idxs[:5])
         dm, robs = io
-        print("dm", dm.shape, "robs", robs.shape)
+        # print("dm", dm.shape, "robs", robs.shape)
 
         if model is None:
             model = RidgeCV(
@@ -230,7 +230,6 @@ class Encoder:
         return scores, model
 
     def _get_scores_sd(self, io, idxs, baseline_model):
-        print("UNEXPECTED!")
         train_idxs, test_idxs = idxs
         tents, tvs, robs = io
 
@@ -264,7 +263,7 @@ class Encoder:
         }
 
         for i in range(n_folds):
-            print(i)
+            # print(i)
             np.random.seed(seed=i)
 
             train_idxs = np.sort(
@@ -274,7 +273,7 @@ class Encoder:
             )
             test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
-            print("baseline")
+            # print("baseline")
             self.scores_cv["baseline"][i], baseline_model = self.get_scores(
                 is_encoder=False,
                 io=(self.tents, self.robs),
@@ -293,7 +292,7 @@ class Encoder:
                 self.scores_cv["ps_baseline"][i] = self.scores_cv["baseline"][i]
 
             else:
-                print("encoder")
+                # print("encoder")
                 self.scores_cv["encoder"][i], encoder = self.get_scores(
                     is_encoder=True,
                     io=(self.dm, self.robs),
@@ -346,7 +345,8 @@ class Encoder:
         from core.viz import plot_kdes
 
         scores_no_ps = deepcopy(self.scores)
-        scores_no_ps.pop("ps_baseline")
+        if "ps_baseline" in scores_no_ps.keys():
+            scores_no_ps.pop("ps_baseline")
         plot_kdes(scores_no_ps, label=r"$r^2$", ax=axes[1])
 
         # sctavg vs beta weight
@@ -617,6 +617,8 @@ class StrategyEncoder(Encoder):
     def get_r2(self, n_folds=20, p_train=0.8):
         if not hasattr(self, "robs"):
             self.build_dm()
+        if not hasattr(self, "baseline_model"):
+            self.fit_baseline()
 
         self.scores_cv = {
             "encoder": np.zeros((n_folds, self.num_units)),

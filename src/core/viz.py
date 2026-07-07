@@ -52,26 +52,42 @@ def plot_scatter(x, y, xlabel="", ylabel="", title="", add_unity=False, ax=None)
 
 
 # plot multiple distros as kdes
-def plot_kdes(data: dict, label="", cmap="tab10", ax=None):
+def plot_kdes(
+    data: dict, xlim=None, label="", cmap="tab10", line_kwargs: dict = {}, ax=None
+):
     if ax is None:
         _, ax = plt.subplots(figsize=(2.5, 2.5), tight_layout=True)
 
     from scipy.stats import gaussian_kde
 
-    mn = min([min(v) for v in data.values()])
-    mx = max([max(v) for v in data.values()])
+    if xlim is not None:
+        (mn, mx) = xlim
+    else:
+        mn = min([min(v) for v in data.values()])
+        mx = max([max(v) for v in data.values()])
     x = np.linspace(mn, mx, 300)
 
     colors = plt.get_cmap(cmap)(np.linspace(0, 1, len(data)))
 
-    for (data_label, data_vals), color in zip(data.items(), colors):
+    for (data_label, data_vals), default_color in zip(data.items(), colors):
         kde = gaussian_kde(data_vals)
         y = kde(x)
-        ax.plot(x, y, color=color, linewidth=0.5, label=data_label)
+
+        style = {"color": default_color, "linewidth": 0.5}
+        style.update(line_kwargs.get(data_label, {}))
+
+        ax.plot(x, y, label=data_label, **style)
 
         avg = np.mean(data_vals)
-        ax.plot(avg, kde(avg), marker="v", color=color, markersize=1, linestyle="none")
-        ax.axvline(x=avg, color=color, linewidth=0.5, linestyle="--")
+        ax.plot(
+            avg,
+            kde(avg),
+            marker="v",
+            color=style["color"],
+            markersize=1,
+            linestyle="none",
+        )
+        ax.axvline(x=avg, **style)
     ax.set_xlabel(label)
     ax.set_ylabel("density")
     ax.legend()
