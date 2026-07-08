@@ -48,6 +48,8 @@ class Encoder:
         if self.add_svd:
             self.num_svd = kwargs.pop("num_svd", 10)
 
+        self.n = kwargs.pop("n", None)
+
         self.norm = kwargs.pop("norm", False)
         self.separate_drift = kwargs.pop("separate_drift", False)
         self.max_reg = kwargs.pop("max_reg", 5)
@@ -92,6 +94,13 @@ class Encoder:
             add_svd=self.add_svd,
             thresh=self.thresh,
         )
+
+        if self.n is not None:
+            self.idxs = np.sort(
+                np.random.choice(len(self.trial_data), self.n, replace=False)
+            )
+            self.trial_data = self.trial_data.iloc[self.idxs]
+            self.psths = {reg: self.psths[reg][:, self.idxs, :] for reg in self.regions}
 
     def build_dm(self):
         if not (hasattr(self, "psths")):
