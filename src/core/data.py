@@ -119,6 +119,7 @@ def load_sess(
     alignment_ref=None,
     add_svd=False,
     add_licks=False,
+    full_trial=False,
     trial_start_pre=0,
     thresh=1,
 ):
@@ -235,11 +236,35 @@ def load_sess(
 
         # add svds
         if add_svd:
-            svds_df = get_svd_df(subj_id, sess_id, trial_data, session_data)
-            trial_data = trial_data.join(svds_df)
+            svds_df = get_svd_df(
+                subj_id,
+                sess_id,
+                trial_data,
+                session_data,
+                alignment=alignment,
+                tpre=tpre,
+                tpost=tpost,
+                full_trial=full_trial,
+            )
+            if full_trial:
+                trial_data = trial_data.join(svds_df)
+            else:
+                trial_data[svds_df.columns] = svds_df.reset_index(drop=True).values
         if add_licks:
-            licks_df = get_licks_df(subj_id, sess_id, trial_data, session_data)
-            trial_data = trial_data.join(licks_df)
+            licks_df = get_licks_df(
+                subj_id,
+                sess_id,
+                trial_data,
+                session_data,
+                alignment=alignment,
+                tpre=tpre,
+                tpost=tpost,
+                full_trial=full_trial,
+            )
+            if full_trial:
+                trial_data = trial_data.join(licks_df)
+            else:
+                trial_data[licks_df.columns] = licks_df.reset_index(drop=True).values
 
         return spike_times, trial_data, psths, session_data, regions
     elif mode == "old":
@@ -457,7 +482,7 @@ def get_trial_mask(trial_data, strategy_only=True, reward_only=False):
 
 
 # SVD
-def get_svd_df(subj_id, sess_id, trial_data, session_data):
+def get_svd_df(subj_id, sess_id, trial_data, session_data, **trial_idx_kwargs):
     trial_start = session_data["events"]["event_timestamps"][0]
     movie_frame = session_data["events"]["event_timestamps"][1]
 
@@ -469,7 +494,9 @@ def get_svd_df(subj_id, sess_id, trial_data, session_data):
         allow_pickle=True,
     ).item()
 
-    frame_trial_idxs = get_event_trial_idxs(trial_start, trial_data, movie_frame)
+    frame_trial_idxs = get_event_trial_idxs(
+        trial_start, trial_data, movie_frame, **trial_idx_kwargs
+    )
 
     svd_tavg = np.zeros((len(frame_trial_idxs), 200))
     for i, (start, end) in enumerate(frame_trial_idxs):
@@ -480,7 +507,7 @@ def get_svd_df(subj_id, sess_id, trial_data, session_data):
     return svd_df
 
 
-def get_licks_df(subj_id, sess_id, trial_data, session_data):
+def get_licks_df(subj_id, sess_id, trial_data, session_data, **trial_idx_kwargs):
     trial_start = session_data["events"]["event_timestamps"][0]
 
     licks = {
@@ -490,7 +517,8 @@ def get_licks_df(subj_id, sess_id, trial_data, session_data):
 
     n_licks = {
         f"n_{side}_licks": np.diff(
-            get_event_trial_idxs(trial_start, trial_data, ts), axis=1
+            get_event_trial_idxs(trial_start, trial_data, ts, **trial_idx_kwargs),
+            axis=1,
         ).ravel()
         for side, ts in licks.items()
     }
@@ -500,19 +528,46 @@ def get_licks_df(subj_id, sess_id, trial_data, session_data):
     return licks_df
 
 
-def get_event_trial_idxs(trial_start, trial_data, movie_frame):
-    frame_trial_idxs = np.zeros((len(trial_start), 2), dtype=np.int32)
+def get_event_trial_idxs(
+    trial_start,
+    trial_data,
+    movie_frame,
+    alignment="choice",
+    tpre=None,
+    tpost=None,
+    full_trial=False,
+):
 
-    trial_start = np.append(
-        trial_start, trial_start[-1] + trial_data["outcome_time"].iloc[-1]
-    )  # TODO
+    if full_trial:
+        frame_trial_idxs = np.zeros((len(trial_start), 2), dtype=np.int32)
+        trial_start = np.append(
+            trial_start, trial_start[-1] + trial_data["outcome_time"].iloc[-1]
+        )  # TODO
 
-    for trial_i in range(frame_trial_idxs.shape[0]):
-        # do same epoch
-        start_idx = np.searchsorted(movie_frame, trial_start[trial_i])
-        end_idx = np.searchsorted(movie_frame, trial_start[trial_i + 1])
+        for trial_i in range(frame_trial_idxs.shape[0]):
+            # do same epoch
+            start_idx = np.searchsorted(movie_frame, trial_start[trial_i])
+            end_idx = np.searchsorted(movie_frame, trial_start[trial_i + 1])
 
-        frame_trial_idxs[trial_i] = (start_idx, end_idx)
+            frame_trial_idxs[trial_i] = (start_idx, end_idx)
+
+    else:
+        if alignment == "choice":
+            ts = trial_data["trial_start_time"] + trial_data["response_time"]  # s
+        else:
+            raise NotImplementedError(
+                f"alignment {alignment} is not currently implemented"
+            )
+
+        trial_idxs = np.vstack((ts - tpre, ts + tpost)).T
+
+        frame_trial_idxs = np.zeros((len(trial_idxs), 2), dtype=np.int32)
+
+        for trial_i, (trial_pre, trial_post) in enumerate(trial_idxs):
+            start_idx = np.searchsorted(movie_frame, trial_pre)
+            end_idx = np.searchsorted(movie_frame, trial_post)
+
+            frame_trial_idxs[trial_i] = (start_idx, end_idx)
 
     return frame_trial_idxs
 

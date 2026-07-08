@@ -50,6 +50,7 @@ class Encoder:
         self.add_licks = kwargs.pop("add_licks", False)
 
         self.n = kwargs.pop("n", None)
+        self.full_trial = kwargs.pop("full_trial", False)
 
         self.norm = kwargs.pop("norm", False)
         self.separate_drift = kwargs.pop("separate_drift", False)
@@ -94,6 +95,7 @@ class Encoder:
             binwidth_ms=self.binwidth_ms,
             add_svd=self.add_svd,
             add_licks=self.add_licks,
+            full_trial=self.full_trial,
             thresh=self.thresh,
         )
 
