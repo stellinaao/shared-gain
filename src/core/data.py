@@ -862,10 +862,8 @@ def get_encoder_io(
 ):
     # robs
     robs = (
-        np.concatenate(
-            [np.sum(psths[region] * (binwidth_ms / 1000), axis=2) for region in regions]
-        ).T
-        ** 0.5
+        np.concatenate([np.sum(psths[region], axis=2) for region in regions]).T
+        # ** 0.5
     )
 
     if norm:

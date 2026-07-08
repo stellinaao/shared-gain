@@ -18,7 +18,7 @@ from core.data import (
 from core.viz import plot_raincloud
 
 from squiggs.neuron_viewer import NeuronViewer
-from squiggs.renderers import FitRenderer, PETHWeightRenderer
+from squiggs.renderers import FitRenderer, PETHWeightRenderer, PETHRasterRenderer
 from utils.paths import FIGURES_DIR
 
 
@@ -548,6 +548,28 @@ class Encoder:
 
         return NeuronViewer(
             num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
+        )
+
+    def view_peths(self, reg="DLS", mode="response"):
+        if reg not in self.regions:
+            raise ValueError(f"{reg} must be in {self.regions}")
+
+        if not hasattr(self, "psths"):
+            self.get_data()
+
+        r = PETHRasterRenderer(
+            event_times=get_choice_ts(self.trial_data, mode=mode),
+            spike_times=self.spike_times[reg],
+            peths=get_psths_cond(self.psths[reg], self.trial_data, mode=mode),
+            pres=self.tpre,
+            posts=self.tpost,
+            binwidth_s=self.binwidth_ms / 1000,
+            s=0.2,
+            linewidths=0.2,
+        )
+
+        return NeuronViewer(
+            num_units=self.reg_idxs[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
         )
 
 
