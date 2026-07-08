@@ -9,13 +9,12 @@ from scipy.stats import pearsonr
 
 
 # plot two data distros against each other as a scatter
-def plot_scatter(x, y, xlabel="", ylabel="", title="", add_unity=False, ax=None):
+def plot_scatter(
+    x, y, xlabel="", ylabel="", title="", add_unity=False, add_lr=False, ax=None
+):
     if ax is None:
-        _, ax = plt.subplots(figsize=(3, 3), tight_layout=True)
+        _, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
 
-    lr = LinearRegression().fit(x.reshape(-1, 1), y)
-    m = lr.coef_[0]
-    b = lr.intercept_
     r = pearsonr(x, y).statistic
 
     mn = 1.05 * min([np.min(x), np.min(y)])
@@ -25,13 +24,20 @@ def plot_scatter(x, y, xlabel="", ylabel="", title="", add_unity=False, ax=None)
 
     if add_unity:
         ax.plot([mn, mx], [mn, mx], linewidth=0.5, linestyle="--", color="#666666")
-    ax.plot(
-        [mn, mx],
-        [m * mn + b, m * mx + b],
-        linewidth=0.5,
-        color="#BA3737",
-        label=f"{m:.3f}x+{b:.3f}",
-    )
+
+    if add_lr:
+        lr = LinearRegression().fit(x.reshape(-1, 1), y)
+        m = lr.coef_[0]
+        b = lr.intercept_
+
+        ax.plot(
+            [mn, mx],
+            [m * mn + b, m * mx + b],
+            linewidth=0.5,
+            color="#BA3737",
+            label=f"{m:.3f}x+{b:.3f}",
+        )
+        ax.legend(loc="upper right")
 
     ax.axhline(y=0, linewidth=0.5, color="k")
     ax.axvline(x=0, linewidth=0.5, color="k")
@@ -44,8 +50,6 @@ def plot_scatter(x, y, xlabel="", ylabel="", title="", add_unity=False, ax=None)
     else:
         title = f"{title}, r={r:.3f}"
     ax.set_title(title)
-
-    ax.legend()
 
 
 """ MULTIPLE DISTROS """

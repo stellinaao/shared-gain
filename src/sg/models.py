@@ -47,6 +47,7 @@ class Encoder:
         self.add_svd = kwargs.pop("add_svd", False)
         if self.add_svd:
             self.num_svd = kwargs.pop("num_svd", 10)
+        self.add_licks = kwargs.pop("add_licks", False)
 
         self.n = kwargs.pop("n", None)
 
@@ -92,6 +93,7 @@ class Encoder:
             alignment_ref=self.alignment_ref,
             binwidth_ms=self.binwidth_ms,
             add_svd=self.add_svd,
+            add_licks=self.add_licks,
             thresh=self.thresh,
         )
 
@@ -122,6 +124,7 @@ class Encoder:
             tv_keys=self.tv_keys,
             add_svd=self.add_svd,
             num_svd=self.num_svd if self.add_svd else None,
+            add_licks=self.add_licks,
             binwidth_ms=25,
         )
 
@@ -384,7 +387,7 @@ class Encoder:
                 return
 
         if ax is None:
-            _, ax = plt.figure(tight_layout=True)
+            _, ax = plt.subplots(tight_layout=True)
 
         ax.scatter(self.scores["baseline"], self.scores["encoder"], s=0.5, alpha=0.5)
         ax.plot([-0.5, 1], [-0.5, 1], color="#666666", linestyle="--", linewidth=0.5)

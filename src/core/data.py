@@ -118,6 +118,7 @@ def load_sess(
     tpost_ref=1,
     alignment_ref=None,
     add_svd=False,
+    add_licks=False,
     trial_start_pre=0,
     thresh=1,
 ):
@@ -236,6 +237,9 @@ def load_sess(
         if add_svd:
             svds_df = get_svd_df(subj_id, sess_id, trial_data, session_data)
             trial_data = trial_data.join(svds_df)
+        if add_licks:
+            licks_df = get_licks_df(subj_id, sess_id, trial_data, session_data)
+            trial_data = trial_data.join(licks_df)
 
         return spike_times, trial_data, psths, session_data, regions
     elif mode == "old":
@@ -465,7 +469,7 @@ def get_svd_df(subj_id, sess_id, trial_data, session_data):
         allow_pickle=True,
     ).item()
 
-    frame_trial_idxs = get_frame_trial_idxs(trial_start, trial_data, movie_frame)
+    frame_trial_idxs = get_event_trial_idxs(trial_start, trial_data, movie_frame)
 
     svd_tavg = np.zeros((len(frame_trial_idxs), 200))
     for i, (start, end) in enumerate(frame_trial_idxs):
@@ -476,7 +480,27 @@ def get_svd_df(subj_id, sess_id, trial_data, session_data):
     return svd_df
 
 
-def get_frame_trial_idxs(trial_start, trial_data, movie_frame):
+def get_licks_df(subj_id, sess_id, trial_data, session_data):
+    trial_start = session_data["events"]["event_timestamps"][0]
+
+    licks = {
+        "left": session_data["events"]["event_timestamps"][3],
+        "right": session_data["events"]["event_timestamps"][2],
+    }
+
+    n_licks = {
+        f"n_{side}_licks": np.diff(
+            get_event_trial_idxs(trial_start, trial_data, ts), axis=1
+        ).ravel()
+        for side, ts in licks.items()
+    }
+
+    licks_df = pd.DataFrame(n_licks)
+
+    return licks_df
+
+
+def get_event_trial_idxs(trial_start, trial_data, movie_frame):
     frame_trial_idxs = np.zeros((len(trial_start), 2), dtype=np.int32)
 
     trial_start = np.append(
@@ -858,6 +882,7 @@ def get_encoder_io(
     tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
     add_svd=True,
     num_svd=10,
+    add_licks=True,
     binwidth_ms=25,
 ):
     # robs
@@ -894,6 +919,14 @@ def get_encoder_io(
         tvs = np.hstack((tvs, tvs_svd)) if tvs is not None else tvs_svd
         svd_names = [f"svd_{i}" for i in range(num_svd)]
 
+    lick_names = []
+    if add_licks:
+        lick_keys = [f"n_{side}_licks" for side in ["left", "right"]]
+        # tvs_licks = zscore(trial_data[lick_keys], axis=0)
+        tvs_licks = trial_data[lick_keys]
+        tvs = np.hstack((tvs, tvs_licks)) if tvs is not None else tvs_licks
+        lick_names = lick_keys
+
     # tents
     # uniform splines at same frequency whether subsampled or not
     num_trials = trial_data.shape[0]
@@ -913,6 +946,7 @@ def get_encoder_io(
             [f"tents_{i}" for i in range(tents.shape[1])],
             tv_names,
             svd_names,
+            lick_names,
         )
     )
 
