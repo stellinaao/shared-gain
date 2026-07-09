@@ -57,7 +57,13 @@ def plot_scatter(
 
 # plot multiple distros as kdes
 def plot_kdes(
-    data: dict, xlim=None, label="", cmap="tab10", line_kwargs: dict = {}, ax=None
+    data: dict,
+    xlim=None,
+    label="",
+    cmap="tab10",
+    add_means=True,
+    line_kwargs: dict = {},
+    ax=None,
 ):
     if ax is None:
         _, ax = plt.subplots(figsize=(2.5, 2.5), tight_layout=True)
@@ -82,16 +88,17 @@ def plot_kdes(
 
         ax.plot(x, y, label=data_label, **style)
 
-        avg = np.mean(data_vals)
-        ax.plot(
-            avg,
-            kde(avg),
-            marker="v",
-            color=style["color"],
-            markersize=1,
-            linestyle="none",
-        )
-        ax.axvline(x=avg, **style)
+        if add_means:
+            avg = np.mean(data_vals)
+            ax.plot(
+                avg,
+                kde(avg),
+                marker="v",
+                color=style["color"],
+                markersize=1,
+                linestyle="none",
+            )
+            ax.axvline(x=avg, **style)
     ax.set_xlabel(label)
     ax.set_ylabel("density")
     ax.legend()
