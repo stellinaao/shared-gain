@@ -60,7 +60,7 @@ colors_subj = {
     "MR83": "#3359D7",
 }
 
-colors_strategy = {"mb": "#D7A007", "mf": "#183488"}
+colors_strategy = {"full": "#666666", "mb": "#D7A007", "mf": "#183488"}
 colors_epoch = {
     "full": "#FFEE00",
     "choice": "#1F6A92",

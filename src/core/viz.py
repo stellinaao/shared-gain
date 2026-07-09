@@ -60,6 +60,8 @@ def plot_kdes(
     data: dict,
     xlim=None,
     label="",
+    ylabel=True,
+    legend=True,
     cmap="tab10",
     add_means=True,
     line_kwargs: dict = {},
@@ -100,10 +102,66 @@ def plot_kdes(
             )
             ax.axvline(x=avg, **style)
     ax.set_xlabel(label)
-    ax.set_ylabel("density")
-    ax.legend()
+    if ylabel:
+        ax.set_ylabel("density")
+    if legend:
+        ax.legend()
 
     return ax
+
+
+# plot nested distros as a row of kdes
+def plot_kde_row(
+    data: dict,  # dict of dicts
+    styles: dict = {},
+    title: str = None,
+    sharey=True,
+    panel_width=1.5,
+    panel_height=1.5,
+    legend_panel=-1,
+    legend_kwargs: dict = {},
+    **kwargs,
+):
+    fig, axes = plt.subplots(
+        ncols=len(data),
+        nrows=1,
+        figsize=(panel_width * len(data), panel_height),
+        sharey=sharey,
+        tight_layout=True,
+    )
+    if len(data) == 1:
+        axes = [axes]  # plt.subplots returns a bare Axes, not an array, when ncols=1
+
+    for i, (k, data_) in enumerate(data.items()):
+        plot_kdes(
+            data_,
+            label=k,
+            line_kwargs=styles,
+            ax=axes[i],
+            ylabel=(i == 0),
+            legend=False,
+            **kwargs,
+        )
+    # title
+    if title is not None:
+        fig.tight_layout(rect=[0, 0, 1, 0.9])
+        x_center = (axes[0].get_position().x0 + axes[-1].get_position().x1) / 2
+        fig.suptitle(title, x=x_center)
+
+    # legend
+    if legend_panel is not None:
+        handles, labels = axes[0].get_legend_handles_labels()
+        small_legend = dict(
+            fontsize=5,
+            handlelength=1.0,
+            labelspacing=0.3,
+            borderaxespad=0.3,
+            frameon=False,
+        )
+        small_legend.update(legend_kwargs)
+        axes[legend_panel].legend(handles, labels, **small_legend)
+
+    return fig, axes
 
 
 """ DISTROS """
