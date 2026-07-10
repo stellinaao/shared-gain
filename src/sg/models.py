@@ -278,11 +278,12 @@ class Encoder:
             tvs[test_idxs]
         ), encoder
 
-    def get_r2(self, n_folds=20, p_train=0.8, pool=True):
+    def get_r2(self, n_folds=20, p_train=0.8, pool=False):
         if not hasattr(self, "robs"):
             self.build_dm()
 
         if pool:
+            print("pool")
             yhats = {
                 k: np.zeros((self.num_trials, self.num_units))
                 for k in ["baseline", "ps_baseline", "encoder"]
@@ -333,6 +334,7 @@ class Encoder:
                 for k, yhat in yhats.items()
             }
         else:
+            print("no pool")
             self.scores_cv = {
                 "baseline": np.zeros((n_folds, self.num_units)),
                 "ps_baseline": np.zeros((n_folds, self.num_units)),
