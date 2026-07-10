@@ -65,15 +65,110 @@ def plot_scatter(
     return ax
 
 
+# plot two data distros against each other as a 2d histogram
+def plot_hist2d(
+    x,
+    y,
+    mn=None,
+    mx=None,
+    xlabel="",
+    ylabel="",
+    title="",
+    ax=None,
+):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(2.25, 2), tight_layout=True)
+    else:
+        fig = ax.figure
+
+    r = pearsonr(x, y).statistic
+
+    mn = 1.05 * min([np.min(x), np.min(y)]) if mn is None else mn
+    mx = 1.05 * max([np.max(x), np.max(y)]) if mx is None else mx
+
+    _, _, _, im = ax.hist2d(
+        x, y, range=[[mn, mx], [mn, mx]], bins=50, cmap="Blues", density=True
+    )
+    fig.colorbar(im, ax=ax, fraction=0.05, pad=0.05)
+
+    ax.set_aspect("equal", adjustable="box")
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    if title == "":
+        title = f"r={r:.3f}"
+    else:
+        title = f"{title} (r={r:.3f})"
+    ax.set_title(title)
+
+    return ax
+
+
+def plot_contour(
+    x,
+    y,
+    mn=None,
+    mx=None,
+    fill=True,
+    levels=20,
+    thresh=0,
+    bw_adjust=1.0,
+    cmap="Blues",
+    cbar=False,
+    xlabel="",
+    ylabel="",
+    title="",
+    ax=None,
+):
+    if ax is None:
+        _, ax = plt.subplots(figsize=(2.25, 2), tight_layout=True)
+
+    r = pearsonr(x, y).statistic
+
+    mn = 1.05 * min([np.min(x), np.min(y)]) if mn is None else mn
+    mx = 1.05 * max([np.max(x), np.max(y)]) if mx is None else mx
+
+    sns.kdeplot(
+        x=x,
+        y=y,
+        fill=fill,
+        levels=levels,
+        thresh=thresh,
+        bw_adjust=bw_adjust,
+        cmap=cmap,
+        clip=((mn, mx), (mn, mx)),
+        cbar=cbar,
+        cbar_kws=dict(fraction=0.05, pad=0.05) if cbar else None,
+        ax=ax,
+    )
+
+    ax.set_xlim([mn, mx])
+    ax.set_ylim([mn, mx])
+    ax.set_aspect("equal", adjustable="box")
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    if title == "":
+        title = f"r={r:.3f}"
+    else:
+        title = f"{title} (r={r:.3f})"
+    ax.set_title(title)
+
+    return ax
+
+
 # plot multiple pairs of distros against each other
-def plot_scatter_row(
+def plot_2d_row(
+    fn,
     data: dict,  # panel_label -> (x, y) tuple
     xlabel="",
     ylabel="",
     sharey=True,
     sharex=True,
-    panel_width=1.5,
-    panel_height=2,
+    panel_width=2.5,
+    panel_height=3,
     title="",  # overall row title
     **kwargs,
 ):
@@ -89,7 +184,7 @@ def plot_scatter_row(
         axes = [axes]
 
     for i, (panel_label, (x, y)) in enumerate(data.items()):
-        plot_scatter(
+        fn(
             x=x,
             y=y,
             xlabel=xlabel,
