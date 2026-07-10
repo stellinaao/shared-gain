@@ -660,7 +660,7 @@ class StrategyEncoder(Encoder):
         subj_id,
         sess_id,
         strategy_filter="mb",
-        balance_strategy=True,
+        balance_strategy=False,
         idxs=None,
         **kwargs,
     ):
