@@ -5,12 +5,23 @@ import seaborn as sns
 from sklearn.linear_model import LinearRegression
 from scipy.stats import pearsonr
 
+from utils.viz_utils import center_title
+
 """ DISTRO RELATIONSHIP (2) """
 
 
 # plot two data distros against each other as a scatter
 def plot_scatter(
-    x, y, xlabel="", ylabel="", title="", add_unity=False, add_lr=False, ax=None
+    x,
+    y,
+    xlabel="",
+    ylabel="",
+    title="",
+    color=None,
+    label=None,
+    add_unity=False,
+    add_lr=False,
+    ax=None,
 ):
     if ax is None:
         _, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
@@ -20,7 +31,7 @@ def plot_scatter(
     mn = 1.05 * min([np.min(x), np.min(y)])
     mx = 1.05 * max([np.max(x), np.max(y)])
 
-    ax.scatter(x, y, s=0.5, alpha=0.5)
+    ax.scatter(x, y, s=0.5, c=color, alpha=0.5, label=label)
 
     if add_unity:
         ax.plot([mn, mx], [mn, mx], linewidth=0.5, linestyle="--", color="#666666")
@@ -48,8 +59,103 @@ def plot_scatter(
     if title == "":
         title = f"r={r:.3f}"
     else:
-        title = f"{title}, r={r:.3f}"
+        title = f"{title} (r={r:.3f})"
     ax.set_title(title)
+
+    return ax
+
+
+# plot multiple pairs of distros against each other
+def plot_scatter_row(
+    data: dict,  # panel_label -> (x, y) tuple
+    xlabel="",
+    ylabel="",
+    sharey=True,
+    sharex=True,
+    panel_width=1.5,
+    panel_height=2,
+    title="",  # overall row title
+    **kwargs,
+):
+    fig, axes = plt.subplots(
+        ncols=len(data),
+        nrows=1,
+        figsize=(panel_width * len(data), panel_height),
+        sharey=sharey,
+        sharex=sharex,
+        tight_layout=True,
+    )
+    if len(data) == 1:
+        axes = [axes]
+
+    for i, (panel_label, (x, y)) in enumerate(data.items()):
+        plot_scatter(
+            x=x,
+            y=y,
+            xlabel=xlabel,
+            ylabel=ylabel if i == 0 else "",
+            title=panel_label,
+            ax=axes[i],
+            **kwargs,
+        )
+
+    if title:
+        center_title(fig, axes, title)
+
+    return fig, axes
+
+
+# plot groups of two distros against each other on the same scatter plot
+def plot_scatter_groups(
+    data: dict,  # group_label -> (x, y) tuple
+    xlabel="",
+    ylabel="",
+    title="",
+    colors: dict = {},
+    add_unity=False,
+    add_lr=False,
+    ax=None,
+):
+    if ax is None:
+        _, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
+
+    x_all = np.concatenate([x for x, y in data.values()])
+    y_all = np.concatenate([y for x, y in data.values()])
+
+    r = pearsonr(x_all, y_all).statistic
+
+    mn = 1.05 * min(x_all.min(), y_all.min())
+    mx = 1.05 * max(x_all.max(), y_all.max())
+
+    for group_label, (x, y) in data.items():
+        ax.scatter(x, y, s=0.5, c=colors.get(group_label), alpha=0.5, label=group_label)
+
+    if add_unity:
+        ax.plot([mn, mx], [mn, mx], linewidth=0.5, linestyle="--", color="#666666")
+
+    if add_lr:
+        lr = LinearRegression().fit(x_all.reshape(-1, 1), y_all)
+        m, b = lr.coef_[0], lr.intercept_
+        ax.plot(
+            [mn, mx],
+            [m * mn + b, m * mx + b],
+            linewidth=0.5,
+            color="#BA3737",
+            label=f"{m:.3f}x+{b:.3f}",
+        )
+
+    ax.axhline(y=0, linewidth=0.5, color="k")
+    ax.axvline(x=0, linewidth=0.5, color="k")
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    title = f"r={r:.3f}" if title == "" else f"{title} (r={r:.3f})"
+    ax.set_title(title)
+
+    ax.legend(fontsize=5, loc="upper left")
+
+    return ax
 
 
 """ MULTIPLE DISTROS """
@@ -144,9 +250,7 @@ def plot_kde_row(
         )
     # title
     if title is not None:
-        fig.tight_layout(rect=[0, 0, 1, 0.9])
-        x_center = (axes[0].get_position().x0 + axes[-1].get_position().x1) / 2
-        fig.suptitle(title, x=x_center)
+        center_title(fig, axes, title)
 
     # legend
     if legend_panel is not None:
