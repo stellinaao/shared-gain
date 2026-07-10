@@ -53,7 +53,7 @@ class Encoder:
         self.n = kwargs.pop("n", None)
         self.full_trial = kwargs.pop("full_trial", False)
 
-        self.norm = kwargs.pop("norm", True)
+        self.norm = kwargs.pop("norm", False)
         self.separate_drift = kwargs.pop("separate_drift", False)
         self.max_reg = kwargs.pop("max_reg", 5)
 
@@ -278,12 +278,11 @@ class Encoder:
             tvs[test_idxs]
         ), encoder
 
-    def get_r2(self, n_folds=20, p_train=0.8, pool=False):
+    def get_r2(self, n_folds=20, p_train=0.8, pool=True):
         if not hasattr(self, "robs"):
             self.build_dm()
 
         if pool:
-            print("pool")
             yhats = {
                 k: np.zeros((self.num_trials, self.num_units))
                 for k in ["baseline", "ps_baseline", "encoder"]
@@ -334,7 +333,6 @@ class Encoder:
                 for k, yhat in yhats.items()
             }
         else:
-            print("no pool")
             self.scores_cv = {
                 "baseline": np.zeros((n_folds, self.num_units)),
                 "ps_baseline": np.zeros((n_folds, self.num_units)),
@@ -447,10 +445,8 @@ class Encoder:
         plot_raincloud(self.scores["encoder"], label=r"$r^2$, encoder", ax=ax)
 
     def plot_r2_comp(self, ax=None):
-        print("heyy")
         if not hasattr(self, "scores"):
             try:
-                print("okkkk")
                 self.get_r2()
             except NotImplementedError:
                 return
@@ -659,8 +655,9 @@ class StrategyEncoder(Encoder):
         self,
         subj_id,
         sess_id,
-        strategy_filter="mb",
+        strategy_filter,
         balance_strategy=False,
+        cond_balance=False,
         idxs=None,
         **kwargs,
     ):
@@ -669,6 +666,9 @@ class StrategyEncoder(Encoder):
 
         self.strategy_filter = strategy_filter
         self.balance_strategy = balance_strategy
+        if self.balance_strategy:
+            self.cond_balance = cond_balance
+
         self.idxs = idxs
 
         if not (self.strategy_filter == "mb" or self.strategy_filter == "mf"):
@@ -692,6 +692,7 @@ class StrategyEncoder(Encoder):
                 self.trial_data,
                 self.strategy_filter,
                 balance_strategy=self.balance_strategy,
+                cond_balance=self.cond_balance if self.balance_strategy else False,
             )
             self.idxs = self.idxs_all[self.strategy_filter]
 
@@ -708,15 +709,6 @@ class StrategyEncoder(Encoder):
         self.encoder_ref.fit_baseline()
         self.baseline_model = self.encoder_ref.baseline_model
 
-    # def baseline_predict(self):
-    #     super().baseline_predict()
-
-    # def fit_encoder(self):
-    #     super().fit_encoder()
-
-    # def encoder_predict(self):
-    #     super().encoder_predict()
-
     def get_r2(self, n_folds=20, p_train=0.8, pool=True):
         if not hasattr(self, "robs"):
             self.build_dm()
@@ -724,6 +716,7 @@ class StrategyEncoder(Encoder):
             self.fit_baseline()
 
         if pool:
+            print("pool")
             yhats = {
                 k: np.zeros((self.num_trials, self.num_units))
                 for k in ["baseline", "encoder"]

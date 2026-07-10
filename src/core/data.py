@@ -829,6 +829,7 @@ def get_strategy_filter_idxs(
     trial_data,
     strategy="both",
     balance_strategy=True,  # conditional balancing
+    cond_balance=False,
     num_trial_thresh=20,
 ):
     if not (strategy == "both" or strategy == "mb" or strategy == "mf"):
@@ -838,89 +839,114 @@ def get_strategy_filter_idxs(
     mf_mask = trial_data["strategy"] == -1
 
     if balance_strategy:
-        mb_cond_masks = {
-            "left_corr": (mb_mask)
-            & (trial_data["response"] == 1)
-            & (trial_data["rewarded"] == 1),
-            "right_corr": (mb_mask)
-            & (trial_data["response"] == -1)
-            & (trial_data["rewarded"] == 1),
-            "left_incorr": (mb_mask)
-            & (trial_data["response"] == 1)
-            & (trial_data["rewarded"] == 0),
-            "right_incorr": (mb_mask)
-            & (trial_data["response"] == -1)
-            & (trial_data["rewarded"] == 0),
-        }
+        if cond_balance:
+            print("hello")
+            mb_cond_masks = {
+                "left_corr": (mb_mask)
+                & (trial_data["response"] == 1)
+                & (trial_data["rewarded"] == 1),
+                "right_corr": (mb_mask)
+                & (trial_data["response"] == -1)
+                & (trial_data["rewarded"] == 1),
+                "left_incorr": (mb_mask)
+                & (trial_data["response"] == 1)
+                & (trial_data["rewarded"] == 0),
+                "right_incorr": (mb_mask)
+                & (trial_data["response"] == -1)
+                & (trial_data["rewarded"] == 0),
+            }
 
-        mf_cond_masks = {
-            "left_corr": (mf_mask)
-            & (trial_data["response"] == 1)
-            & (trial_data["rewarded"] == 1),
-            "right_corr": (mf_mask)
-            & (trial_data["response"] == -1)
-            & (trial_data["rewarded"] == 1),
-            "left_incorr": (mf_mask)
-            & (trial_data["response"] == 1)
-            & (trial_data["rewarded"] == 0),
-            "right_incorr": (mf_mask)
-            & (trial_data["response"] == -1)
-            & (trial_data["rewarded"] == 0),
-        }
+            mf_cond_masks = {
+                "left_corr": (mf_mask)
+                & (trial_data["response"] == 1)
+                & (trial_data["rewarded"] == 1),
+                "right_corr": (mf_mask)
+                & (trial_data["response"] == -1)
+                & (trial_data["rewarded"] == 1),
+                "left_incorr": (mf_mask)
+                & (trial_data["response"] == 1)
+                & (trial_data["rewarded"] == 0),
+                "right_incorr": (mf_mask)
+                & (trial_data["response"] == -1)
+                & (trial_data["rewarded"] == 0),
+            }
 
-        num_trials_cond = [
-            min(mb_cond_masks[key].sum(), mf_cond_masks[key].sum())
-            for key in mb_cond_masks
-        ]
-        num_trial_strategy = np.sum(num_trials_cond)
+            num_trials_cond = [
+                min(mb_cond_masks[key].sum(), mf_cond_masks[key].sum())
+                for key in mb_cond_masks
+            ]
+            num_trial_strategy = np.sum(num_trials_cond)
 
-        if (
-            (strategy == "mb" or strategy == "mf")
-            and num_trial_strategy < num_trial_thresh
-        ) or ((strategy == "both") and 2 * num_trial_strategy < num_trial_thresh):
-            raise RuntimeError("not enough trials after balancing")
+            if (
+                (strategy == "mb" or strategy == "mf")
+                and num_trial_strategy < num_trial_thresh
+            ) or ((strategy == "both") and 2 * num_trial_strategy < num_trial_thresh):
+                raise RuntimeError("not enough trials after balancing")
 
-        if strategy == "both" or strategy == "mb":
-            idxs_subsamp_mb = []
-        if strategy == "both" or strategy == "mf":
-            idxs_subsamp_mf = []
-
-        for i, cond in enumerate(mb_cond_masks):
             if strategy == "both" or strategy == "mb":
-                idxs_subsamp_mb.extend(
-                    np.random.choice(
-                        np.where(mb_cond_masks[cond])[0],
-                        num_trials_cond[i],
-                        replace=False,
-                    )
-                )
+                idxs_subsamp_mb = []
             if strategy == "both" or strategy == "mf":
-                idxs_subsamp_mf.extend(
-                    np.random.choice(
-                        np.where(mf_cond_masks[cond])[0],
-                        num_trials_cond[i],
-                        replace=False,
+                idxs_subsamp_mf = []
+
+            for i, cond in enumerate(mb_cond_masks):
+                if strategy == "both" or strategy == "mb":
+                    idxs_subsamp_mb.extend(
+                        np.random.choice(
+                            np.where(mb_cond_masks[cond])[0],
+                            num_trials_cond[i],
+                            replace=False,
+                        )
                     )
+                if strategy == "both" or strategy == "mf":
+                    idxs_subsamp_mf.extend(
+                        np.random.choice(
+                            np.where(mf_cond_masks[cond])[0],
+                            num_trials_cond[i],
+                            replace=False,
+                        )
+                    )
+
+            if strategy == "both":
+                idxs_subsamp_mb = np.sort(idxs_subsamp_mb)
+                idxs_subsamp_mf = np.sort(idxs_subsamp_mf)
+                idxs_subsamp = np.sort(
+                    np.concatenate((idxs_subsamp_mb, idxs_subsamp_mf))
                 )
 
-        if strategy == "both":
-            idxs_subsamp_mb = np.sort(idxs_subsamp_mb)
-            idxs_subsamp_mf = np.sort(idxs_subsamp_mf)
-            idxs_subsamp = np.sort(np.concatenate((idxs_subsamp_mb, idxs_subsamp_mf)))
+                return {
+                    "both": idxs_subsamp,
+                    "mb": idxs_subsamp_mb,
+                    "mf": idxs_subsamp_mf,
+                }
 
-            return {"both": idxs_subsamp, "mb": idxs_subsamp_mb, "mf": idxs_subsamp_mf}
+            elif strategy == "mb":
+                idxs_subsamp_mb = np.sort(idxs_subsamp_mb)
 
-        elif strategy == "mb":
-            idxs_subsamp_mb = np.sort(idxs_subsamp_mb)
+                return {"both": None, "mb": idxs_subsamp_mb, "mf": None}
 
-            return {"both": None, "mb": idxs_subsamp_mb, "mf": None}
+            elif strategy == "mf":
+                idxs_subsamp_mf = np.sort(idxs_subsamp_mf)
 
-        elif strategy == "mf":
-            idxs_subsamp_mf = np.sort(idxs_subsamp_mf)
+                return {"both": None, "mb": None, "mf": idxs_subsamp_mf}
 
-            return {"both": None, "mb": None, "mf": idxs_subsamp_mf}
+        # no cond balancing, just trial count
+        else:
+            print("bye")
+            mb_mask = trial_data["strategy"] == 1
+            mf_mask = trial_data["strategy"] == -1
 
+            num_trials = min(mb_mask.sum(), mf_mask.sum())
+
+            return {
+                "mb": np.sort(
+                    np.random.choice(np.where(mb_mask)[0], num_trials, replace=False)
+                ),
+                "mf": np.sort(
+                    np.random.choice(np.where(mf_mask)[0], num_trials, replace=False)
+                ),
+            }
     else:
+        print("3")
         return {
             "both": np.arange(len(trial_data)),
             "mb": np.where(mb_mask)[0],

@@ -27,6 +27,7 @@ def plot_scatter(
         _, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
 
     r = pearsonr(x, y).statistic
+    gr = np.mean(x < y)
 
     mn = 1.05 * min([np.min(x), np.min(y)])
     mx = 1.05 * max([np.max(x), np.max(y)])
@@ -57,9 +58,9 @@ def plot_scatter(
     ax.set_ylabel(ylabel)
 
     if title == "":
-        title = f"r={r:.3f}"
+        title = f"r={r:.3f}, gr={gr:.3f}"
     else:
-        title = f"{title} (r={r:.3f})"
+        title = f"{title} (r={r:.3f}), gr={gr:.3f}"
     ax.set_title(title)
 
     return ax
