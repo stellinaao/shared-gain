@@ -53,7 +53,7 @@ class Encoder:
         self.n = kwargs.pop("n", None)
         self.full_trial = kwargs.pop("full_trial", False)
 
-        self.norm = kwargs.pop("norm", False)
+        self.norm = kwargs.pop("norm", True)
         self.separate_drift = kwargs.pop("separate_drift", False)
         self.max_reg = kwargs.pop("max_reg", 5)
 
@@ -128,7 +128,7 @@ class Encoder:
             add_svd=self.add_svd,
             num_svd=self.num_svd if self.add_svd else None,
             add_licks=self.add_licks,
-            binwidth_ms=25,
+            binwidth_ms=self.binwidth_ms,
         )
 
         self.num_trials, self.num_tv = self.tvs.shape
@@ -247,9 +247,7 @@ class Encoder:
 
     def _get_predictions_nosd(self, idxs, io, model=None):
         train_idxs, test_idxs = idxs
-        # print("train", train_idxs[:5], "test", test_idxs[:5])
         dm, robs = io
-        # print("dm", dm.shape, "robs", robs.shape)
 
         if model is None:
             model = RidgeCV(
@@ -278,7 +276,7 @@ class Encoder:
             tvs[test_idxs]
         ), encoder
 
-    def get_r2(self, n_folds=20, p_train=0.8, pool=True, shuffle=True):
+    def get_r2(self, n_folds=20, p_train=0.8, pool=True):
         if not hasattr(self, "robs"):
             self.build_dm()
 
@@ -288,12 +286,11 @@ class Encoder:
                 for k in ["baseline", "ps_baseline", "encoder"]
             }
 
-            self.kfold = KFold(
-                n_splits=n_folds, shuffle=shuffle, random_state=(0 if shuffle else None)
-            ).split(self.robs)
+            self.kfold = KFold(n_splits=n_folds, shuffle=True, random_state=0).split(
+                self.robs
+            )
 
             for i, (train_idxs, test_idxs) in enumerate(self.kfold):
-                print(i, test_idxs)
                 # train, test, save test predictions
                 self.yhats["baseline"][test_idxs], baseline_model = (
                     self.get_predictions(
@@ -347,7 +344,6 @@ class Encoder:
             }
 
             for i in range(n_folds):
-                # print(i)
                 np.random.seed(seed=i)
 
                 train_idxs = np.sort(
@@ -357,7 +353,6 @@ class Encoder:
                 )
                 test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
-                # print("baseline")
                 self.scores_cv["baseline"][i], baseline_model = self.get_scores(
                     is_encoder=False,
                     io=(self.tents, self.robs),
@@ -365,7 +360,6 @@ class Encoder:
                 )
 
                 if self.separate_drift:
-                    print("what is happening here?")
                     self.scores_cv["encoder"][i], _ = self.get_scores(
                         is_encoder=True,
                         io=(self.tents, self.tvs, self.robs),
@@ -376,7 +370,6 @@ class Encoder:
                     self.scores_cv["ps_baseline"][i] = self.scores_cv["baseline"][i]
 
                 else:
-                    # print("encoder")
                     self.scores_cv["encoder"][i], encoder = self.get_scores(
                         is_encoder=True,
                         io=(self.dm, self.robs),
@@ -597,9 +590,7 @@ class Encoder:
 
         r = FitRenderer(
             y=self.robs[:, self.reg_idxs[reg]],
-            yhat=self.yhats[model][
-                :, self.reg_idxs[reg]
-            ],  # self.robs_predict[model][:, self.reg_idxs[reg]],
+            yhat=self.robs_predict[model][:, self.reg_idxs[reg]],
             rsquared=self.scores[model][self.reg_idxs[reg]],
             mode="lite",
         )
@@ -665,7 +656,7 @@ class StrategyEncoder(Encoder):
         subj_id,
         sess_id,
         strategy_filter,
-        balance_strategy=False,
+        balance_strategy=True,
         cond_balance=False,
         idxs=None,
         **kwargs,
@@ -725,7 +716,6 @@ class StrategyEncoder(Encoder):
             self.fit_baseline()
 
         if pool:
-            print("pool")
             yhats = {
                 k: np.zeros((self.num_trials, self.num_units))
                 for k in ["baseline", "encoder"]
@@ -787,59 +777,6 @@ class StrategyEncoder(Encoder):
 
     def verify(self, subtract_baseline=True):
         super().verify(r2_comp=False)
-
-    # def get_r2(self, n_folds=20, p_train=0.8):
-    #     if not hasattr(self, "robs"):
-    #         self.build_dm()
-
-    #     self.scores_cv = {
-    #         "baseline": np.zeros((n_folds, self.num_units)),
-    #         "encoder": np.zeros((n_folds, self.num_units)),
-    #     }
-
-    #     self.encoder_ref.get_r2()
-    #     self.scores_cv["baseline"] = self.encoder_ref.scores_cv["baseline"]
-
-    #     # encoder
-    #     for i in range(n_folds):
-    #         np.random.seed(seed=i)
-    #         train_idxs = np.sort(
-    #             np.random.choice(
-    #                 self.num_trials,
-    #                 int(self.num_trials * p_train),
-    #                 replace=False,
-    #             )
-    #         )
-    #         test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
-
-    #         if (
-    #             not hasattr(self, "robs_predict")
-    #             or "baseline" not in self.robs_predict.keys()
-    #         ):
-    #             self.baseline_predict()
-
-    #         encoder = RidgeCV(
-    #             alphas=np.logspace(-self.max_reg, self.max_reg, 2*self.max_reg+1, base=10),
-    #             alpha_per_target=True,
-    #         ).fit(
-    #             self.tvs[train_idxs],
-    #             self.robs[train_idxs] - self.robs_predict["baseline"][train_idxs],
-    #         )
-
-    #         self.scores_cv["encoder"][i] = r2_score(
-    #             self.robs[test_idxs],
-    #             self.robs_predict["baseline"][test_idxs]
-    #             + encoder.predict(self.tvs[test_idxs]),
-    #             multioutput="raw_values",
-    #             force_finite=False,
-    #         )
-
-    #     self.seed()
-
-    #     self.scores = {
-    #         "baseline": np.median(self.scores_cv["baseline"], axis=0),
-    #         "encoder": np.median(self.scores_cv["encoder"], axis=0),
-    #     }
 
 
 class ShuffledEncoder:
