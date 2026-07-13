@@ -1018,3 +1018,48 @@ class ShuffledEncoder:
         ax.legend(loc="upper right")
 
         return ax
+
+
+class TimeResolvedEncoder(Encoder):
+    def __init__(
+        self,
+        subj_id,
+        sess_id,
+        stepsize_ms=0.1,
+        **kwargs,
+    ):
+        self.subj_id = subj_id
+        self.sess_id = sess_id
+
+        self.stepsize_ms = stepsize_ms
+
+        super().__init__(
+            subj_id,
+            sess_id,
+            separate_drift=True,
+            **kwargs,
+        )
+
+        self.num_bins = int((self.tpre + self.tpost) / self.stepsize_ms)
+
+        if not self.num_bins * self.stepsize_ms == self.tpre + self.tpost:
+            raise ValueError(
+                f"stepsize {stepsize_ms} ms must evenly divide the spanned epoch [-{self.tpre}, {self.tpost}]"
+            )
+
+        self.tbins, step_ = np.linspace(
+            -self.tpre, self.tpost, self.num_bins + 1, retstep=True
+        )
+        assert step_ == self.stepsize_ms
+        print(self.tbins)
+
+        self.t_encoders = {
+            f"[{start:.1f},{stop:.1f}]": Encoder(subj_id, sess_id, **kwargs)
+            for (start, stop) in zip(self.tbins, self.tbins[1:])
+        }
+
+    def build_dm(self):
+        super().build_dm()
+
+        self.encoder_ref.build_dm()
+        self.tents = self.encoder_ref.tents[self.idxs]
