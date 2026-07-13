@@ -278,38 +278,45 @@ class Encoder:
             tvs[test_idxs]
         ), encoder
 
-    def get_r2(self, n_folds=20, p_train=0.8, pool=True):
+    def get_r2(self, n_folds=20, p_train=0.8, pool=True, shuffle=True):
         if not hasattr(self, "robs"):
             self.build_dm()
 
         if pool:
-            yhats = {
+            self.yhats = {
                 k: np.zeros((self.num_trials, self.num_units))
                 for k in ["baseline", "ps_baseline", "encoder"]
             }
 
-            for i, (train_idxs, test_idxs) in enumerate(
-                KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
-            ):
+            self.kfold = KFold(
+                n_splits=n_folds, shuffle=shuffle, random_state=(0 if shuffle else None)
+            ).split(self.robs)
+
+            for i, (train_idxs, test_idxs) in enumerate(self.kfold):
+                print(i, test_idxs)
                 # train, test, save test predictions
-                yhats["baseline"][test_idxs], baseline_model = self.get_predictions(
-                    is_encoder=False,
-                    io=(self.tents, self.robs),
-                    idxs=(train_idxs, test_idxs),
+                self.yhats["baseline"][test_idxs], baseline_model = (
+                    self.get_predictions(
+                        is_encoder=False,
+                        io=(self.tents, self.robs),
+                        idxs=(train_idxs, test_idxs),
+                    )
                 )
 
                 if self.separate_drift:
-                    yhats["encoder"][test_idxs], _ = self.get_predictions(
+                    self.yhats["encoder"][test_idxs], _ = self.get_predictions(
                         is_encoder=True,
                         io=(self.tents, self.tvs, self.robs),
                         idxs=(train_idxs, test_idxs),
                         baseline_model=baseline_model,
                     )
 
-                    yhats["ps_baseline"][test_idxs] = yhats["baseline"][test_idxs]
+                    self.yhats["ps_baseline"][test_idxs] = self.yhats["baseline"][
+                        test_idxs
+                    ]
 
                 else:
-                    yhats["encoder"][test_idxs], encoder = self.get_predictions(
+                    self.yhats["encoder"][test_idxs], encoder = self.get_predictions(
                         is_encoder=True,
                         io=(self.dm, self.robs),
                         idxs=(train_idxs, test_idxs),
@@ -319,7 +326,7 @@ class Encoder:
                         self.dm_tv_ko = deepcopy(self.dm)
                         self.dm_tv_ko[:, self.num_tents :] = 0
 
-                    yhats["ps_baseline"][test_idxs], _ = self.get_predictions(
+                    self.yhats["ps_baseline"][test_idxs], _ = self.get_predictions(
                         is_encoder=False,
                         io=(self.dm_tv_ko, self.robs),
                         idxs=(train_idxs, test_idxs),
@@ -330,7 +337,7 @@ class Encoder:
                 k: r2_score(
                     self.robs, yhat, multioutput="raw_values", force_finite=False
                 )
-                for k, yhat in yhats.items()
+                for k, yhat in self.yhats.items()
             }
         else:
             self.scores_cv = {
@@ -590,7 +597,9 @@ class Encoder:
 
         r = FitRenderer(
             y=self.robs[:, self.reg_idxs[reg]],
-            yhat=self.robs_predict[model][:, self.reg_idxs[reg]],
+            yhat=self.yhats[model][
+                :, self.reg_idxs[reg]
+            ],  # self.robs_predict[model][:, self.reg_idxs[reg]],
             rsquared=self.scores[model][self.reg_idxs[reg]],
             mode="lite",
         )
