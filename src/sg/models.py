@@ -591,7 +591,7 @@ class Encoder:
         r = FitRenderer(
             y=self.robs[:, self.reg_idxs[reg]],
             yhat=self.robs_predict[model][:, self.reg_idxs[reg]],
-            rsquared=self.scores[model][self.reg_idxs[reg]],
+            rsquared=None,  # self.scores[model][self.reg_idxs[reg]],
             mode="lite",
         )
 
@@ -1120,3 +1120,56 @@ class TimeResolvedEncoder(Encoder):
                     add_licks=self.add_licks,
                     binwidth_ms=self.binwidth_ms,
                 )
+
+    def fit_baseline(self):
+        if not hasattr(self, "robs"):
+            self.build_dm()
+
+        self.baseline_models = {}
+        for i, (k, encoder_) in enumerate(self.t_encoders.items()):
+            encoder_.tents = self.tents[i]
+            encoder_.robs = self.robs[i]
+
+            encoder_.fit_baseline()
+            self.baseline_models[k] = encoder_.baseline_model
+
+    def baseline_predict(self):
+        if not hasattr(self, "robs_predict"):
+            self.robs_predict = {}
+
+        if not hasattr(self, "baseline_models"):
+            self.fit_baseline()
+
+        self.robs_predict["baseline"] = np.zeros_like(self.robs)
+
+        for i, encoder in enumerate(self.t_encoders.values()):
+            encoder.baseline_predict()
+            self.robs_predict["baseline"][i] = encoder.robs_predict["baseline"]
+
+    def fit_encoder(self):
+        if not hasattr(self, "robs"):
+            self.build_dm()
+
+        self.encoders = {}
+        for i, (k, encoder_) in enumerate(self.t_encoders.items()):
+            if self.separate_drift:
+                encoder_.tvs = self.tvs[i]
+            else:
+                encoder_.dm = self.dm[i]
+            encoder_.robs = self.robs[i]
+
+            encoder_.fit_encoder()
+            self.encoders[k] = encoder_.encoder
+
+    def encoder_predict(self):
+        if not hasattr(self, "robs_predict"):
+            self.robs_predict = {}
+
+        if not hasattr(self, "encoders"):
+            self.fit_encoder()
+
+        self.robs_predict["encoder"] = np.zeros_like(self.robs)
+
+        for i, encoder in enumerate(self.t_encoders.values()):
+            encoder.encoder_predict()
+            self.robs_predict["encoder"][i] = encoder.robs_predict["encoder"]
