@@ -954,19 +954,7 @@ def get_strategy_filter_idxs(
         }
 
 
-def get_encoder_io(
-    psths,
-    trial_data,
-    regions,
-    norm=True,
-    num_tents=10,
-    tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
-    add_svd=True,
-    num_svd=10,
-    add_licks=True,
-    binwidth_ms=25,
-):
-    # robs
+def get_robs(psths, regions, norm=True):
     robs = (
         np.concatenate([np.sum(psths[region], axis=2) for region in regions]).T
         # ** 0.5
@@ -976,15 +964,20 @@ def get_encoder_io(
         s = np.std(robs, axis=0) + 1e-10
         mu = np.mean(robs, axis=0)
         robs = (robs - mu) / s
+    return robs
 
-    # reg keys
+
+def get_reg_keys(psths, regions):
     reg_mask = np.concatenate(
         [np.repeat(i, len(psths[region])) for i, region in enumerate(regions)]
     )
     reg_idxs = {reg: np.where(reg_mask == i)[0] for i, reg in enumerate(regions)}
+    return reg_idxs
 
-    # tvs
-    # non-movement
+
+def get_dm(trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents):
+    # task variables
+    # non movement
     if tv_keys is not None:
         ohe = OHE().fit(trial_data[tv_keys])
         tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
@@ -1009,14 +1002,14 @@ def get_encoder_io(
         lick_names = lick_keys
 
     # tents
-    # uniform splines at same frequency whether subsampled or not
     num_trials = trial_data.shape[0]
     xs = np.linspace(0, num_trials - 1, num_tents)
     tents = tent_basis_generate(xs)
-    # tents = zscore(tents, axis=0)  # FLAG
 
-    # design matrix
+    # dm
     dm = np.hstack((tents, tvs))
+
+    # names and idxs
     tv_names = ohe.get_feature_names_out() if tv_keys is not None else []
 
     for i, tv_name in enumerate(tv_names):
@@ -1033,7 +1026,31 @@ def get_encoder_io(
 
     dm_idxs = {dm_name: i for i, dm_name in enumerate(dm_names)}
 
-    return (tents, tvs, dm, robs, dm_names, dm_idxs, reg_idxs)
+    return dm, (tents, tvs), (dm_names, dm_idxs)
+
+
+def get_encoder_io(
+    psths,
+    trial_data,
+    regions,
+    norm=True,
+    num_tents=10,
+    tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
+    add_svd=True,
+    num_svd=10,
+    add_licks=True,
+    binwidth_ms=25,
+):
+    # neural activity (Y/O)
+    robs = get_robs(psths, regions, norm)
+    reg_idxs = get_reg_keys(psths, regions)
+
+    # trial data (X/I)
+    dm, (tents, tvs), (dm_names, dm_idxs) = get_dm(
+        trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents
+    )
+
+    return tents, tvs, dm, robs, dm_names, dm_idxs, reg_idxs
 
 
 # BALANCING

@@ -1025,13 +1025,13 @@ class TimeResolvedEncoder(Encoder):
         self,
         subj_id,
         sess_id,
-        stepsize_ms=0.1,
+        stepsize_s=0.1,
         **kwargs,
     ):
         self.subj_id = subj_id
         self.sess_id = sess_id
 
-        self.stepsize_ms = stepsize_ms
+        self.stepsize_s = stepsize_s
 
         super().__init__(
             subj_id,
@@ -1040,17 +1040,17 @@ class TimeResolvedEncoder(Encoder):
             **kwargs,
         )
 
-        self.num_bins = int((self.tpre + self.tpost) / self.stepsize_ms)
+        self.num_bins = int((self.tpre + self.tpost) / self.stepsize_s)
 
-        if not self.num_bins * self.stepsize_ms == self.tpre + self.tpost:
+        if not self.num_bins * self.stepsize_s == self.tpre + self.tpost:
             raise ValueError(
-                f"stepsize {stepsize_ms} ms must evenly divide the spanned epoch [-{self.tpre}, {self.tpost}]"
+                f"stepsize {stepsize_s} s must evenly divide the spanned epoch [-{self.tpre}, {self.tpost}]"
             )
 
         self.tbins, step_ = np.linspace(
             -self.tpre, self.tpost, self.num_bins + 1, retstep=True
         )
-        assert step_ == self.stepsize_ms
+        assert step_ == self.stepsize_s
         print(self.tbins)
 
         self.t_encoders = {
@@ -1059,7 +1059,64 @@ class TimeResolvedEncoder(Encoder):
         }
 
     def build_dm(self):
-        super().build_dm()
+        if not (hasattr(self, "psths")):
+            self.get_data()
 
-        self.encoder_ref.build_dm()
-        self.tents = self.encoder_ref.tents[self.idxs]
+        for i, (tpre_bin, tpost_bin) in enumerate(zip(self.tbins, self.tbins[1:])):
+            if i == 0:
+                (
+                    tents_,
+                    tvs_,
+                    dm_,
+                    robs_,
+                    self.dm_names,
+                    self.dm_idxs,
+                    self.reg_idxs,
+                ) = get_encoder_io(
+                    self.psths,
+                    self.trial_data,
+                    self.regions,
+                    norm=self.norm,
+                    num_tents=self.num_tents,
+                    tv_keys=self.tv_keys,
+                    add_svd=self.add_svd,
+                    num_svd=self.num_svd if self.add_svd else None,
+                    add_licks=self.add_licks,
+                    binwidth_ms=self.binwidth_ms,
+                )
+
+                self.num_trials, self.num_tv = tvs_.shape
+                self.num_units = robs_.shape[1]
+
+                self.robs = np.zeros((self.num_bins, self.num_trials, self.num_units))
+                self.tents = np.zeros((self.num_bins, self.num_trials, self.num_tents))
+                self.tvs = np.zeros((self.num_bins, self.num_trials, self.num_tv))
+                self.dm = np.zeros(
+                    (self.num_bins, self.num_trials, self.num_tents + self.num_tv)
+                )
+
+                self.robs[0] = robs_
+                self.tents[0] = tents_
+                self.tvs[0] = tvs_
+                self.dm[0] = dm_
+            else:
+                (
+                    self.tents[i],
+                    self.tvs[i],
+                    self.dm[i],
+                    self.robs[i],
+                    _,
+                    _,
+                    _,
+                ) = get_encoder_io(
+                    self.psths,
+                    self.trial_data,
+                    self.regions,
+                    norm=self.norm,
+                    num_tents=self.num_tents,
+                    tv_keys=self.tv_keys,
+                    add_svd=self.add_svd,
+                    num_svd=self.num_svd if self.add_svd else None,
+                    add_licks=self.add_licks,
+                    binwidth_ms=self.binwidth_ms,
+                )
