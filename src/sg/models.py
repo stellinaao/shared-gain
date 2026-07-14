@@ -6,6 +6,8 @@ from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import KFold
 from sklearn.metrics import r2_score
 
+from scipy.stats import zscore
+
 from core.data import (
     load_sess,
     get_strategy_filter_idxs,
@@ -173,7 +175,7 @@ class Encoder:
 
                 self.robs_predict["ps_baseline"] = self.encoder.predict(self.dm_tv_ko)
 
-    def fit_encoder(self, idxs=None):
+    def fit_encoder(self, idxs=None, fit_intercept=True):
         if not (hasattr(self, "dm") and hasattr(self, "robs")):
             self.build_dm()
 
@@ -187,6 +189,7 @@ class Encoder:
                     -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
                 ),
                 alpha_per_target=True,
+                fit_intercept=fit_intercept,
             ).fit(self.tvs, self.robs - self.robs_predict["baseline"])
 
             self.encoder_weights = np.hstack(
@@ -198,6 +201,7 @@ class Encoder:
                     -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
                 ),
                 alpha_per_target=True,
+                fit_intercept=fit_intercept,
             ).fit(self.dm, self.robs)
 
             self.encoder_weights = self.encoder.coef_
@@ -1062,6 +1066,7 @@ class TimeResolvedEncoder(Encoder):
 
         self.t_psths = {}
         for i, (tpre_bin, tpost_bin) in enumerate(zip(self.tbins, self.tbins[1:])):
+            print(tpre_bin, tpost_bin)
             (
                 _,
                 _,
@@ -1087,8 +1092,14 @@ class TimeResolvedEncoder(Encoder):
     def build_dm(self):
         if not (hasattr(self, "psths")):
             self.get_data()
+        print("consider the data got")
 
         for i, psths in enumerate(self.t_psths.values()):
+            if any([psths[reg].ndim == 2 for reg in self.regions]):
+                psths = {
+                    reg: psths[reg].reshape(psths[reg].shape[0], psths[reg].shape[1], 1)
+                    for reg in psths
+                }
             if i == 0:
                 (
                     tents_,
@@ -1102,7 +1113,7 @@ class TimeResolvedEncoder(Encoder):
                     psths,
                     self.trial_data,
                     self.regions,
-                    norm=self.norm,
+                    norm=False,
                     num_tents=self.num_tents,
                     tv_keys=self.tv_keys,
                     add_svd=self.add_svd,
@@ -1147,9 +1158,13 @@ class TimeResolvedEncoder(Encoder):
                     binwidth_ms=self.binwidth_ms,
                 )
 
+        if self.norm:
+            self.robs = zscore(self.robs, axis=(0, 1))
+
     def fit_baseline(self):
         if not hasattr(self, "robs"):
             self.build_dm()
+        print("done")
 
         self.baseline_models = {}
         for i, (k, encoder_) in enumerate(self.t_encoders.items()):
@@ -1187,7 +1202,7 @@ class TimeResolvedEncoder(Encoder):
                 encoder_.dm = self.dm[i]
             encoder_.robs = self.robs[i]
 
-            encoder_.fit_encoder()
+            encoder_.fit_encoder(fit_intercept=False)
             self.encoders[k] = encoder_.encoder
             self.encoder_weights[i] = encoder_.encoder_weights
 
