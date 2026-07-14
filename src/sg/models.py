@@ -1051,18 +1051,44 @@ class TimeResolvedEncoder(Encoder):
             -self.tpre, self.tpost, self.num_bins + 1, retstep=True
         )
         assert step_ == self.stepsize_s
-        print(self.tbins)
 
         self.t_encoders = {
             f"[{start:.1f},{stop:.1f}]": Encoder(subj_id, sess_id, **kwargs)
             for (start, stop) in zip(self.tbins, self.tbins[1:])
         }
 
+    def get_data(self):
+        super().get_data()
+
+        self.t_psths = {}
+        for i, (tpre_bin, tpost_bin) in enumerate(zip(self.tbins, self.tbins[1:])):
+            (
+                _,
+                _,
+                self.t_psths[f"[{tpre_bin},{tpost_bin}]"],
+                _,
+                _,
+            ) = load_sess(
+                subj_id=self.subj_id,
+                sess_id=self.sess_id,
+                tpre=-tpre_bin,
+                tpost=tpost_bin,
+                alignment=self.alignment,
+                tpre_ref=self.tpre_ref,
+                tpost_ref=self.tpost_ref,
+                alignment_ref=self.alignment_ref,
+                binwidth_ms=self.binwidth_ms,
+                add_svd=self.add_svd,
+                add_licks=self.add_licks,
+                full_trial=self.full_trial,
+                thresh=self.thresh,
+            )
+
     def build_dm(self):
         if not (hasattr(self, "psths")):
             self.get_data()
 
-        for i, (tpre_bin, tpost_bin) in enumerate(zip(self.tbins, self.tbins[1:])):
+        for i, psths in enumerate(self.t_psths.values()):
             if i == 0:
                 (
                     tents_,
@@ -1073,7 +1099,7 @@ class TimeResolvedEncoder(Encoder):
                     self.dm_idxs,
                     self.reg_idxs,
                 ) = get_encoder_io(
-                    self.psths,
+                    psths,
                     self.trial_data,
                     self.regions,
                     norm=self.norm,
@@ -1109,7 +1135,7 @@ class TimeResolvedEncoder(Encoder):
                     _,
                     _,
                 ) = get_encoder_io(
-                    self.psths,
+                    psths,
                     self.trial_data,
                     self.regions,
                     norm=self.norm,
@@ -1151,6 +1177,9 @@ class TimeResolvedEncoder(Encoder):
             self.build_dm()
 
         self.encoders = {}
+        self.encoder_weights = np.zeros(
+            (self.num_bins, self.num_units, self.num_tents + self.num_tv)
+        )
         for i, (k, encoder_) in enumerate(self.t_encoders.items()):
             if self.separate_drift:
                 encoder_.tvs = self.tvs[i]
@@ -1160,6 +1189,7 @@ class TimeResolvedEncoder(Encoder):
 
             encoder_.fit_encoder()
             self.encoders[k] = encoder_.encoder
+            self.encoder_weights[i] = encoder_.encoder_weights
 
     def encoder_predict(self):
         if not hasattr(self, "robs_predict"):

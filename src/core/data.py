@@ -205,6 +205,7 @@ def load_sess(
             or not (tpre == tpre_ref)
             or not (tpost == tpost_ref)
         ):
+            print("ahoy matey")
             psths_ref, _ = get_psths(
                 spike_times,
                 trial_data,
