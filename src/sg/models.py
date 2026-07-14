@@ -1173,3 +1173,35 @@ class TimeResolvedEncoder(Encoder):
         for i, encoder in enumerate(self.t_encoders.values()):
             encoder.encoder_predict()
             self.robs_predict["encoder"][i] = encoder.robs_predict["encoder"]
+
+    def view_fits(self, reg="DLS", model="encoder"):
+        if reg not in self.regions:
+            raise ValueError(f"{reg} must be in {self.regions}")
+
+        if not hasattr(self, "robs_predict") or model not in self.robs_predict.keys():
+            if model == "encoder":
+                self.encoder_predict()
+            elif model == "baseline":
+                self.baseline_predict()
+            else:
+                raise ValueError(
+                    f"valid arguments for model are 'encoder' and 'baseline,' not {model}"
+                )
+
+        def _transform(robs_3d, reg):
+            return (
+                robs_3d[:, :, self.reg_idxs[reg]]
+                .T.reshape(self.psths[reg].shape[0], -1)
+                .T
+            )
+
+        r = FitRenderer(
+            y=_transform(self.robs, reg),
+            yhat=_transform(self.robs_predict[model], reg),
+            rsquared=None,  # self.scores[model][self.reg_idxs[reg]],
+            mode="lite",
+        )
+
+        return NeuronViewer(
+            num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
+        )
