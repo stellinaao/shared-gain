@@ -22,7 +22,9 @@ from sklearn.preprocessing import OneHotEncoder as OHE
 from scipy.stats import zscore
 
 from spks.utils import get_cluster_spike_times
-from damn.alignment import compute_spike_count
+from spks.event_aligned import compute_spike_count
+
+# from damn.alignment import compute_spike_count
 from ndnt.utils.NDNutils import tent_basis_generate
 from utils.paths import DATA_DIR
 
@@ -184,55 +186,21 @@ def load_sess(
         trial_data = trial_data[trial_mask]
 
         # get psths
-        psths, trial_mask = get_psths(
+        psths, session_data, tbin_edges = get_psths_ref(
             spike_times,
             trial_data,
             session_data,
             regions,
-            tpre=tpre,
-            tpost=tpost,
-            binwidth_ms=binwidth_ms,
-            alignment=alignment,
-            trial_start_pre=trial_start_pre,
-            do_rem_zstd=False,
-            reward_only=False,
-            prev_filter=False,
-            mode=mode,
-        )
-
-        if alignment_ref is not None and (
-            not (alignment == alignment_ref)
-            or not (tpre == tpre_ref)
-            or not (tpost == tpost_ref)
-        ):
-            print("ahoy matey")
-            psths_ref, _ = get_psths(
-                spike_times,
-                trial_data,
-                session_data,
-                regions,
-                tpre=tpre_ref,
-                tpost=tpost_ref,
-                binwidth_ms=binwidth_ms,
-                alignment=alignment_ref,
-                trial_start_pre=trial_start_pre,
-                do_rem_zstd=False,  # so that there are no indexing issues later
-                reward_only=False,
-                prev_filter=False,
-                mode=mode,
-            )
-
-        else:
-            psths_ref = None
-
-        trial_data = trial_data[trial_mask]
-
-        psths, spike_times = rem_low_fr(
-            psths,
-            spike_times,
-            psths_ref=psths_ref,
-            thresh=thresh,
-            binwidth_ms=binwidth_ms,
+            tpre,
+            tpost,
+            binwidth_ms,
+            alignment,
+            trial_start_pre,
+            tpre_ref,
+            tpost_ref,
+            alignment_ref,
+            mode,
+            thresh=1,
         )
 
         # add svds
@@ -267,7 +235,7 @@ def load_sess(
             else:
                 trial_data[licks_df.columns] = licks_df.reset_index(drop=True).values
 
-        return spike_times, trial_data, psths, session_data, regions
+        return spike_times, trial_data, psths, session_data, regions, tbin_edges
     elif mode == "old":
         # load data and set variables needed for aligning spikes to behavioral events
         if subj_idx is None:
@@ -323,9 +291,83 @@ def load_sess(
             psths, spike_times, thresh=thresh, binwidth_ms=binwidth_ms
         )
 
-        return spike_times, trial_data, psths, session_data, regions
+        return spike_times, trial_data, psths, session_data, regions, tbin_edges
     else:
         raise ValueError("valid values for mode are 'old' and 'new.'")
+
+
+def get_psths_ref(
+    spike_times,
+    trial_data,
+    session_data,
+    regions,
+    tpre,
+    tpost,
+    binwidth_ms,
+    alignment,
+    trial_start_pre,
+    tpre_ref,
+    tpost_ref,
+    alignment_ref,
+    mode,
+    thresh=1,
+):
+    psths, trial_mask, tbin_edges = get_psths(
+        spike_times,
+        trial_data,
+        session_data,
+        regions,
+        tpre=tpre,
+        tpost=tpost,
+        binwidth_ms=binwidth_ms,
+        alignment=alignment,
+        trial_start_pre=trial_start_pre,
+        do_rem_zstd=False,
+        reward_only=False,
+        prev_filter=False,
+        mode=mode,
+    )
+
+    if alignment_ref is not None and (
+        not (alignment == alignment_ref)
+        or not (tpre == tpre_ref)
+        or not (tpost == tpost_ref)
+    ):
+        print("ahoy matey")
+        print(alignment, alignment_ref)
+        print(tpre, tpre_ref)
+        print(tpost, tpost_ref)
+        psths_ref, _, tbin_edges_ref = get_psths(
+            spike_times,
+            trial_data,
+            session_data,
+            regions,
+            tpre=tpre_ref,
+            tpost=tpost_ref,
+            binwidth_ms=binwidth_ms,
+            alignment=alignment_ref,
+            trial_start_pre=trial_start_pre,
+            do_rem_zstd=False,  # so that there are no indexing issues later
+            reward_only=False,
+            prev_filter=False,
+            mode=mode,
+        )
+
+    else:
+        psths_ref = None
+
+    assert trial_mask.mean() == 1
+    # trial_data = trial_data[trial_mask]
+
+    psths, spike_times = rem_low_fr(
+        psths,
+        spike_times,
+        psths_ref=psths_ref,
+        thresh=thresh,
+        binwidth_ms=binwidth_ms,
+    )
+
+    return psths, spike_times, tbin_edges
 
 
 def load_data(thresh=1):
@@ -643,11 +685,21 @@ def get_psths(
     psths_all = np.squeeze(
         Parallel(n_jobs=8)(
             delayed(_compute_spike_count_first)(
-                ts, unit, tpre, tpost, binwidth_ms / 1000
+                event_times=ts,
+                spike_times=unit,
+                pre_seconds=tpre,
+                post_seconds=tpost,
+                binwidth_ms=binwidth_ms,
             )
             for _, unit in tasks
         )
     )
+
+    _, tbin_edges, _ = compute_spike_count(ts, tasks[0][1], tpre, tpost, binwidth_ms)
+
+    # psth_matrix, timebin_edges, event_index = compute_spike_count(
+    #     event_times=ts, spike_times=tasks[0][1], pre_seconds=tpre+0.001, post_seconds=tpost+0.001, binwidth_ms=binwidth_ms,
+    # )
 
     idx = 0
     for reg in regions:
@@ -658,7 +710,7 @@ def get_psths(
     if do_rem_zstd:
         [psths], units_to_rem = rem_zstd([psths], regions)
         return psths, mask, units_to_rem
-    return psths, mask
+    return psths, mask, tbin_edges  # (psth_matrix, timebin_edges, event_index)
 
 
 def _compute_spike_count_first(*args, **kwargs):
@@ -1093,8 +1145,12 @@ def rem_low_fr(psths, spike_times, psths_ref=None, thresh=1, binwidth_ms=25):
         psths_ref = psths
 
     for region in psths.keys():
-        frs = np.mean(psths_ref[region], axis=(1, 2))
-        low_fr_idxs = np.where(frs < (thresh * binwidth_ms / 1000))[0]
+        frs = np.mean(
+            psths_ref[region], axis=(1, 2)
+        )  # across trials and bins, what's the avg # spks/bin?
+        low_fr_idxs = np.where(frs < (thresh * binwidth_ms / 1000))[
+            0
+        ]  # thresh*binwidth_ms/1000 -> # spks/bin to get thresh spks/s
 
         # thresh was hardcoded in the bool op...the messy hardcode strikes again..never forget (1.13.26)
         psths_lite[region] = np.delete(psths[region], low_fr_idxs, axis=0)

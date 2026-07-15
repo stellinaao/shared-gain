@@ -11,6 +11,7 @@ from scipy.stats import zscore
 from core.data import (
     load_sess,
     get_strategy_filter_idxs,
+    get_psths_ref,
     get_encoder_io,
     get_tavg_sc_cond,
     get_choice_ts,
@@ -80,12 +81,14 @@ class Encoder:
         np.random.seed(self.random_state)
 
     def get_data(self):
+
         (
             self.spike_times,
             self.trial_data,
             self.psths,
             self.session_data,
             self.regions,
+            self.tbin_edges,
         ) = load_sess(
             subj_id=self.subj_id,
             sess_id=self.sess_id,
@@ -1030,12 +1033,18 @@ class TimeResolvedEncoder(Encoder):
         subj_id,
         sess_id,
         stepsize_s=0.1,
+        edge_inclusive=False,
         **kwargs,
     ):
         self.subj_id = subj_id
         self.sess_id = sess_id
 
         self.stepsize_s = stepsize_s
+
+        if self.stepsize_s < 0.01:
+            raise ValueError("min stepsize is 1 ms")
+
+        self.edge_inclusive = edge_inclusive
 
         super().__init__(
             subj_id,
@@ -1052,9 +1061,14 @@ class TimeResolvedEncoder(Encoder):
             )
 
         self.tbins, step_ = np.linspace(
-            -self.tpre, self.tpost, self.num_bins + 1, retstep=True
+            -self.tpre * 1000, self.tpost * 1000, self.num_bins + 1, retstep=True
         )
-        assert step_ == self.stepsize_s
+        self.tbins /= 1000
+        self.tbins = np.round(
+            self.tbins, 3
+        )  # only supports precision to the nearest millisecond
+
+        assert step_ / 1000 == self.stepsize_s
 
         self.t_encoders = {
             f"[{start:.1f},{stop:.1f}]": Encoder(subj_id, sess_id, **kwargs)
@@ -1064,42 +1078,43 @@ class TimeResolvedEncoder(Encoder):
     def get_data(self):
         super().get_data()
 
-        self.t_psths = {}
-        for i, (tpre_bin, tpost_bin) in enumerate(zip(self.tbins, self.tbins[1:])):
-            print(tpre_bin, tpost_bin)
-            (
-                _,
-                _,
-                self.t_psths[f"[{tpre_bin},{tpost_bin}]"],
-                _,
-                _,
-            ) = load_sess(
-                subj_id=self.subj_id,
-                sess_id=self.sess_id,
-                tpre=-tpre_bin,
-                tpost=tpost_bin,
-                alignment=self.alignment,
-                tpre_ref=self.tpre_ref,
-                tpost_ref=self.tpost_ref,
-                alignment_ref=self.alignment_ref,
-                binwidth_ms=self.binwidth_ms,
-                add_svd=self.add_svd,
-                add_licks=self.add_licks,
-                full_trial=self.full_trial,
-                thresh=self.thresh,
-            )
+        # self.t_psths = {}
+        # for i, (tpre_bin, tpost_bin) in enumerate(zip(self.tbins, self.tbins[1:])):
+        #     print(tpre_bin, tpost_bin)
+        #     (
+        #         _,
+        #         _,
+        #         self.t_psths[f"[{tpre_bin},{tpost_bin}]"],
+        #         _,
+        #         _,
+        #     ) = load_sess(
+        #         subj_id=self.subj_id,
+        #         sess_id=self.sess_id,
+        #         tpre=-tpre_bin,
+        #         tpost=tpost_bin,
+        #         alignment=self.alignment,
+        #         tpre_ref=self.tpre_ref,
+        #         tpost_ref=self.tpost_ref,
+        #         alignment_ref=self.alignment_ref,
+        #         binwidth_ms=self.binwidth_ms,
+        #         add_svd=self.add_svd,
+        #         add_licks=self.add_licks,
+        #         full_trial=self.full_trial,
+        #         thresh=self.thresh,
+        #     )
+        # assert len(set([psth[reg].ndim for psth in self.t_psths.values() for reg in self.regions])) == 1, "number of values in each bin is different"
 
     def build_dm(self):
         if not (hasattr(self, "psths")):
             self.get_data()
         print("consider the data got")
 
-        for i, psths in enumerate(self.t_psths.values()):
-            if any([psths[reg].ndim == 2 for reg in self.regions]):
-                psths = {
-                    reg: psths[reg].reshape(psths[reg].shape[0], psths[reg].shape[1], 1)
-                    for reg in psths
-                }
+        for i in range(self.num_bins):
+            # if any([psths[reg].ndim == 2 for reg in self.regions]):
+            #     psths = {
+            #         reg: psths[reg].reshape(psths[reg].shape[0], psths[reg].shape[1], 1)
+            #         for reg in psths
+            #     }
             if i == 0:
                 (
                     tents_,
@@ -1110,7 +1125,7 @@ class TimeResolvedEncoder(Encoder):
                     self.dm_idxs,
                     self.reg_idxs,
                 ) = get_encoder_io(
-                    psths,
+                    self.psths,
                     self.trial_data,
                     self.regions,
                     norm=False,
@@ -1125,14 +1140,14 @@ class TimeResolvedEncoder(Encoder):
                 self.num_trials, self.num_tv = tvs_.shape
                 self.num_units = robs_.shape[1]
 
-                self.robs = np.zeros((self.num_bins, self.num_trials, self.num_units))
+                # self.robs = np.zeros((self.num_bins, self.num_trials, self.num_units))
                 self.tents = np.zeros((self.num_bins, self.num_trials, self.num_tents))
                 self.tvs = np.zeros((self.num_bins, self.num_trials, self.num_tv))
                 self.dm = np.zeros(
                     (self.num_bins, self.num_trials, self.num_tents + self.num_tv)
                 )
 
-                self.robs[0] = robs_
+                # self.robs[0] = robs_
                 self.tents[0] = tents_
                 self.tvs[0] = tvs_
                 self.dm[0] = dm_
@@ -1141,12 +1156,13 @@ class TimeResolvedEncoder(Encoder):
                     self.tents[i],
                     self.tvs[i],
                     self.dm[i],
-                    self.robs[i],
+                    # self.robs[i],
+                    _,
                     _,
                     _,
                     _,
                 ) = get_encoder_io(
-                    psths,
+                    self.psths,
                     self.trial_data,
                     self.regions,
                     norm=self.norm,
@@ -1158,6 +1174,34 @@ class TimeResolvedEncoder(Encoder):
                     binwidth_ms=self.binwidth_ms,
                 )
 
+        def _edge_inclusive(t):
+            return t + 0.001 if self.edge_inclusive else t
+
+        self.robs, _, self.t_tbin_edges = get_psths_ref(
+            self.spike_times,
+            self.trial_data,
+            self.session_data,
+            self.regions,
+            tpre=_edge_inclusive(self.tpre),
+            tpost=_edge_inclusive(self.tpost),
+            binwidth_ms=self.stepsize_s * 1000,
+            alignment=self.alignment,
+            trial_start_pre=0,
+            tpre_ref=_edge_inclusive(self.tpre_ref),
+            tpost_ref=_edge_inclusive(self.tpost_ref),
+            alignment_ref=self.alignment_ref,
+            mode="new",
+            thresh=self.thresh,
+        )
+
+        if self.edge_inclusive:
+            assert np.allclose(self.t_tbin_edges, self.tbins), "alignment issue"
+        else:
+            assert np.allclose(self.t_tbin_edges, self.tbins[1:-1]), "alignment issue"
+
+        self.robs = np.array(
+            [unit for reg in self.regions for unit in self.robs[reg]]
+        ).T
         if self.norm:
             self.robs = zscore(self.robs, axis=(0, 1))
 
