@@ -65,6 +65,7 @@ class Encoder:
         self.tpre = kwargs.pop("tpre", 0.5)
         self.tpost = kwargs.pop("tpost", 1)
         self.alignment = kwargs.pop("alignment", "choice")
+        self.edge_inclusive = kwargs.pop("edge_inclusive", False)
 
         self.tpre_ref = kwargs.pop("tpre_ref", 0.5)
         self.tpost_ref = kwargs.pop("tpost_ref", 1)
@@ -81,6 +82,8 @@ class Encoder:
         np.random.seed(self.random_state)
 
     def get_data(self):
+        def _edge_inclusive(t):
+            return t + 0.001 if self.edge_inclusive else t
 
         (
             self.spike_times,
@@ -92,11 +95,11 @@ class Encoder:
         ) = load_sess(
             subj_id=self.subj_id,
             sess_id=self.sess_id,
-            tpre=self.tpre,
-            tpost=self.tpost,
+            tpre=_edge_inclusive(self.tpre),
+            tpost=_edge_inclusive(self.tpost),
             alignment=self.alignment,
-            tpre_ref=self.tpre_ref,
-            tpost_ref=self.tpost_ref,
+            tpre_ref=_edge_inclusive(self.tpre_ref),
+            tpost_ref=_edge_inclusive(self.tpost_ref),
             alignment_ref=self.alignment_ref,
             binwidth_ms=self.binwidth_ms,
             add_svd=self.add_svd,
@@ -634,20 +637,23 @@ class Encoder:
             num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
         )
 
-    def view_peths(self, reg="DLS", mode="response"):
+    def view_peths(self, reg="DLS", mode="response", flag=True):
         if reg not in self.regions:
             raise ValueError(f"{reg} must be in {self.regions}")
 
         if not hasattr(self, "psths"):
             self.get_data()
 
+        a = self.psths[reg] if flag else self.robs[:, :, self.reg_idxs[reg]].T
+
         r = PETHRasterRenderer(
             event_times=get_choice_ts(self.trial_data, mode=mode),
             spike_times=self.spike_times[reg],
-            peths=get_psths_cond(self.psths[reg], self.trial_data, mode=mode),
+            peths=get_psths_cond(a, self.trial_data, mode=mode),
             pres=self.tpre,
             posts=self.tpost,
             binwidth_s=self.binwidth_ms / 1000,
+            tbin_edges=self.tbin_edges,
             s=0.2,
             linewidths=0.2,
         )
@@ -1033,7 +1039,6 @@ class TimeResolvedEncoder(Encoder):
         subj_id,
         sess_id,
         stepsize_s=0.1,
-        edge_inclusive=False,
         **kwargs,
     ):
         self.subj_id = subj_id
@@ -1043,8 +1048,6 @@ class TimeResolvedEncoder(Encoder):
 
         if self.stepsize_s < 0.01:
             raise ValueError("min stepsize is 1 ms")
-
-        self.edge_inclusive = edge_inclusive
 
         super().__init__(
             subj_id,
