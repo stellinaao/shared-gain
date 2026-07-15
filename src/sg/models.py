@@ -65,7 +65,7 @@ class Encoder:
         self.tpre = kwargs.pop("tpre", 0.5)
         self.tpost = kwargs.pop("tpost", 1)
         self.alignment = kwargs.pop("alignment", "choice")
-        self.edge_inclusive = kwargs.pop("edge_inclusive", False)
+        self.edge_inclusive = kwargs.pop("edge_inclusive", True)
 
         self.tpre_ref = kwargs.pop("tpre_ref", 0.5)
         self.tpost_ref = kwargs.pop("tpost_ref", 1)
@@ -644,12 +644,10 @@ class Encoder:
         if not hasattr(self, "psths"):
             self.get_data()
 
-        a = self.psths[reg] if flag else self.robs[:, :, self.reg_idxs[reg]].T
-
         r = PETHRasterRenderer(
             event_times=get_choice_ts(self.trial_data, mode=mode),
             spike_times=self.spike_times[reg],
-            peths=get_psths_cond(a, self.trial_data, mode=mode),
+            peths=get_psths_cond(self.psths[reg], self.trial_data, mode=mode),
             pres=self.tpre,
             posts=self.tpost,
             binwidth_s=self.binwidth_ms / 1000,
@@ -1074,38 +1072,14 @@ class TimeResolvedEncoder(Encoder):
         assert step_ / 1000 == self.stepsize_s
 
         self.t_encoders = {
-            f"[{start:.1f},{stop:.1f}]": Encoder(subj_id, sess_id, **kwargs)
+            f"[{start:.3f},{stop:.3f}]": Encoder(subj_id, sess_id, **kwargs)
             for (start, stop) in zip(self.tbins, self.tbins[1:])
         }
 
+        assert len(self.t_encoders) == self.num_bins, "not one-to-one encoder per bin"
+
     def get_data(self):
         super().get_data()
-
-        # self.t_psths = {}
-        # for i, (tpre_bin, tpost_bin) in enumerate(zip(self.tbins, self.tbins[1:])):
-        #     print(tpre_bin, tpost_bin)
-        #     (
-        #         _,
-        #         _,
-        #         self.t_psths[f"[{tpre_bin},{tpost_bin}]"],
-        #         _,
-        #         _,
-        #     ) = load_sess(
-        #         subj_id=self.subj_id,
-        #         sess_id=self.sess_id,
-        #         tpre=-tpre_bin,
-        #         tpost=tpost_bin,
-        #         alignment=self.alignment,
-        #         tpre_ref=self.tpre_ref,
-        #         tpost_ref=self.tpost_ref,
-        #         alignment_ref=self.alignment_ref,
-        #         binwidth_ms=self.binwidth_ms,
-        #         add_svd=self.add_svd,
-        #         add_licks=self.add_licks,
-        #         full_trial=self.full_trial,
-        #         thresh=self.thresh,
-        #     )
-        # assert len(set([psth[reg].ndim for psth in self.t_psths.values() for reg in self.regions])) == 1, "number of values in each bin is different"
 
     def build_dm(self):
         if not (hasattr(self, "psths")):
@@ -1113,11 +1087,6 @@ class TimeResolvedEncoder(Encoder):
         print("consider the data got")
 
         for i in range(self.num_bins):
-            # if any([psths[reg].ndim == 2 for reg in self.regions]):
-            #     psths = {
-            #         reg: psths[reg].reshape(psths[reg].shape[0], psths[reg].shape[1], 1)
-            #         for reg in psths
-            #     }
             if i == 0:
                 (
                     tents_,
@@ -1143,14 +1112,12 @@ class TimeResolvedEncoder(Encoder):
                 self.num_trials, self.num_tv = tvs_.shape
                 self.num_units = robs_.shape[1]
 
-                # self.robs = np.zeros((self.num_bins, self.num_trials, self.num_units))
                 self.tents = np.zeros((self.num_bins, self.num_trials, self.num_tents))
                 self.tvs = np.zeros((self.num_bins, self.num_trials, self.num_tv))
                 self.dm = np.zeros(
                     (self.num_bins, self.num_trials, self.num_tents + self.num_tv)
                 )
 
-                # self.robs[0] = robs_
                 self.tents[0] = tents_
                 self.tvs[0] = tvs_
                 self.dm[0] = dm_
@@ -1159,7 +1126,6 @@ class TimeResolvedEncoder(Encoder):
                     self.tents[i],
                     self.tvs[i],
                     self.dm[i],
-                    # self.robs[i],
                     _,
                     _,
                     _,
@@ -1221,18 +1187,26 @@ class TimeResolvedEncoder(Encoder):
             encoder_.fit_baseline()
             self.baseline_models[k] = encoder_.baseline_model
 
-    def baseline_predict(self):
+    def baseline_predict(self, pseudo=False):
         if not hasattr(self, "robs_predict"):
             self.robs_predict = {}
 
         if not hasattr(self, "baseline_models"):
             self.fit_baseline()
 
-        self.robs_predict["baseline"] = np.zeros_like(self.robs)
+        if pseudo:
+            self.robs_predict["ps_baseline"] = np.zeros_like(self.robs)
+        else:
+            self.robs_predict["baseline"] = np.zeros_like(self.robs)
 
         for i, encoder in enumerate(self.t_encoders.values()):
-            encoder.baseline_predict()
-            self.robs_predict["baseline"][i] = encoder.robs_predict["baseline"]
+            encoder.baseline_predict(pseudo=pseudo)
+            if pseudo:
+                self.robs_predict["ps_baseline"][i] = encoder.robs_predict[
+                    "ps_baseline"
+                ]
+            else:
+                self.robs_predict["baseline"][i] = encoder.robs_predict["baseline"]
 
     def fit_encoder(self):
         if not hasattr(self, "robs"):
