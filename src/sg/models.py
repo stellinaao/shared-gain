@@ -82,6 +82,8 @@ class Encoder:
         np.random.seed(self.random_state)
 
     def get_data(self):
+        print("WHAT")
+
         def _edge_inclusive(t):
             return t + 0.001 if self.edge_inclusive else t
 
@@ -142,8 +144,8 @@ class Encoder:
         self.num_trials, self.num_tv = self.tvs.shape
         self.num_units = self.robs.shape[1]
 
-    def fit_baseline(self, idxs=None):
-        if not (hasattr(self, "dm") and hasattr(self, "robs")):
+    def fit_baseline(self, fit_intercept=True, idxs=None):
+        if not (hasattr(self, "tents") and hasattr(self, "robs")):
             self.build_dm()
 
         self.baseline_model = RidgeCV(
@@ -151,6 +153,7 @@ class Encoder:
                 -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
             ),
             alpha_per_target=True,
+            fit_intercept=fit_intercept,
         ).fit(self.tents, self.robs)
 
     def baseline_predict(self, pseudo=False):
@@ -182,12 +185,12 @@ class Encoder:
                 self.robs_predict["ps_baseline"] = self.encoder.predict(self.dm_tv_ko)
 
     def fit_encoder(self, idxs=None, fit_intercept=True):
-        if not (hasattr(self, "dm") and hasattr(self, "robs")):
+        if not (hasattr(self, "robs")):
             self.build_dm()
 
         if self.separate_drift:
             if not hasattr(self, "baseline_model"):
-                self.fit_baseline()
+                self.fit_baseline(fit_intercept=fit_intercept)
             self.baseline_predict()
 
             self.encoder = RidgeCV(
@@ -1072,7 +1075,9 @@ class TimeResolvedEncoder(Encoder):
         assert step_ / 1000 == self.stepsize_s
 
         self.t_encoders = {
-            f"[{start:.3f},{stop:.3f}]": Encoder(subj_id, sess_id, **kwargs)
+            f"[{start:.3f},{stop:.3f}]": Encoder(
+                subj_id, sess_id, separate_drift=True, **kwargs
+            )
             for (start, stop) in zip(self.tbins, self.tbins[1:])
         }
 
@@ -1218,6 +1223,7 @@ class TimeResolvedEncoder(Encoder):
         )
         for i, (k, encoder_) in enumerate(self.t_encoders.items()):
             if self.separate_drift:
+                encoder_.tents = self.tents[i]
                 encoder_.tvs = self.tvs[i]
             else:
                 encoder_.dm = self.dm[i]

@@ -186,7 +186,7 @@ def load_sess(
         trial_data = trial_data[trial_mask]
 
         # get psths
-        psths, session_data, tbin_edges = get_psths_ref(
+        psths, spike_times, tbin_edges = get_psths_ref(
             spike_times,
             trial_data,
             session_data,
@@ -202,6 +202,9 @@ def load_sess(
             mode,
             thresh=1,
         )
+
+        for reg in psths:
+            print(reg, len(spike_times[reg]))
 
         # add svds
         if add_svd:
@@ -357,7 +360,6 @@ def get_psths_ref(
         psths_ref = None
 
     assert trial_mask.mean() == 1
-    # trial_data = trial_data[trial_mask]
 
     psths, spike_times = rem_low_fr(
         psths,
@@ -366,6 +368,9 @@ def get_psths_ref(
         thresh=thresh,
         binwidth_ms=binwidth_ms,
     )
+
+    for reg in psths:
+        print(reg, len(spike_times[reg]))
 
     return psths, spike_times, tbin_edges
 
@@ -893,7 +898,7 @@ def get_strategy_filter_idxs(
 
     if balance_strategy:
         if cond_balance:
-            print("hello")
+            # print("hello")
             mb_cond_masks = {
                 "left_corr": (mb_mask)
                 & (trial_data["response"] == 1)
@@ -984,7 +989,7 @@ def get_strategy_filter_idxs(
 
         # no cond balancing, just trial count
         else:
-            print("bye")
+            # print("bye")
             mb_mask = trial_data["strategy"] == 1
             mf_mask = trial_data["strategy"] == -1
 
@@ -999,7 +1004,7 @@ def get_strategy_filter_idxs(
                 ),
             }
     else:
-        print("3")
+        # print("3")
         return {
             "both": np.arange(len(trial_data)),
             "mb": np.where(mb_mask)[0],
@@ -1159,4 +1164,6 @@ def rem_low_fr(psths, spike_times, psths_ref=None, thresh=1, binwidth_ms=25):
             for i in range(psths[region].shape[0])
             if i not in low_fr_idxs
         ]
+        print(region, len(psths_lite[region]))
+        print(region, len(spike_times_lite[region]))
     return psths_lite, spike_times_lite
