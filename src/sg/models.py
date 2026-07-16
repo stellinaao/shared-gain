@@ -452,7 +452,7 @@ class Encoder:
             self.get_r2()
 
         if ax is None:
-            _, ax = plt.figure(tight_layout=True)
+            _, ax = plt.subplots(tight_layout=True)
 
         plot_raincloud(self.scores["encoder"], label=r"$r^2$, encoder", ax=ax)
 
@@ -1247,6 +1247,67 @@ class TimeResolvedEncoder(Encoder):
         for i, encoder in enumerate(self.t_encoders.values()):
             encoder.encoder_predict()
             self.robs_predict["encoder"][i] = encoder.robs_predict["encoder"]
+
+    def get_r2(self, n_folds=20, p_train=0.8):
+        if not hasattr(self, "robs"):
+            self.build_dm()
+
+        self.yhats = {
+            k: np.zeros((self.num_trials * self.num_bins, self.num_units))
+            for k in ["baseline", "ps_baseline", "encoder"]
+        }
+
+        def _reshape(arr_3d):
+            # arr_3d.shape = (num_bins, num_trials, _)
+            assert arr_3d.ndim == 3
+            return arr_3d.reshape(self.num_bins * self.num_trials, arr_3d.shape[-1])
+
+        self.kfold = KFold(n_splits=n_folds, shuffle=True, random_state=0).split(
+            _reshape(self.robs)
+        )
+
+        for i, (train_idxs, test_idxs) in enumerate(self.kfold):
+            # train, test, save test predictions
+            self.yhats["baseline"][test_idxs], baseline_model = self.get_predictions(
+                is_encoder=False,
+                io=(_reshape(self.tents), _reshape(self.robs)),
+                idxs=(train_idxs, test_idxs),
+            )
+
+            if self.separate_drift:
+                self.yhats["encoder"][test_idxs], _ = self.get_predictions(
+                    is_encoder=True,
+                    io=(_reshape(self.tents), _reshape(self.tvs), _reshape(self.robs)),
+                    idxs=(train_idxs, test_idxs),
+                    baseline_model=baseline_model,
+                )
+
+                self.yhats["ps_baseline"][test_idxs] = self.yhats["baseline"][test_idxs]
+
+            else:
+                self.yhats["encoder"][test_idxs], encoder = self.get_predictions(
+                    is_encoder=True,
+                    io=(_reshape(self.dm), _reshape(self.robs)),
+                    idxs=(train_idxs, test_idxs),
+                )
+
+                if not hasattr(self, "dm_tv_ko"):
+                    self.dm_tv_ko = deepcopy(self.dm)
+                    self.dm_tv_ko[:, :, self.num_tents :] = 0
+
+                self.yhats["ps_baseline"][test_idxs], _ = self.get_predictions(
+                    is_encoder=False,
+                    io=(_reshape(self.dm_tv_ko), _reshape(self.robs)),
+                    idxs=(train_idxs, test_idxs),
+                    model=encoder,
+                )
+
+        self.scores = {
+            k: r2_score(
+                _reshape(self.robs), yhat, multioutput="raw_values", force_finite=False
+            )
+            for k, yhat in self.yhats.items()
+        }
 
     def view_fits(self, reg="DLS", model="encoder"):
         if reg not in self.regions:
