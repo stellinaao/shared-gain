@@ -219,6 +219,7 @@ class Encoder:
         if not hasattr(self, "robs_predict"):
             self.robs_predict = {}
         if not hasattr(self, "encoder"):
+            print("shouldn't be here")
             self.fit_encoder()
 
         if self.separate_drift:
@@ -226,6 +227,7 @@ class Encoder:
                 self.tents
             ) + self.encoder.predict(self.tvs)
         else:
+            print("hello")
             self.robs_predict["encoder"] = self.encoder.predict(self.dm)
 
     def get_scores(self, is_encoder, **kwargs):
@@ -1047,13 +1049,13 @@ class TimeResolvedEncoder(Encoder):
 
         self.stepsize_s = stepsize_s
 
-        if self.stepsize_s < 0.01:
+        if self.stepsize_s < 0.001:
             raise ValueError("min stepsize is 1 ms")
 
         super().__init__(
             subj_id,
             sess_id,
-            separate_drift=True,
+            separate_drift=False,
             **kwargs,
         )
 
@@ -1076,7 +1078,7 @@ class TimeResolvedEncoder(Encoder):
 
         self.t_encoders = {
             f"[{start:.3f},{stop:.3f}]": Encoder(
-                subj_id, sess_id, separate_drift=True, **kwargs
+                subj_id, sess_id, separate_drift=False, **kwargs
             )
             for (start, stop) in zip(self.tbins, self.tbins[1:])
         }
@@ -1200,9 +1202,9 @@ class TimeResolvedEncoder(Encoder):
             self.fit_baseline()
 
         if pseudo:
-            self.robs_predict["ps_baseline"] = np.zeros_like(self.robs)
+            self.robs_predict["ps_baseline"] = np.zeros_like(self.robs, dtype="float32")
         else:
-            self.robs_predict["baseline"] = np.zeros_like(self.robs)
+            self.robs_predict["baseline"] = np.zeros_like(self.robs, dtype="float32")
 
         for i, encoder in enumerate(self.t_encoders.values()):
             encoder.baseline_predict(pseudo=pseudo)
@@ -1240,10 +1242,14 @@ class TimeResolvedEncoder(Encoder):
         if not hasattr(self, "encoders"):
             self.fit_encoder()
 
-        self.robs_predict["encoder"] = np.zeros_like(self.robs)
+        self.robs_predict["encoder"] = np.zeros_like(self.robs, dtype="float32")
 
         for i, encoder in enumerate(self.t_encoders.values()):
             encoder.encoder_predict()
+            print(
+                encoder.robs_predict["encoder"].min(),
+                encoder.robs_predict["encoder"].max(),
+            )
             self.robs_predict["encoder"][i] = encoder.robs_predict["encoder"]
 
     def view_fits(self, reg="DLS", model="encoder"):
