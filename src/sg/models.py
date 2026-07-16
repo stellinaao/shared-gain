@@ -82,8 +82,6 @@ class Encoder:
         np.random.seed(self.random_state)
 
     def get_data(self):
-        print("WHAT")
-
         def _edge_inclusive(t):
             return t + 0.001 if self.edge_inclusive else t
 
@@ -227,7 +225,6 @@ class Encoder:
                 self.tents
             ) + self.encoder.predict(self.tvs)
         else:
-            print("hello")
             self.robs_predict["encoder"] = self.encoder.predict(self.dm)
 
     def get_scores(self, is_encoder, **kwargs):
@@ -1059,6 +1056,8 @@ class TimeResolvedEncoder(Encoder):
             **kwargs,
         )
 
+        self.binwidth_ms = stepsize_s * 1000
+
         self.num_bins = int((self.tpre + self.tpost) / self.stepsize_s)
 
         if not self.num_bins * self.stepsize_s == self.tpre + self.tpost:
@@ -1178,13 +1177,14 @@ class TimeResolvedEncoder(Encoder):
         self.robs = np.array(
             [unit for reg in self.regions for unit in self.robs[reg]]
         ).T
+
         if self.norm:
             self.robs = zscore(self.robs, axis=(0, 1))
 
     def fit_baseline(self):
         if not hasattr(self, "robs"):
             self.build_dm()
-        print("done")
+        print("done-")
 
         self.baseline_models = {}
         for i, (k, encoder_) in enumerate(self.t_encoders.items()):
@@ -1246,10 +1246,6 @@ class TimeResolvedEncoder(Encoder):
 
         for i, encoder in enumerate(self.t_encoders.values()):
             encoder.encoder_predict()
-            print(
-                encoder.robs_predict["encoder"].min(),
-                encoder.robs_predict["encoder"].max(),
-            )
             self.robs_predict["encoder"][i] = encoder.robs_predict["encoder"]
 
     def view_fits(self, reg="DLS", model="encoder"):

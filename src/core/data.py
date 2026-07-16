@@ -203,9 +203,6 @@ def load_sess(
             thresh=1,
         )
 
-        for reg in psths:
-            print(reg, len(spike_times[reg]))
-
         # add svds
         if add_svd:
             svds_df = get_svd_df(
@@ -368,9 +365,6 @@ def get_psths_ref(
         thresh=thresh,
         binwidth_ms=binwidth_ms,
     )
-
-    for reg in psths:
-        print(reg, len(spike_times[reg]))
 
     return psths, spike_times, tbin_edges
 
@@ -1164,6 +1158,4 @@ def rem_low_fr(psths, spike_times, psths_ref=None, thresh=1, binwidth_ms=25):
             for i in range(psths[region].shape[0])
             if i not in low_fr_idxs
         ]
-        print(region, len(psths_lite[region]))
-        print(region, len(spike_times_lite[region]))
     return psths_lite, spike_times_lite
