@@ -297,11 +297,9 @@ class Encoder:
                 for k in ["baseline", "ps_baseline", "encoder"]
             }
 
-            self.kfold = KFold(n_splits=n_folds, shuffle=True, random_state=0).split(
-                self.robs
-            )
-
-            for i, (train_idxs, test_idxs) in enumerate(self.kfold):
+            for i, (train_idxs, test_idxs) in enumerate(
+                KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
+            ):
                 # train, test, save test predictions
                 self.yhats["baseline"][test_idxs], baseline_model = (
                     self._get_predictions(
@@ -1271,11 +1269,11 @@ class TimeResolvedEncoder(Encoder):
             assert arr_3d.ndim == 3
             return arr_3d.reshape(self.num_bins * self.num_trials, arr_3d.shape[-1])
 
-        self.kfold = KFold(n_splits=n_folds, shuffle=True, random_state=0).split(
-            _reshape(self.robs)
-        )
-
-        for i, (train_idxs, test_idxs) in enumerate(self.kfold):
+        for i, (train_idxs, test_idxs) in enumerate(
+            KFold(n_splits=n_folds, shuffle=True, random_state=0).split(
+                _reshape(self.robs)
+            )
+        ):
             # train, test, save test predictions
             self.yhats["baseline"][test_idxs], baseline_model = self._get_predictions(
                 is_encoder=False,
