@@ -217,7 +217,6 @@ class Encoder:
         if not hasattr(self, "robs_predict"):
             self.robs_predict = {}
         if not hasattr(self, "encoder"):
-            print("shouldn't be here")
             self.fit_encoder()
 
         if self.separate_drift:
@@ -227,19 +226,19 @@ class Encoder:
         else:
             self.robs_predict["encoder"] = self.encoder.predict(self.dm)
 
-    def get_scores(self, is_encoder, **kwargs):
+    def _get_scores(self, is_encoder, **kwargs):
         if self.separate_drift and is_encoder:
-            return self._get_scores(sd=True, **kwargs)
+            return self._get_scores_branches(sd=True, **kwargs)
         else:
-            return self._get_scores(sd=False, **kwargs)
+            return self._get_scores_branches(sd=False, **kwargs)
 
-    def get_predictions(self, is_encoder, **kwargs):
+    def _get_predictions(self, is_encoder, **kwargs):
         if self.separate_drift and is_encoder:
             return self._get_predictions_sd(**kwargs)
         else:
             return self._get_predictions_nosd(**kwargs)
 
-    def _get_scores(self, sd=False, idxs=None, io=None, **kwargs):
+    def _get_scores_branches(self, sd=False, idxs=None, io=None, **kwargs):
         _, test_idxs = idxs
         robs = io[-1]
 
@@ -305,7 +304,7 @@ class Encoder:
             for i, (train_idxs, test_idxs) in enumerate(self.kfold):
                 # train, test, save test predictions
                 self.yhats["baseline"][test_idxs], baseline_model = (
-                    self.get_predictions(
+                    self._get_predictions(
                         is_encoder=False,
                         io=(self.tents, self.robs),
                         idxs=(train_idxs, test_idxs),
@@ -313,7 +312,7 @@ class Encoder:
                 )
 
                 if self.separate_drift:
-                    self.yhats["encoder"][test_idxs], _ = self.get_predictions(
+                    self.yhats["encoder"][test_idxs], _ = self._get_predictions(
                         is_encoder=True,
                         io=(self.tents, self.tvs, self.robs),
                         idxs=(train_idxs, test_idxs),
@@ -325,7 +324,7 @@ class Encoder:
                     ]
 
                 else:
-                    self.yhats["encoder"][test_idxs], encoder = self.get_predictions(
+                    self.yhats["encoder"][test_idxs], encoder = self._get_predictions(
                         is_encoder=True,
                         io=(self.dm, self.robs),
                         idxs=(train_idxs, test_idxs),
@@ -335,7 +334,7 @@ class Encoder:
                         self.dm_tv_ko = deepcopy(self.dm)
                         self.dm_tv_ko[:, self.num_tents :] = 0
 
-                    self.yhats["ps_baseline"][test_idxs], _ = self.get_predictions(
+                    self.yhats["ps_baseline"][test_idxs], _ = self._get_predictions(
                         is_encoder=False,
                         io=(self.dm_tv_ko, self.robs),
                         idxs=(train_idxs, test_idxs),
@@ -365,14 +364,14 @@ class Encoder:
                 )
                 test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
-                self.scores_cv["baseline"][i], baseline_model = self.get_scores(
+                self.scores_cv["baseline"][i], baseline_model = self._get_scores(
                     is_encoder=False,
                     io=(self.tents, self.robs),
                     idxs=(train_idxs, test_idxs),
                 )
 
                 if self.separate_drift:
-                    self.scores_cv["encoder"][i], _ = self.get_scores(
+                    self.scores_cv["encoder"][i], _ = self._get_scores(
                         is_encoder=True,
                         io=(self.tents, self.tvs, self.robs),
                         idxs=(train_idxs, test_idxs),
@@ -382,7 +381,7 @@ class Encoder:
                     self.scores_cv["ps_baseline"][i] = self.scores_cv["baseline"][i]
 
                 else:
-                    self.scores_cv["encoder"][i], encoder = self.get_scores(
+                    self.scores_cv["encoder"][i], encoder = self._get_scores(
                         is_encoder=True,
                         io=(self.dm, self.robs),
                         idxs=(train_idxs, test_idxs),
@@ -392,7 +391,7 @@ class Encoder:
                         self.dm_tv_ko = deepcopy(self.dm)
                         self.dm_tv_ko[:, self.num_tents :] = 0
 
-                    self.scores_cv["ps_baseline"][i], _ = self.get_scores(
+                    self.scores_cv["ps_baseline"][i], _ = self._get_scores(
                         is_encoder=False,
                         io=(self.dm_tv_ko, self.robs),
                         idxs=(train_idxs, test_idxs),
@@ -600,10 +599,13 @@ class Encoder:
                     f"valid arguments for model are 'encoder' and 'baseline,' not {model}"
                 )
 
+        if not hasattr(self, "scores"):
+            self.get_r2()
+
         r = FitRenderer(
             y=self.robs[:, self.reg_idxs[reg]],
             yhat=self.robs_predict[model][:, self.reg_idxs[reg]],
-            rsquared=None,  # self.scores[model][self.reg_idxs[reg]],
+            rsquared=self.scores[model][self.reg_idxs[reg]],
             mode="lite",
         )
 
@@ -633,6 +635,7 @@ class Encoder:
             pres=self.tpre,
             posts=self.tpost,
             binwidth_s=self.binwidth_ms / 1000,
+            tbin_edges=self.tbin_edges,
         )
 
         return NeuronViewer(
@@ -654,8 +657,8 @@ class Encoder:
             posts=self.tpost,
             binwidth_s=self.binwidth_ms / 1000,
             tbin_edges=self.tbin_edges,
-            s=0.2,
-            linewidths=0.2,
+            s=0.5,
+            linewidths=0.5,
         )
 
         return NeuronViewer(
@@ -669,20 +672,18 @@ class StrategyEncoder(Encoder):
         subj_id,
         sess_id,
         strategy_filter,
-        balance_strategy=True,
-        cond_balance=False,
-        idxs=None,
         **kwargs,
     ):
         self.subj_id = subj_id
         self.sess_id = sess_id
 
         self.strategy_filter = strategy_filter
-        self.balance_strategy = balance_strategy
+        self.balance_strategy = kwargs.pop("balance_strategy", True)
         if self.balance_strategy:
-            self.cond_balance = cond_balance
+            self.cond_balance = kwargs.pop("cond_balance", False)
+        self.min_num_trials = kwargs.pop("min_num_trials", 20)
 
-        self.idxs = idxs
+        self.idxs = kwargs.pop("idxs", None)
 
         if not (self.strategy_filter == "mb" or self.strategy_filter == "mf"):
             raise ValueError("strategy_filter must be mb or mf")
@@ -708,6 +709,10 @@ class StrategyEncoder(Encoder):
                 cond_balance=self.cond_balance if self.balance_strategy else False,
             )
             self.idxs = self.idxs_all[self.strategy_filter]
+            if len(self.idxs) < self.min_num_trials:
+                raise ValueError(
+                    f"# trials after balancing for trial count (len(self.idxs)) is less than {self.min_num_trials}"
+                )
 
         self.trial_data = self.trial_data.iloc[self.idxs]
         self.psths = {reg: self.psths[reg][:, self.idxs, :] for reg in self.regions}
@@ -717,6 +722,10 @@ class StrategyEncoder(Encoder):
 
         self.encoder_ref.build_dm()
         self.tents = self.encoder_ref.tents[self.idxs]
+
+        if self.norm:
+            # want to have normalized with respect to all the trials
+            self.robs = self.encoder_ref.robs[self.idxs]
 
     def fit_baseline(self):
         self.encoder_ref.fit_baseline()
@@ -737,7 +746,7 @@ class StrategyEncoder(Encoder):
             for i, (train_idxs, test_idxs) in enumerate(
                 KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
             ):
-                yhats["encoder"][test_idxs], _ = self.get_predictions(
+                yhats["encoder"][test_idxs], _ = self._get_predictions(
                     is_encoder=True,
                     io=(self.tents, self.tvs, self.robs),
                     idxs=(train_idxs, test_idxs),
@@ -767,7 +776,7 @@ class StrategyEncoder(Encoder):
                 )
                 test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
 
-                self.scores_cv["encoder"][i], _ = self.get_scores(
+                self.scores_cv["encoder"][i], _ = self._get_scores(
                     is_encoder=True,
                     io=(self.tents, self.tvs, self.robs),
                     idxs=(train_idxs, test_idxs),
@@ -1268,14 +1277,14 @@ class TimeResolvedEncoder(Encoder):
 
         for i, (train_idxs, test_idxs) in enumerate(self.kfold):
             # train, test, save test predictions
-            self.yhats["baseline"][test_idxs], baseline_model = self.get_predictions(
+            self.yhats["baseline"][test_idxs], baseline_model = self._get_predictions(
                 is_encoder=False,
                 io=(_reshape(self.tents), _reshape(self.robs)),
                 idxs=(train_idxs, test_idxs),
             )
 
             if self.separate_drift:
-                self.yhats["encoder"][test_idxs], _ = self.get_predictions(
+                self.yhats["encoder"][test_idxs], _ = self._get_predictions(
                     is_encoder=True,
                     io=(_reshape(self.tents), _reshape(self.tvs), _reshape(self.robs)),
                     idxs=(train_idxs, test_idxs),
@@ -1285,7 +1294,7 @@ class TimeResolvedEncoder(Encoder):
                 self.yhats["ps_baseline"][test_idxs] = self.yhats["baseline"][test_idxs]
 
             else:
-                self.yhats["encoder"][test_idxs], encoder = self.get_predictions(
+                self.yhats["encoder"][test_idxs], encoder = self._get_predictions(
                     is_encoder=True,
                     io=(_reshape(self.dm), _reshape(self.robs)),
                     idxs=(train_idxs, test_idxs),
@@ -1295,7 +1304,7 @@ class TimeResolvedEncoder(Encoder):
                     self.dm_tv_ko = deepcopy(self.dm)
                     self.dm_tv_ko[:, :, self.num_tents :] = 0
 
-                self.yhats["ps_baseline"][test_idxs], _ = self.get_predictions(
+                self.yhats["ps_baseline"][test_idxs], _ = self._get_predictions(
                     is_encoder=False,
                     io=(_reshape(self.dm_tv_ko), _reshape(self.robs)),
                     idxs=(train_idxs, test_idxs),
@@ -1323,6 +1332,9 @@ class TimeResolvedEncoder(Encoder):
                     f"valid arguments for model are 'encoder' and 'baseline,' not {model}"
                 )
 
+        if not hasattr(self, "scores"):
+            self.get_r2()
+
         def _transform(robs_3d, reg):
             return (
                 robs_3d[:, :, self.reg_idxs[reg]]
@@ -1333,7 +1345,7 @@ class TimeResolvedEncoder(Encoder):
         r = FitRenderer(
             y=_transform(self.robs, reg),
             yhat=_transform(self.robs_predict[model], reg),
-            rsquared=None,  # self.scores[model][self.reg_idxs[reg]],
+            rsquared=self.scores[model][self.reg_idxs[reg]],
             mode="lite",
         )
 

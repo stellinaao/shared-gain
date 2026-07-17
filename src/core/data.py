@@ -983,7 +983,6 @@ def get_strategy_filter_idxs(
 
         # no cond balancing, just trial count
         else:
-            # print("bye")
             mb_mask = trial_data["strategy"] == 1
             mf_mask = trial_data["strategy"] == -1
 
@@ -1028,6 +1027,7 @@ def get_reg_keys(psths, regions):
 
 
 def get_dm(trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents):
+
     # task variables
     # non movement
     if tv_keys is not None:
@@ -1098,6 +1098,7 @@ def get_encoder_io(
     reg_idxs = get_reg_keys(psths, regions)
 
     # trial data (X/I)
+
     dm, (tents, tvs), (dm_names, dm_idxs) = get_dm(
         trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents
     )
