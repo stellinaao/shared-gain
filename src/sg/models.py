@@ -26,6 +26,7 @@ from squiggs.renderers import (
     FitRenderer,
     FitRendererTime,
     PETHWeightRenderer,
+    PETHWeightRendererTime,
     PETHRasterRenderer,
 )
 from utils.paths import FIGURES_DIR
@@ -1362,6 +1363,37 @@ class TimeResolvedEncoder(Encoder):
             )
         else:
             raise ValueError("mode can only be 'time' or 'full'")
+
+        return NeuronViewer(
+            num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
+        )
+
+    def view_weights(self, reg="DLS", peth_mode="response", mode="trace"):
+        if not hasattr(self, "encoder_weights"):
+            self.fit_encoder()
+
+        if mode == "trace":
+            r = PETHWeightRendererTime(
+                weights=self.encoder_weights[:, self.reg_idxs[reg], :],
+                tv="response",
+                weight_idxs=self.dm_idxs,
+                tv_vals=tv_vals,
+                mode="trace",
+                peths=get_psths_cond(self.psths[reg], self.trial_data, mode=peth_mode),
+                binwidth_s=0.1,
+                tbin_centers=self.tbin_centers,
+            )
+        elif mode == "matrix":
+            r = PETHWeightRendererTime(
+                weights=self.encoder_weights[:, self.reg_idxs[reg], :],
+                weight_names=self.dm_names,
+                mode="matrix",
+                peths=get_psths_cond(self.psths[reg], self.trial_data, mode=peth_mode),
+                binwidth_s=0.1,
+                tbin_centers=self.tbin_centers,
+            )
+        else:
+            raise ValueError("valid arguments are 'trace' and 'matrix'")
 
         return NeuronViewer(
             num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
