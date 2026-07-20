@@ -22,7 +22,12 @@ from core.data import (
 from core.viz import plot_raincloud
 
 from squiggs.neuron_viewer import NeuronViewer
-from squiggs.renderers import FitRenderer, PETHWeightRenderer, PETHRasterRenderer
+from squiggs.renderers import (
+    FitRenderer,
+    FitRendererTime,
+    PETHWeightRenderer,
+    PETHRasterRenderer,
+)
 from utils.paths import FIGURES_DIR
 
 
@@ -1079,6 +1084,7 @@ class TimeResolvedEncoder(Encoder):
         self.tbins = np.round(
             self.tbins, 3
         )  # only supports precision to the nearest millisecond
+        self.tbin_centers = (self.tbins - (self.stepsize_s / 2))[1:]
 
         assert step_ / 1000 == self.stepsize_s
 
@@ -1316,7 +1322,7 @@ class TimeResolvedEncoder(Encoder):
             for k, yhat in self.yhats.items()
         }
 
-    def view_fits(self, reg="DLS", model="encoder"):
+    def view_fits(self, reg="DLS", model="encoder", mode="time"):
         if reg not in self.regions:
             raise ValueError(f"{reg} must be in {self.regions}")
 
@@ -1340,12 +1346,22 @@ class TimeResolvedEncoder(Encoder):
                 .T
             )
 
-        r = FitRenderer(
-            y=_transform(self.robs, reg),
-            yhat=_transform(self.robs_predict[model], reg),
-            rsquared=self.scores[model][self.reg_idxs[reg]],
-            mode="lite",
-        )
+        if mode == "time":
+            r = FitRendererTime(
+                x=self.tbin_centers,
+                y=self.robs[:, :, self.reg_idxs[reg]],
+                yhat=self.robs_predict[model][:, :, self.reg_idxs[reg]],
+                rsquared=self.scores[model][self.reg_idxs[reg]],
+            )
+        elif mode == "full":
+            r = FitRenderer(
+                y=_transform(self.robs, reg),
+                yhat=_transform(self.robs_predict[model], reg),
+                rsquared=self.scores[model][self.reg_idxs[reg]],
+                mode="lite",
+            )
+        else:
+            raise ValueError("mode can only be 'time' or 'full'")
 
         return NeuronViewer(
             num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
