@@ -49,36 +49,6 @@ session_ids = [
 ]
 
 probes = ["imec0", "imec1"]
-colors_model = {
-    "default": "#333333",
-    "drift": "#666666",
-    "tv": "#E5A400",
-    "affine": "#1A4D99",
-}
-
-colors_subj = {
-    "MM012": "#E32525",
-    "MR82": "#40AAC2",
-    "MR83": "#3359D7",
-}
-
-colors_strategy = {"full": "#666666", "mb": "#D7A007", "mf": "#183488"}
-colors_epoch = {
-    "full": "#FFEE00",
-    "choice": "#1F6A92",
-    "reward": "#229B46",
-    "iti": "#7051B8",
-}
-
-colors_region = {
-    "ACC": "#140C6A",
-    "DMS": "#7166E9",
-    "M2": "#845910",
-    "DLS": "#F7E164",
-    "M1": "#409B3D",
-}
-
-markers_region = {"ACC": "v", "DMS": "^", "M2": "x", "DLS": "*", "M1": "."}
 
 tv_vals = {
     "response": ["left", "right"],

@@ -62,7 +62,7 @@ class Encoder:
         self.n = kwargs.pop("n", None)
         self.full_trial = kwargs.pop("full_trial", False)
 
-        self.norm = kwargs.pop("norm", True)
+        self.norm = kwargs.pop("norm", False)
         self.separate_drift = kwargs.pop("separate_drift", False)
         self.max_reg = kwargs.pop("max_reg", 5)
 
