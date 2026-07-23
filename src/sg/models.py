@@ -148,7 +148,7 @@ class Encoder:
         self.num_trials, self.num_tv = self.tvs.shape
         self.num_units = self.robs.shape[1]
 
-    def fit_baseline(self, fit_intercept=True, idxs=None):
+    def fit_baseline(self, idxs=None):
         if not (hasattr(self, "tents") and hasattr(self, "robs")):
             self.build_dm()
 
@@ -157,7 +157,6 @@ class Encoder:
                 -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
             ),
             alpha_per_target=True,
-            fit_intercept=fit_intercept,
         ).fit(self.tents, self.robs)
 
     def baseline_predict(self, pseudo=False):
@@ -188,13 +187,13 @@ class Encoder:
 
                 self.robs_predict["ps_baseline"] = self.encoder.predict(self.dm_tv_ko)
 
-    def fit_encoder(self, idxs=None, fit_intercept=True):
+    def fit_encoder(self, idxs=None):
         if not (hasattr(self, "robs")):
             self.build_dm()
 
         if self.separate_drift:
             if not hasattr(self, "baseline_model"):
-                self.fit_baseline(fit_intercept=fit_intercept)
+                self.fit_baseline()
             self.baseline_predict()
 
             self.encoder = RidgeCV(
@@ -202,7 +201,6 @@ class Encoder:
                     -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
                 ),
                 alpha_per_target=True,
-                fit_intercept=fit_intercept,
             ).fit(self.tvs, self.robs - self.robs_predict["baseline"])
 
             self.encoder_weights = np.hstack(
@@ -214,7 +212,6 @@ class Encoder:
                     -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
                 ),
                 alpha_per_target=True,
-                fit_intercept=fit_intercept,
             ).fit(self.dm, self.robs)
 
             self.encoder_weights = self.encoder.coef_
@@ -1245,7 +1242,7 @@ class TimeResolvedEncoder(Encoder):
                 encoder_.dm = self.dm[i]
             encoder_.robs = self.robs[i]
 
-            encoder_.fit_encoder(fit_intercept=False)
+            encoder_.fit_encoder()
             self.encoders[k] = encoder_.encoder
             self.encoder_weights[i] = encoder_.encoder_weights
 
