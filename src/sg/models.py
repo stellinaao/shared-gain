@@ -1109,75 +1109,67 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             super().get_data()
 
         def build_dm(self):
+            """
             if not (hasattr(self, "psths")):
                 self.get_data()
             print("consider the data got")
+            """
 
-            for i in range(self.num_bins):
-                if i == 0:
-                    (
-                        tents_,
-                        tvs_,
-                        dm_,
-                        robs_,
-                        self.dm_names,
-                        self.dm_idxs,
-                        self.reg_idxs,
-                    ) = get_encoder_io(
-                        self.psths,
-                        self.trial_data,
-                        self.regions,
-                        norm=False,
-                        num_tents=self.num_tents,
-                        tv_keys=self.tv_keys,
-                        add_svd=self.add_svd,
-                        num_svd=self.num_svd if self.add_svd else None,
-                        add_licks=self.add_licks,
-                        binwidth_ms=self.binwidth_ms,
-                    )
+            super().build_dm()
 
-                    self.num_trials, self.num_tv = tvs_.shape
-                    self.num_units = robs_.shape[1]
+            """
+            (
+                tents_,
+                tvs_,
+                dm_,
+                robs_,
+                self.dm_names,
+                self.dm_idxs,
+                self.reg_idxs,
+            ) = get_encoder_io(
+                self.psths,
+                self.trial_data,
+                self.regions,
+                norm=self.norm,
+                num_tents=self.num_tents,
+                tv_keys=self.tv_keys,
+                add_svd=self.add_svd,
+                num_svd=self.num_svd if self.add_svd else None,
+                add_licks=self.add_licks,
+                binwidth_ms=self.binwidth_ms,
+            )
 
-                    self.tents = np.zeros(
-                        (self.num_bins, self.num_trials, self.num_tents)
-                    )
-                    self.tvs = np.zeros((self.num_bins, self.num_trials, self.num_tv))
-                    self.dm = np.zeros(
-                        (self.num_bins, self.num_trials, self.num_tents + self.num_tv)
-                    )
+            self.num_trials, self.num_tv = tvs_.shape
+            self.num_units = robs_.shape[1]
 
-                    self.tents[0] = tents_
-                    self.tvs[0] = tvs_
-                    self.dm[0] = dm_
-                else:
-                    (
-                        self.tents[i],
-                        self.tvs[i],
-                        self.dm[i],
-                        _,
-                        _,
-                        _,
-                        _,
-                    ) = get_encoder_io(
-                        self.psths,
-                        self.trial_data,
-                        self.regions,
-                        norm=self.norm,
-                        num_tents=self.num_tents,
-                        tv_keys=self.tv_keys,
-                        add_svd=self.add_svd,
-                        num_svd=self.num_svd if self.add_svd else None,
-                        add_licks=self.add_licks,
-                        binwidth_ms=self.binwidth_ms,
-                    )
+            self.tents = np.array([tents_ for i in range(self.num_bins)])
+            self.tvs = np.array([tvs_ for i in range(self.num_bins)])
+            self.dm = np.array([dm_ for i in range(self.num_bins)])
+            """
+
+            self.tents = np.array([self.tents for i in range(self.num_bins)])
+            self.tvs = np.array([self.tvs for i in range(self.num_bins)])
+            self.dm = np.array([self.dm for i in range(self.num_bins)])
+
+            assert self.tents.shape == (self.num_bins, self.num_trials, self.num_tents)
+            assert self.tvs.shape == (self.num_bins, self.num_trials, self.num_tv)
+            assert self.dm.shape == (
+                self.num_bins,
+                self.num_trials,
+                self.num_tents + self.num_tv,
+            )
 
             def _edge_inclusive(t):
                 return t + 0.001 if self.edge_inclusive else t
 
+            # might be a trial indexing issue
+            # figure out a more elegant way to write this function
+            print(self.trial_data.shape)
             self.robs, _, self.t_tbin_edges = get_psths_ref(
                 self.spike_times,
-                self.trial_data,
+                self.encoder_ref.trial_data
+                if enc_class is StrategyEncoder
+                else self.trial_data,
                 self.session_data,
                 self.regions,
                 tpre=_edge_inclusive(self.tpre),
@@ -1199,12 +1191,15 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
                     "alignment issue"
                 )
 
+            print([self.robs[reg].shape for reg in self.regions])
+
             self.robs = np.array(
                 [unit for reg in self.regions for unit in self.robs[reg]]
             ).T
 
             if self.norm:
                 self.robs = zscore(self.robs, axis=(0, 1))
+            self.robs = self.robs[:, self.idxs, :]
 
         def fit_baseline(self):
             if not hasattr(self, "robs"):
