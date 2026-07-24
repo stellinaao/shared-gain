@@ -1045,366 +1045,394 @@ class ShuffledEncoder:
         return ax
 
 
-class TimeResolvedEncoder(Encoder):
-    def __init__(
-        self,
-        subj_id,
-        sess_id,
-        stepsize_s=0.1,
-        enc_class: Type[Encoder] = Encoder,
-        opt_kwargs=None,  # only if enc_class=StrategyEncoder
-        **kwargs,
-    ):
-        if not (isinstance(enc_class, type) and issubclass(enc_class, Encoder)):
-            raise TypeError(f"enc_class must be a subclass of Encoder, got {enc_class}")
-        if opt_kwargs and not issubclass(enc_class, StrategyEncoder):
-            raise ValueError(
-                "opt_kwargs is only valid when enc_class is StrategyEncoder (or a subclass)"
-            )
-
-        self.subj_id = subj_id
-        self.sess_id = sess_id
-
-        self.stepsize_s = stepsize_s
-
-        if self.stepsize_s < 0.001:
-            raise ValueError("min stepsize is 1 ms")
-
-        super().__init__(
+def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
+    class TimeResolvedEncoder(enc_class):
+        def __init__(
+            self,
             subj_id,
             sess_id,
-            separate_drift=False,
+            stepsize_s=0.1,
             **kwargs,
-        )
-
-        self.binwidth_ms = stepsize_s * 1000
-
-        self.num_bins = int((self.tpre + self.tpost) / self.stepsize_s)
-
-        if not self.num_bins * self.stepsize_s == self.tpre + self.tpost:
-            raise ValueError(
-                f"stepsize {stepsize_s} s must evenly divide the spanned epoch [-{self.tpre}, {self.tpost}]"
-            )
-
-        self.tbins, step_ = np.linspace(
-            -self.tpre * 1000, self.tpost * 1000, self.num_bins + 1, retstep=True
-        )
-        self.tbins /= 1000
-        self.tbins = np.round(
-            self.tbins, 3
-        )  # only supports precision to the nearest millisecond
-        self.tbin_centers = (self.tbins - (self.stepsize_s / 2))[1:]
-
-        assert step_ / 1000 == self.stepsize_s
-
-        comb_kwargs = {**kwargs, **(opt_kwargs or {})}
-        self.t_encoders = {
-            f"[{start:.3f},{stop:.3f}]": enc_class(  # modify this to accommodate strategy encoder too.
-                subj_id, sess_id, **comb_kwargs
-            )
-            for (start, stop) in zip(self.tbins, self.tbins[1:])
-        }
-
-        assert len(self.t_encoders) == self.num_bins, "not one-to-one encoder per bin"
-
-    def get_data(self):
-        super().get_data()
-
-    def build_dm(self):
-        if not (hasattr(self, "psths")):
-            self.get_data()
-        print("consider the data got")
-
-        for i in range(self.num_bins):
-            if i == 0:
-                (
-                    tents_,
-                    tvs_,
-                    dm_,
-                    robs_,
-                    self.dm_names,
-                    self.dm_idxs,
-                    self.reg_idxs,
-                ) = get_encoder_io(
-                    self.psths,
-                    self.trial_data,
-                    self.regions,
-                    norm=False,
-                    num_tents=self.num_tents,
-                    tv_keys=self.tv_keys,
-                    add_svd=self.add_svd,
-                    num_svd=self.num_svd if self.add_svd else None,
-                    add_licks=self.add_licks,
-                    binwidth_ms=self.binwidth_ms,
-                )
-
-                self.num_trials, self.num_tv = tvs_.shape
-                self.num_units = robs_.shape[1]
-
-                self.tents = np.zeros((self.num_bins, self.num_trials, self.num_tents))
-                self.tvs = np.zeros((self.num_bins, self.num_trials, self.num_tv))
-                self.dm = np.zeros(
-                    (self.num_bins, self.num_trials, self.num_tents + self.num_tv)
-                )
-
-                self.tents[0] = tents_
-                self.tvs[0] = tvs_
-                self.dm[0] = dm_
-            else:
-                (
-                    self.tents[i],
-                    self.tvs[i],
-                    self.dm[i],
-                    _,
-                    _,
-                    _,
-                    _,
-                ) = get_encoder_io(
-                    self.psths,
-                    self.trial_data,
-                    self.regions,
-                    norm=self.norm,
-                    num_tents=self.num_tents,
-                    tv_keys=self.tv_keys,
-                    add_svd=self.add_svd,
-                    num_svd=self.num_svd if self.add_svd else None,
-                    add_licks=self.add_licks,
-                    binwidth_ms=self.binwidth_ms,
-                )
-
-        def _edge_inclusive(t):
-            return t + 0.001 if self.edge_inclusive else t
-
-        self.robs, _, self.t_tbin_edges = get_psths_ref(
-            self.spike_times,
-            self.trial_data,
-            self.session_data,
-            self.regions,
-            tpre=_edge_inclusive(self.tpre),
-            tpost=_edge_inclusive(self.tpost),
-            binwidth_ms=self.stepsize_s * 1000,
-            alignment=self.alignment,
-            trial_start_pre=0,
-            tpre_ref=_edge_inclusive(self.tpre_ref),
-            tpost_ref=_edge_inclusive(self.tpost_ref),
-            alignment_ref=self.alignment_ref,
-            mode="new",
-            thresh=self.thresh,
-        )
-
-        if self.edge_inclusive:
-            assert np.allclose(self.t_tbin_edges, self.tbins), "alignment issue"
-        else:
-            assert np.allclose(self.t_tbin_edges, self.tbins[1:-1]), "alignment issue"
-
-        self.robs = np.array(
-            [unit for reg in self.regions for unit in self.robs[reg]]
-        ).T
-
-        if self.norm:
-            self.robs = zscore(self.robs, axis=(0, 1))
-
-    def fit_baseline(self):
-        if not hasattr(self, "robs"):
-            self.build_dm()
-        print("done-")
-
-        self.baseline_models = {}
-        for i, (k, encoder_) in enumerate(self.t_encoders.items()):
-            encoder_.tents = self.tents[i]
-            encoder_.robs = self.robs[i]
-
-            encoder_.fit_baseline()
-            self.baseline_models[k] = encoder_.baseline_model
-
-    def baseline_predict(self, pseudo=False):
-        if not hasattr(self, "robs_predict"):
-            self.robs_predict = {}
-
-        if not hasattr(self, "baseline_models"):
-            self.fit_baseline()
-
-        if pseudo:
-            self.robs_predict["ps_baseline"] = np.zeros_like(self.robs, dtype="float32")
-        else:
-            self.robs_predict["baseline"] = np.zeros_like(self.robs, dtype="float32")
-
-        for i, encoder in enumerate(self.t_encoders.values()):
-            encoder.baseline_predict(pseudo=pseudo)
-            if pseudo:
-                self.robs_predict["ps_baseline"][i] = encoder.robs_predict[
-                    "ps_baseline"
-                ]
-            else:
-                self.robs_predict["baseline"][i] = encoder.robs_predict["baseline"]
-
-    def fit_encoder(self):
-        if not hasattr(self, "robs"):
-            self.build_dm()
-
-        self.encoders = {}
-        self.encoder_weights = np.zeros(
-            (self.num_bins, self.num_units, self.num_tents + self.num_tv)
-        )
-        for i, (k, encoder_) in enumerate(self.t_encoders.items()):
-            if self.separate_drift:
-                encoder_.tents = self.tents[i]
-                encoder_.tvs = self.tvs[i]
-            else:
-                encoder_.dm = self.dm[i]
-            encoder_.robs = self.robs[i]
-
-            encoder_.fit_encoder()
-            self.encoders[k] = encoder_.encoder
-            self.encoder_weights[i] = encoder_.encoder_weights
-
-    def encoder_predict(self):
-        if not hasattr(self, "robs_predict"):
-            self.robs_predict = {}
-
-        if not hasattr(self, "encoders"):
-            self.fit_encoder()
-
-        self.robs_predict["encoder"] = np.zeros_like(self.robs, dtype="float32")
-
-        for i, encoder in enumerate(self.t_encoders.values()):
-            encoder.encoder_predict()
-            self.robs_predict["encoder"][i] = encoder.robs_predict["encoder"]
-
-    def get_r2(self, n_folds=20, p_train=0.8):
-        if not hasattr(self, "robs"):
-            self.build_dm()
-
-        self.yhats = {
-            k: np.zeros((self.num_trials * self.num_bins, self.num_units))
-            for k in ["baseline", "ps_baseline", "encoder"]
-        }
-
-        def _reshape(arr_3d):
-            # arr_3d.shape = (num_bins, num_trials, _)
-            assert arr_3d.ndim == 3
-            return arr_3d.reshape(self.num_bins * self.num_trials, arr_3d.shape[-1])
-
-        for i, (train_idxs, test_idxs) in enumerate(
-            KFold(n_splits=n_folds, shuffle=True, random_state=0).split(
-                _reshape(self.robs)
-            )
         ):
-            # train, test, save test predictions
-            self.yhats["baseline"][test_idxs], baseline_model = self._get_predictions(
-                is_encoder=False,
-                io=(_reshape(self.tents), _reshape(self.robs)),
-                idxs=(train_idxs, test_idxs),
+            if not (isinstance(enc_class, type) and issubclass(enc_class, Encoder)):
+                raise TypeError(
+                    f"enc_class must be a subclass of Encoder, got {enc_class}"
+                )
+
+            self.subj_id = subj_id
+            self.sess_id = sess_id
+
+            self.stepsize_s = stepsize_s
+
+            if self.stepsize_s < 0.001:
+                raise ValueError("min stepsize is 1 ms")
+
+            super().__init__(
+                subj_id,
+                sess_id,
+                # separate_drift=False,
+                **kwargs,
             )
 
-            if self.separate_drift:
-                self.yhats["encoder"][test_idxs], _ = self._get_predictions(
-                    is_encoder=True,
-                    io=(_reshape(self.tents), _reshape(self.tvs), _reshape(self.robs)),
-                    idxs=(train_idxs, test_idxs),
-                    baseline_model=baseline_model,
-                )
+            self.binwidth_ms = stepsize_s * 1000
 
-                self.yhats["ps_baseline"][test_idxs] = self.yhats["baseline"][test_idxs]
+            self.num_bins = int((self.tpre + self.tpost) / self.stepsize_s)
 
-            else:
-                self.yhats["encoder"][test_idxs], encoder = self._get_predictions(
-                    is_encoder=True,
-                    io=(_reshape(self.dm), _reshape(self.robs)),
-                    idxs=(train_idxs, test_idxs),
-                )
-
-                if not hasattr(self, "dm_tv_ko"):
-                    self.dm_tv_ko = deepcopy(self.dm)
-                    self.dm_tv_ko[:, :, self.num_tents :] = 0
-
-                self.yhats["ps_baseline"][test_idxs], _ = self._get_predictions(
-                    is_encoder=False,
-                    io=(_reshape(self.dm_tv_ko), _reshape(self.robs)),
-                    idxs=(train_idxs, test_idxs),
-                    model=encoder,
-                )
-
-        self.scores = {
-            k: r2_score(
-                _reshape(self.robs), yhat, multioutput="raw_values", force_finite=False
-            )
-            for k, yhat in self.yhats.items()
-        }
-
-    def view_fits(self, reg="DLS", model="encoder", mode="time"):
-        if reg not in self.regions:
-            raise ValueError(f"{reg} must be in {self.regions}")
-
-        if not hasattr(self, "robs_predict") or model not in self.robs_predict.keys():
-            if model == "encoder":
-                self.encoder_predict()
-            elif model == "baseline":
-                self.baseline_predict()
-            else:
+            if not self.num_bins * self.stepsize_s == self.tpre + self.tpost:
                 raise ValueError(
-                    f"valid arguments for model are 'encoder' and 'baseline,' not {model}"
+                    f"stepsize {stepsize_s} s must evenly divide the spanned epoch [-{self.tpre}, {self.tpost}]"
                 )
 
-        if not hasattr(self, "scores"):
-            self.get_r2()
+            self.tbins, step_ = np.linspace(
+                -self.tpre * 1000, self.tpost * 1000, self.num_bins + 1, retstep=True
+            )
+            self.tbins /= 1000
+            self.tbins = np.round(
+                self.tbins, 3
+            )  # only supports precision to the nearest millisecond
+            self.tbin_centers = (self.tbins - (self.stepsize_s / 2))[1:]
 
-        def _transform(robs_3d, reg):
-            return (
-                robs_3d[:, :, self.reg_idxs[reg]]
-                .T.reshape(self.psths[reg].shape[0], -1)
-                .T
+            assert step_ / 1000 == self.stepsize_s
+
+            self.t_encoders = {
+                f"[{start:.3f},{stop:.3f}]": enc_class(  # modify this to accommodate strategy encoder too.
+                    subj_id, sess_id, **kwargs
+                )
+                for (start, stop) in zip(self.tbins, self.tbins[1:])
+            }
+
+            assert len(self.t_encoders) == self.num_bins, (
+                "not one-to-one encoder per bin"
             )
 
-        if mode == "time":
-            r = FitRendererTime(
-                x=self.tbin_centers,
-                y=self.robs[:, :, self.reg_idxs[reg]],
-                yhat=self.robs_predict[model][:, :, self.reg_idxs[reg]],
-                rsquared=self.scores[model][self.reg_idxs[reg]],
-            )
-        elif mode == "full":
-            r = FitRenderer(
-                y=_transform(self.robs, reg),
-                yhat=_transform(self.robs_predict[model], reg),
-                rsquared=self.scores[model][self.reg_idxs[reg]],
-                mode="lite",
-            )
-        else:
-            raise ValueError("mode can only be 'time' or 'full'")
+        def get_data(self):
+            super().get_data()
 
-        return NeuronViewer(
-            num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
-        )
+        def build_dm(self):
+            if not (hasattr(self, "psths")):
+                self.get_data()
+            print("consider the data got")
 
-    def view_weights(self, reg="DLS", peth_mode="response", mode="trace"):
-        if not hasattr(self, "encoder_weights"):
-            self.fit_encoder()
+            for i in range(self.num_bins):
+                if i == 0:
+                    (
+                        tents_,
+                        tvs_,
+                        dm_,
+                        robs_,
+                        self.dm_names,
+                        self.dm_idxs,
+                        self.reg_idxs,
+                    ) = get_encoder_io(
+                        self.psths,
+                        self.trial_data,
+                        self.regions,
+                        norm=False,
+                        num_tents=self.num_tents,
+                        tv_keys=self.tv_keys,
+                        add_svd=self.add_svd,
+                        num_svd=self.num_svd if self.add_svd else None,
+                        add_licks=self.add_licks,
+                        binwidth_ms=self.binwidth_ms,
+                    )
 
-        if mode == "trace":
-            r = PETHWeightRendererTime(
-                weights=self.encoder_weights[:, self.reg_idxs[reg], :],
-                tv="response",
-                weight_idxs=self.dm_idxs,
-                tv_vals=tv_vals,
-                mode="trace",
-                peths=get_psths_cond(self.psths[reg], self.trial_data, mode=peth_mode),
-                binwidth_s=0.1,
-                tbin_centers=self.tbin_centers,
+                    self.num_trials, self.num_tv = tvs_.shape
+                    self.num_units = robs_.shape[1]
+
+                    self.tents = np.zeros(
+                        (self.num_bins, self.num_trials, self.num_tents)
+                    )
+                    self.tvs = np.zeros((self.num_bins, self.num_trials, self.num_tv))
+                    self.dm = np.zeros(
+                        (self.num_bins, self.num_trials, self.num_tents + self.num_tv)
+                    )
+
+                    self.tents[0] = tents_
+                    self.tvs[0] = tvs_
+                    self.dm[0] = dm_
+                else:
+                    (
+                        self.tents[i],
+                        self.tvs[i],
+                        self.dm[i],
+                        _,
+                        _,
+                        _,
+                        _,
+                    ) = get_encoder_io(
+                        self.psths,
+                        self.trial_data,
+                        self.regions,
+                        norm=self.norm,
+                        num_tents=self.num_tents,
+                        tv_keys=self.tv_keys,
+                        add_svd=self.add_svd,
+                        num_svd=self.num_svd if self.add_svd else None,
+                        add_licks=self.add_licks,
+                        binwidth_ms=self.binwidth_ms,
+                    )
+
+            def _edge_inclusive(t):
+                return t + 0.001 if self.edge_inclusive else t
+
+            self.robs, _, self.t_tbin_edges = get_psths_ref(
+                self.spike_times,
+                self.trial_data,
+                self.session_data,
+                self.regions,
+                tpre=_edge_inclusive(self.tpre),
+                tpost=_edge_inclusive(self.tpost),
+                binwidth_ms=self.stepsize_s * 1000,
+                alignment=self.alignment,
+                trial_start_pre=0,
+                tpre_ref=_edge_inclusive(self.tpre_ref),
+                tpost_ref=_edge_inclusive(self.tpost_ref),
+                alignment_ref=self.alignment_ref,
+                mode="new",
+                thresh=self.thresh,
             )
-        elif mode == "matrix":
-            r = PETHWeightRendererTime(
-                weights=self.encoder_weights[:, self.reg_idxs[reg], :],
-                weight_names=self.dm_names,
-                mode="matrix",
-                peths=get_psths_cond(self.psths[reg], self.trial_data, mode=peth_mode),
-                binwidth_s=0.1,
-                tbin_centers=self.tbin_centers,
-            )
-        else:
-            raise ValueError("valid arguments are 'trace' and 'matrix'")
 
-        print(r.ncols)
-        return NeuronViewer(
-            num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
-        )
+            if self.edge_inclusive:
+                assert np.allclose(self.t_tbin_edges, self.tbins), "alignment issue"
+            else:
+                assert np.allclose(self.t_tbin_edges, self.tbins[1:-1]), (
+                    "alignment issue"
+                )
+
+            self.robs = np.array(
+                [unit for reg in self.regions for unit in self.robs[reg]]
+            ).T
+
+            if self.norm:
+                self.robs = zscore(self.robs, axis=(0, 1))
+
+        def fit_baseline(self):
+            if not hasattr(self, "robs"):
+                self.build_dm()
+            print("done-")
+
+            self.baseline_models = {}
+            for i, (k, encoder_) in enumerate(self.t_encoders.items()):
+                encoder_.tents = self.tents[i]
+                encoder_.robs = self.robs[i]
+
+                encoder_.fit_baseline()
+                self.baseline_models[k] = encoder_.baseline_model
+
+        def baseline_predict(self, pseudo=False):
+            if not hasattr(self, "robs_predict"):
+                self.robs_predict = {}
+
+            if not hasattr(self, "baseline_models"):
+                self.fit_baseline()
+
+            if pseudo:
+                self.robs_predict["ps_baseline"] = np.zeros_like(
+                    self.robs, dtype="float32"
+                )
+            else:
+                self.robs_predict["baseline"] = np.zeros_like(
+                    self.robs, dtype="float32"
+                )
+
+            for i, encoder in enumerate(self.t_encoders.values()):
+                encoder.baseline_predict(pseudo=pseudo)
+                if pseudo:
+                    self.robs_predict["ps_baseline"][i] = encoder.robs_predict[
+                        "ps_baseline"
+                    ]
+                else:
+                    self.robs_predict["baseline"][i] = encoder.robs_predict["baseline"]
+
+        def fit_encoder(self):
+            if not hasattr(self, "robs"):
+                self.build_dm()
+
+            self.encoders = {}
+            self.encoder_weights = np.zeros(
+                (self.num_bins, self.num_units, self.num_tents + self.num_tv)
+            )
+            for i, (k, encoder_) in enumerate(self.t_encoders.items()):
+                if self.separate_drift:
+                    encoder_.tents = self.tents[i]
+                    encoder_.tvs = self.tvs[i]
+                else:
+                    encoder_.dm = self.dm[i]
+                encoder_.robs = self.robs[i]
+
+                encoder_.fit_encoder()
+                self.encoders[k] = encoder_.encoder
+                self.encoder_weights[i] = encoder_.encoder_weights
+
+        def encoder_predict(self):
+            if not hasattr(self, "robs_predict"):
+                self.robs_predict = {}
+
+            if not hasattr(self, "encoders"):
+                self.fit_encoder()
+
+            self.robs_predict["encoder"] = np.zeros_like(self.robs, dtype="float32")
+
+            for i, encoder in enumerate(self.t_encoders.values()):
+                encoder.encoder_predict()
+                self.robs_predict["encoder"][i] = encoder.robs_predict["encoder"]
+
+        def get_r2(self, n_folds=20, p_train=0.8):
+            if not hasattr(self, "robs"):
+                self.build_dm()
+
+            self.yhats = {
+                k: np.zeros((self.num_trials * self.num_bins, self.num_units))
+                for k in ["baseline", "ps_baseline", "encoder"]
+            }
+
+            def _reshape(arr_3d):
+                # arr_3d.shape = (num_bins, num_trials, _)
+                assert arr_3d.ndim == 3
+                return arr_3d.reshape(self.num_bins * self.num_trials, arr_3d.shape[-1])
+
+            for i, (train_idxs, test_idxs) in enumerate(
+                KFold(n_splits=n_folds, shuffle=True, random_state=0).split(
+                    _reshape(self.robs)
+                )
+            ):
+                # train, test, save test predictions
+                self.yhats["baseline"][test_idxs], baseline_model = (
+                    self._get_predictions(
+                        is_encoder=False,
+                        io=(_reshape(self.tents), _reshape(self.robs)),
+                        idxs=(train_idxs, test_idxs),
+                    )
+                )
+
+                if self.separate_drift:
+                    self.yhats["encoder"][test_idxs], _ = self._get_predictions(
+                        is_encoder=True,
+                        io=(
+                            _reshape(self.tents),
+                            _reshape(self.tvs),
+                            _reshape(self.robs),
+                        ),
+                        idxs=(train_idxs, test_idxs),
+                        baseline_model=baseline_model,
+                    )
+
+                    self.yhats["ps_baseline"][test_idxs] = self.yhats["baseline"][
+                        test_idxs
+                    ]
+
+                else:
+                    self.yhats["encoder"][test_idxs], encoder = self._get_predictions(
+                        is_encoder=True,
+                        io=(_reshape(self.dm), _reshape(self.robs)),
+                        idxs=(train_idxs, test_idxs),
+                    )
+
+                    if not hasattr(self, "dm_tv_ko"):
+                        self.dm_tv_ko = deepcopy(self.dm)
+                        self.dm_tv_ko[:, :, self.num_tents :] = 0
+
+                    self.yhats["ps_baseline"][test_idxs], _ = self._get_predictions(
+                        is_encoder=False,
+                        io=(_reshape(self.dm_tv_ko), _reshape(self.robs)),
+                        idxs=(train_idxs, test_idxs),
+                        model=encoder,
+                    )
+
+            self.scores = {
+                k: r2_score(
+                    _reshape(self.robs),
+                    yhat,
+                    multioutput="raw_values",
+                    force_finite=False,
+                )
+                for k, yhat in self.yhats.items()
+            }
+
+        def view_fits(self, reg="DLS", model="encoder", mode="time"):
+            if reg not in self.regions:
+                raise ValueError(f"{reg} must be in {self.regions}")
+
+            if (
+                not hasattr(self, "robs_predict")
+                or model not in self.robs_predict.keys()
+            ):
+                if model == "encoder":
+                    self.encoder_predict()
+                elif model == "baseline":
+                    self.baseline_predict()
+                else:
+                    raise ValueError(
+                        f"valid arguments for model are 'encoder' and 'baseline,' not {model}"
+                    )
+
+            if not hasattr(self, "scores"):
+                self.get_r2()
+
+            def _transform(robs_3d, reg):
+                return (
+                    robs_3d[:, :, self.reg_idxs[reg]]
+                    .T.reshape(self.psths[reg].shape[0], -1)
+                    .T
+                )
+
+            if mode == "time":
+                r = FitRendererTime(
+                    x=self.tbin_centers,
+                    y=self.robs[:, :, self.reg_idxs[reg]],
+                    yhat=self.robs_predict[model][:, :, self.reg_idxs[reg]],
+                    rsquared=self.scores[model][self.reg_idxs[reg]],
+                )
+            elif mode == "full":
+                r = FitRenderer(
+                    y=_transform(self.robs, reg),
+                    yhat=_transform(self.robs_predict[model], reg),
+                    rsquared=self.scores[model][self.reg_idxs[reg]],
+                    mode="lite",
+                )
+            else:
+                raise ValueError("mode can only be 'time' or 'full'")
+
+            return NeuronViewer(
+                num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
+            )
+
+        def view_weights(self, reg="DLS", peth_mode="response", mode="trace"):
+            if not hasattr(self, "encoder_weights"):
+                self.fit_encoder()
+
+            if mode == "trace":
+                r = PETHWeightRendererTime(
+                    weights=self.encoder_weights[:, self.reg_idxs[reg], :],
+                    tv="response",
+                    weight_idxs=self.dm_idxs,
+                    tv_vals=tv_vals,
+                    mode="trace",
+                    peths=get_psths_cond(
+                        self.psths[reg], self.trial_data, mode=peth_mode
+                    ),
+                    binwidth_s=0.1,
+                    tbin_centers=self.tbin_centers,
+                )
+            elif mode == "matrix":
+                r = PETHWeightRendererTime(
+                    weights=self.encoder_weights[:, self.reg_idxs[reg], :],
+                    weight_names=self.dm_names,
+                    mode="matrix",
+                    peths=get_psths_cond(
+                        self.psths[reg], self.trial_data, mode=peth_mode
+                    ),
+                    binwidth_s=0.1,
+                    tbin_centers=self.tbin_centers,
+                )
+            else:
+                raise ValueError("valid arguments are 'trace' and 'matrix'")
+
+            print(r.ncols)
+            return NeuronViewer(
+                num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
+            )
+
+    TimeResolvedEncoder.__name__ = f"TimeResolved{enc_class.__name__}"
+    TimeResolvedEncoder.__qualname__ = TimeResolvedEncoder.__name__
+    return TimeResolvedEncoder
