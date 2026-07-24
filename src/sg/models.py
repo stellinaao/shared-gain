@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
 
+from typing import Type
+
 from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import KFold
 from sklearn.metrics import r2_score
@@ -1049,8 +1051,17 @@ class TimeResolvedEncoder(Encoder):
         subj_id,
         sess_id,
         stepsize_s=0.1,
+        enc_class: Type[Encoder] = Encoder,
+        opt_kwargs=None,  # only if enc_class=StrategyEncoder
         **kwargs,
     ):
+        if not (isinstance(enc_class, type) and issubclass(enc_class, Encoder)):
+            raise TypeError(f"enc_class must be a subclass of Encoder, got {enc_class}")
+        if opt_kwargs and not issubclass(enc_class, StrategyEncoder):
+            raise ValueError(
+                "opt_kwargs is only valid when enc_class is StrategyEncoder (or a subclass)"
+            )
+
         self.subj_id = subj_id
         self.sess_id = sess_id
 
@@ -1086,9 +1097,10 @@ class TimeResolvedEncoder(Encoder):
 
         assert step_ / 1000 == self.stepsize_s
 
+        comb_kwargs = {**kwargs, **(opt_kwargs or {})}
         self.t_encoders = {
-            f"[{start:.3f},{stop:.3f}]": Encoder(
-                subj_id, sess_id, separate_drift=False, **kwargs
+            f"[{start:.3f},{stop:.3f}]": enc_class(  # modify this to accommodate strategy encoder too.
+                subj_id, sess_id, separate_drift=False, **comb_kwargs
             )
             for (start, stop) in zip(self.tbins, self.tbins[1:])
         }
@@ -1392,6 +1404,7 @@ class TimeResolvedEncoder(Encoder):
         else:
             raise ValueError("valid arguments are 'trace' and 'matrix'")
 
+        print(r.ncols)
         return NeuronViewer(
             num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
         )
