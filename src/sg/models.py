@@ -1100,7 +1100,7 @@ class TimeResolvedEncoder(Encoder):
         comb_kwargs = {**kwargs, **(opt_kwargs or {})}
         self.t_encoders = {
             f"[{start:.3f},{stop:.3f}]": enc_class(  # modify this to accommodate strategy encoder too.
-                subj_id, sess_id, separate_drift=False, **comb_kwargs
+                subj_id, sess_id, **comb_kwargs
             )
             for (start, stop) in zip(self.tbins, self.tbins[1:])
         }
