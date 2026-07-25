@@ -1074,12 +1074,24 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             if self.stepsize_s < 0.001:
                 raise ValueError("min stepsize is 1 ms")
 
-            super().__init__(
-                subj_id,
-                sess_id,
-                separate_drift=True,
-                **kwargs,
-            )
+            if enc_class is Encoder:
+                super().__init__(
+                    subj_id,
+                    sess_id,
+                    separate_drift=True,
+                    **kwargs,
+                )
+            elif enc_class is StrategyEncoder:
+                # separate_drift is True already in StrategyEncoder
+                super().__init__(
+                    subj_id,
+                    sess_id,
+                    **kwargs,
+                )
+            else:
+                raise ValueError(f"what kind of class did you pass??? ({enc_class})")
+
+            assert self.separate_drift, "ur not separating drift"
 
             self.binwidth_ms = stepsize_s * 1000
 
@@ -1101,12 +1113,24 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
 
             assert step_ / 1000 == self.stepsize_s, "stepsize issue"
 
-            self.t_encoders = {
-                f"[{start:.3f},{stop:.3f}]": enc_class(  # modify this to accommodate strategy encoder too.
-                    subj_id, sess_id, separate_drift=True, **kwargs
-                )
-                for (start, stop) in zip(self.tbins, self.tbins[1:])
-            }
+            if enc_class is Encoder:
+                self.t_encoders = {
+                    f"[{start:.3f},{stop:.3f}]": enc_class(  # modify this to accommodate strategy encoder too.
+                        subj_id, sess_id, separate_drift=True, **kwargs
+                    )
+                    for (start, stop) in zip(self.tbins, self.tbins[1:])
+                }
+            elif enc_class is StrategyEncoder:
+                self.t_encoders = {
+                    f"[{start:.3f},{stop:.3f}]": enc_class(  # modify this to accommodate strategy encoder too.
+                        subj_id, sess_id, **kwargs
+                    )
+                    for (start, stop) in zip(self.tbins, self.tbins[1:])
+                }
+
+            assert all([e.separate_drift for e in self.t_encoders.values()]), (
+                "ur not separating drift in t_encoders!!"
+            )
 
             assert len(self.t_encoders) == self.num_bins, (
                 "not one-to-one encoder per bin"
@@ -1166,9 +1190,9 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
 
             if self.norm:
                 self.robs = zscore(self.robs, axis=(0, 1))
+            self.robs_tavg = self.robs.mean(axis=0)  # don't want to subsample robs_tavg
             if enc_class is StrategyEncoder:
                 self.robs = self.robs[:, self.idxs, :]
-            self.robs_tavg = self.robs.mean(axis=0)
 
         def fit_baseline(self):
             if not hasattr(self, "robs"):
@@ -1180,6 +1204,10 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
                 assert encoder_.separate_drift, "t_encoder is not separating drift!"
                 encoder_.tents = self.tents
                 encoder_.robs = self.robs_tavg
+                if enc_class is StrategyEncoder:
+                    encoder_.encoder_ref.build_dm()
+                    encoder_.encoder_ref.robs = self.robs_tavg
+                    assert np.all(encoder_.encoder_ref.robs - self.robs_tavg == 0)
 
                 encoder_.fit_baseline()
                 self.baseline_models[k] = encoder_.baseline_model
@@ -1375,6 +1403,9 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             return NeuronViewer(
                 num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
             )
+
+        def plot_r2_comp(self):
+            raise NotImplementedError("no baseline r2 to compare to")
 
     TimeResolvedEncoder.__name__ = f"TimeResolved{enc_class.__name__}"
     TimeResolvedEncoder.__qualname__ = TimeResolvedEncoder.__name__
