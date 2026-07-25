@@ -274,9 +274,15 @@ class Encoder:
             ).fit(dm[train_idxs], robs[train_idxs])
         return model.predict(dm[test_idxs]), model
 
-    def _get_predictions_sd(self, idxs, io, baseline_model):
+    def _get_predictions_sd(self, idxs, io, baseline_model=None, baseline_predict=None):
         train_idxs, test_idxs = idxs
-        tents, tvs, robs = io
+        if baseline_predict is not None:
+            tvs, robs = io
+        else:
+            tents, tvs, robs = io
+
+        if baseline_predict is None:
+            baseline_predict = baseline_model.predict(tents)
 
         encoder = RidgeCV(
             alphas=np.logspace(
@@ -285,12 +291,13 @@ class Encoder:
             alpha_per_target=True,
         ).fit(
             tvs[train_idxs],
-            robs[train_idxs] - baseline_model.predict(tents[train_idxs]),
+            robs[train_idxs]
+            - baseline_predict[
+                train_idxs
+            ],  # baseline_model.predict(tents[train_idxs]),
         )
 
-        return baseline_model.predict(tents[test_idxs]) + encoder.predict(
-            tvs[test_idxs]
-        ), encoder
+        return baseline_predict[test_idxs] + encoder.predict(tvs[test_idxs]), encoder
 
     def get_r2(self, n_folds=20, p_train=0.8, pool=True):
         if not hasattr(self, "robs"):
@@ -1070,7 +1077,7 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             super().__init__(
                 subj_id,
                 sess_id,
-                # separate_drift=False,
+                separate_drift=True,
                 **kwargs,
             )
 
@@ -1092,11 +1099,11 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             )  # only supports precision to the nearest millisecond
             self.tbin_centers = (self.tbins - (self.stepsize_s / 2))[1:]
 
-            assert step_ / 1000 == self.stepsize_s
+            assert step_ / 1000 == self.stepsize_s, "stepsize issue"
 
             self.t_encoders = {
                 f"[{start:.3f},{stop:.3f}]": enc_class(  # modify this to accommodate strategy encoder too.
-                    subj_id, sess_id, **kwargs
+                    subj_id, sess_id, separate_drift=True, **kwargs
                 )
                 for (start, stop) in zip(self.tbins, self.tbins[1:])
             }
@@ -1109,62 +1116,24 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             super().get_data()
 
         def build_dm(self):
-            """
-            if not (hasattr(self, "psths")):
-                self.get_data()
-            print("consider the data got")
-            """
-
             super().build_dm()
 
-            """
-            (
-                tents_,
-                tvs_,
-                dm_,
-                robs_,
-                self.dm_names,
-                self.dm_idxs,
-                self.reg_idxs,
-            ) = get_encoder_io(
-                self.psths,
-                self.trial_data,
-                self.regions,
-                norm=self.norm,
-                num_tents=self.num_tents,
-                tv_keys=self.tv_keys,
-                add_svd=self.add_svd,
-                num_svd=self.num_svd if self.add_svd else None,
-                add_licks=self.add_licks,
-                binwidth_ms=self.binwidth_ms,
-            )
-
-            self.num_trials, self.num_tv = tvs_.shape
-            self.num_units = robs_.shape[1]
-
-            self.tents = np.array([tents_ for i in range(self.num_bins)])
-            self.tvs = np.array([tvs_ for i in range(self.num_bins)])
-            self.dm = np.array([dm_ for i in range(self.num_bins)])
-            """
-
-            self.tents = np.array([self.tents for i in range(self.num_bins)])
+            # self.tents will not be used to estimate robs on a subtrial basis
             self.tvs = np.array([self.tvs for i in range(self.num_bins)])
             self.dm = np.array([self.dm for i in range(self.num_bins)])
 
-            assert self.tents.shape == (self.num_bins, self.num_trials, self.num_tents)
-            assert self.tvs.shape == (self.num_bins, self.num_trials, self.num_tv)
+            assert self.tvs.shape == (self.num_bins, self.num_trials, self.num_tv), (
+                "tv shape is wrong"
+            )
             assert self.dm.shape == (
                 self.num_bins,
                 self.num_trials,
                 self.num_tents + self.num_tv,
-            )
+            ), "dm shape is wrong"
 
             def _edge_inclusive(t):
                 return t + 0.001 if self.edge_inclusive else t
 
-            # might be a trial indexing issue
-            # figure out a more elegant way to write this function
-            print(self.trial_data.shape)
             self.robs, _, self.t_tbin_edges = get_psths_ref(
                 self.spike_times,
                 self.encoder_ref.trial_data
@@ -1191,15 +1160,15 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
                     "alignment issue"
                 )
 
-            print([self.robs[reg].shape for reg in self.regions])
-
             self.robs = np.array(
                 [unit for reg in self.regions for unit in self.robs[reg]]
             ).T
 
             if self.norm:
                 self.robs = zscore(self.robs, axis=(0, 1))
-            self.robs = self.robs[:, self.idxs, :]
+            if enc_class is StrategyEncoder:
+                self.robs = self.robs[:, self.idxs, :]
+            self.robs_tavg = self.robs.mean(axis=0)
 
         def fit_baseline(self):
             if not hasattr(self, "robs"):
@@ -1208,8 +1177,9 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
 
             self.baseline_models = {}
             for i, (k, encoder_) in enumerate(self.t_encoders.items()):
-                encoder_.tents = self.tents[i]
-                encoder_.robs = self.robs[i]
+                assert encoder_.separate_drift, "t_encoder is not separating drift!"
+                encoder_.tents = self.tents
+                encoder_.robs = self.robs_tavg
 
                 encoder_.fit_baseline()
                 self.baseline_models[k] = encoder_.baseline_model
@@ -1248,11 +1218,10 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
                 (self.num_bins, self.num_units, self.num_tents + self.num_tv)
             )
             for i, (k, encoder_) in enumerate(self.t_encoders.items()):
-                if self.separate_drift:
-                    encoder_.tents = self.tents[i]
-                    encoder_.tvs = self.tvs[i]
-                else:
-                    encoder_.dm = self.dm[i]
+                assert encoder_.separate_drift, "not separating drift!"
+                # sanity checks needed here
+                encoder_.tents = self.tents
+                encoder_.tvs = self.tvs[i]
                 encoder_.robs = self.robs[i]
 
                 encoder_.fit_encoder()
@@ -1276,14 +1245,20 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             if not hasattr(self, "robs"):
                 self.build_dm()
 
+            if (
+                not hasattr(self, "robs_predict")
+                or "baseline" not in self.robs_predict.keys()
+            ):
+                self.baseline_predict()
+
             self.yhats = {
                 k: np.zeros((self.num_trials * self.num_bins, self.num_units))
-                for k in ["baseline", "ps_baseline", "encoder"]
+                for k in ["encoder"]
             }
 
             def _reshape(arr_3d):
                 # arr_3d.shape = (num_bins, num_trials, _)
-                assert arr_3d.ndim == 3
+                assert arr_3d.ndim == 3, "not 3d"
                 return arr_3d.reshape(self.num_bins * self.num_trials, arr_3d.shape[-1])
 
             for i, (train_idxs, test_idxs) in enumerate(
@@ -1292,47 +1267,19 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
                 )
             ):
                 # train, test, save test predictions
-                self.yhats["baseline"][test_idxs], baseline_model = (
-                    self._get_predictions(
-                        is_encoder=False,
-                        io=(_reshape(self.tents), _reshape(self.robs)),
-                        idxs=(train_idxs, test_idxs),
-                    )
+                assert self.separate_drift, "no separate drift, must separate drift!!!"
+
+                # just fix this and you'll be dandy
+
+                self.yhats["encoder"][test_idxs], _ = self._get_predictions(
+                    is_encoder=True,
+                    io=(
+                        _reshape(self.tvs),
+                        _reshape(self.robs),
+                    ),
+                    idxs=(train_idxs, test_idxs),
+                    baseline_predict=_reshape(self.robs_predict["baseline"]),
                 )
-
-                if self.separate_drift:
-                    self.yhats["encoder"][test_idxs], _ = self._get_predictions(
-                        is_encoder=True,
-                        io=(
-                            _reshape(self.tents),
-                            _reshape(self.tvs),
-                            _reshape(self.robs),
-                        ),
-                        idxs=(train_idxs, test_idxs),
-                        baseline_model=baseline_model,
-                    )
-
-                    self.yhats["ps_baseline"][test_idxs] = self.yhats["baseline"][
-                        test_idxs
-                    ]
-
-                else:
-                    self.yhats["encoder"][test_idxs], encoder = self._get_predictions(
-                        is_encoder=True,
-                        io=(_reshape(self.dm), _reshape(self.robs)),
-                        idxs=(train_idxs, test_idxs),
-                    )
-
-                    if not hasattr(self, "dm_tv_ko"):
-                        self.dm_tv_ko = deepcopy(self.dm)
-                        self.dm_tv_ko[:, :, self.num_tents :] = 0
-
-                    self.yhats["ps_baseline"][test_idxs], _ = self._get_predictions(
-                        is_encoder=False,
-                        io=(_reshape(self.dm_tv_ko), _reshape(self.robs)),
-                        idxs=(train_idxs, test_idxs),
-                        model=encoder,
-                    )
 
             self.scores = {
                 k: r2_score(
@@ -1345,6 +1292,8 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             }
 
         def view_fits(self, reg="DLS", model="encoder", mode="time"):
+            if not hasattr(self, "regions"):
+                self.get_data()
             if reg not in self.regions:
                 raise ValueError(f"{reg} must be in {self.regions}")
 
@@ -1423,7 +1372,6 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             else:
                 raise ValueError("valid arguments are 'trace' and 'matrix'")
 
-            print(r.ncols)
             return NeuronViewer(
                 num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
             )
