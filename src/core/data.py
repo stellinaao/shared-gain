@@ -1077,33 +1077,33 @@ def get_encoder_io(
 
 
 # BALANCING
-def balance_strategy(trial_data, mb_idx, mf_idx):
-    """
-    balance should be proportional balancing, so:
-        L  R
-        MF 10 20
-        MB 10 20
-    """
-    # balance the mb and mf trial proportionally on the L vs R trials
-    mb_left = mb_idx[trial_data.loc[mb_idx]["rewarded_side"] == "left"]
-    mb_right = mb_idx[trial_data.loc[mb_idx]["rewarded_side"] == "right"]
+# def balance_strategy(trial_data, mb_idx, mf_idx):
+#     """
+#     balance should be proportional balancing, so:
+#         L  R
+#         MF 10 20
+#         MB 10 20
+#     """
+#     # balance the mb and mf trial proportionally on the L vs R trials
+#     mb_left = mb_idx[trial_data.loc[mb_idx]["rewarded_side"] == "left"]
+#     mb_right = mb_idx[trial_data.loc[mb_idx]["rewarded_side"] == "right"]
 
-    mf_left = mf_idx[trial_data.loc[mf_idx]["rewarded_side"] == "left"]
-    mf_right = mf_idx[trial_data.loc[mf_idx]["rewarded_side"] == "right"]
+#     mf_left = mf_idx[trial_data.loc[mf_idx]["rewarded_side"] == "left"]
+#     mf_right = mf_idx[trial_data.loc[mf_idx]["rewarded_side"] == "right"]
 
-    print(len(mb_left), len(mf_left), len(mb_right), len(mf_right))
-    n_left = min(len(mb_left), len(mf_left))
-    n_right = min(len(mb_right), len(mf_right))
+#     print(len(mb_left), len(mf_left), len(mb_right), len(mf_right))
+#     n_left = min(len(mb_left), len(mf_left))
+#     n_right = min(len(mb_right), len(mf_right))
 
-    # randomly select n_left idxs from mb_left and mf_left and same for right, then concat both mb and mf and return
-    mb_idx = np.concatenate(
-        (np.random.choice(mb_left, n_left), np.random.choice(mb_right, n_right))
-    )
-    mf_idx = np.concatenate(
-        (np.random.choice(mf_left, n_left), np.random.choice(mf_right, n_right))
-    )
+#     # randomly select n_left idxs from mb_left and mf_left and same for right, then concat both mb and mf and return
+#     mb_idx = np.concatenate(
+#         (np.random.choice(mb_left, n_left), np.random.choice(mb_right, n_right))
+#     )
+#     mf_idx = np.concatenate(
+#         (np.random.choice(mf_left, n_left), np.random.choice(mf_right, n_right))
+#     )
 
-    return mb_idx, mf_idx
+#     return mb_idx, mf_idx
 
 
 # UTILS
