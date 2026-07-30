@@ -573,7 +573,6 @@ class StrategyEncoder(Encoder):
             subj_id,
             sess_id,
             num_tents=self.encoder_ref.num_tents,
-            separate_drift=True,
             **kwargs,
         )
 
@@ -616,65 +615,27 @@ class StrategyEncoder(Encoder):
         if not hasattr(self, "baseline_model"):
             self.fit_baseline()
 
-        if pool:
-            yhats = {
-                k: np.zeros((self.num_trials, self.num_units))
-                for k in ["baseline", "encoder"]
-            }
+        yhats = {
+            k: np.zeros((self.num_trials, self.num_units))
+            for k in ["baseline", "encoder"]
+        }
 
-            for i, (train_idxs, test_idxs) in enumerate(
-                KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
-            ):
-                yhats["encoder"][test_idxs], _ = self._get_predictions(
-                    is_encoder=True,
-                    io=(self.tents, self.tvs, self.robs),
-                    idxs=(train_idxs, test_idxs),
-                    baseline_model=self.baseline_model,
-                )
-
-            yhats["baseline"] = self.baseline_model.predict(self.tents)
-
-            self.scores = {
-                k: r2_score(
-                    self.robs, yhat, multioutput="raw_values", force_finite=False
-                )
-                for k, yhat in yhats.items()
-            }
-        else:
-            self.scores_cv = {
-                "encoder": np.zeros((n_folds, self.num_units)),
-            }
-
-            for i in range(n_folds):
-                np.random.seed(seed=i)
-
-                train_idxs = np.sort(
-                    np.random.choice(
-                        self.num_trials, int(self.num_trials * p_train), replace=False
-                    )
-                )
-                test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
-
-                self.scores_cv["encoder"][i], _ = self._get_scores(
-                    is_encoder=True,
-                    io=(self.tents, self.tvs, self.robs),
-                    idxs=(train_idxs, test_idxs),
-                    baseline_model=self.baseline_model,
-                )
-
-            self.seed()
-
-            baseline_scores = r2_score(
-                self.robs,
-                self.baseline_model.predict(self.tents),
-                multioutput="raw_values",
-                force_finite=False,
+        for i, (train_idxs, test_idxs) in enumerate(
+            KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
+        ):
+            yhats["encoder"][test_idxs], _ = self._get_predictions(
+                is_encoder=True,
+                io=(self.tents, self.tvs, self.robs),
+                idxs=(train_idxs, test_idxs),
+                baseline_model=self.baseline_model,
             )
 
-            self.scores = {
-                "baseline": baseline_scores,
-                "encoder": np.median(self.scores_cv["encoder"], axis=0),
-            }
+        yhats["baseline"] = self.baseline_model.predict(self.tents)
+
+        self.scores = {
+            k: r2_score(self.robs, yhat, multioutput="raw_values", force_finite=False)
+            for k, yhat in yhats.items()
+        }
 
     def verify(self, subtract_baseline=True):
         super().verify(r2_comp=False)
