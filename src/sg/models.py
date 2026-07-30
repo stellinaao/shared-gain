@@ -65,7 +65,6 @@ class Encoder:
         self.full_trial = kwargs.pop("full_trial", False)
 
         self.norm = kwargs.pop("norm", False)
-        self.separate_drift = kwargs.pop("separate_drift", False)
         self.max_reg = kwargs.pop("max_reg", 5)
 
         self.num_tents = kwargs.pop("num_tents", 5)
@@ -90,8 +89,6 @@ class Encoder:
         np.random.seed(self.random_state)
 
     def get_data(self):
-        print("THOU SHALL NOT PASS")
-
         def _edge_inclusive(t):
             return t + 0.001 if self.edge_inclusive else t
 
@@ -118,6 +115,7 @@ class Encoder:
             thresh=self.thresh,
         )
 
+        self.tbin_centers = (self.tbin_edges - (self.binwidth_ms / (2 * 1000)))[1:]
         if self.n is not None:
             self.idxs = np.sort(
                 np.random.choice(len(self.trial_data), self.n, replace=False)
@@ -126,7 +124,6 @@ class Encoder:
             self.psths = {reg: self.psths[reg][:, self.idxs, :] for reg in self.regions}
 
     def build_dm(self):
-        print("THOU SHALL NOT PASS")
         if not (hasattr(self, "psths")):
             self.get_data()
         (
@@ -153,120 +150,70 @@ class Encoder:
         self.num_trials, self.num_tv = self.tvs.shape
         self.num_units = self.robs.shape[1]
 
-    def fit_baseline(self, idxs=None):
+    def fit_baseline(self, robs=None):
         if not (hasattr(self, "tents") and hasattr(self, "robs")):
             self.build_dm()
+
+        robs = self.robs if robs is None else robs
 
         self.baseline_model = RidgeCV(
             alphas=np.logspace(
                 -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
             ),
             alpha_per_target=True,
-        ).fit(self.tents, self.robs)
+        ).fit(self.tents, robs)
 
-    def baseline_predict(self, pseudo=False):
+    def baseline_predict(self):
         if not hasattr(self, "robs_predict"):
             self.robs_predict = {}
 
-        if not pseudo:
-            if not hasattr(self, "baseline_model"):
-                self.fit_baseline()
+        if not hasattr(self, "baseline_model"):
+            self.fit_baseline()
 
-            self.robs_predict["baseline"] = self.baseline_model.predict(self.tents)
-        else:
-            if self.separate_drift:
-                print("hey queen")
-                if (
-                    not hasattr(self, "robs_predict")
-                    or "baseline" not in self.robs_predict.keys()
-                ):
-                    print("bien sur?")
-                    self.baseline_predict(pseudo=False)
+        self.robs_predict["baseline"] = self.baseline_model.predict(self.tents)
 
-                self.robs_predict["ps_baseline"] = self.robs_predict["baseline"]
-            else:
-                if not hasattr(self, "encoder"):
-                    self.fit_encoder()
-
-                if not hasattr(self, "dm_tv_ko"):
-                    self.dm_tv_ko = deepcopy(self.dm)
-                    self.dm_tv_ko[:, self.num_tents :] = 0
-
-                self.robs_predict["ps_baseline"] = self.encoder.predict(self.dm_tv_ko)
-
-    def fit_encoder(self, idxs=None):
+    def fit_encoder(self):
         if not (hasattr(self, "robs")):
             self.build_dm()
 
-        if self.separate_drift:
-            if not hasattr(self, "baseline_model"):
-                self.fit_baseline()
+        if (
+            not hasattr(self, "robs_predict")
+            or "baseline" not in self.robs_predict.keys()
+        ):
             self.baseline_predict()
 
-            self.encoder = RidgeCV(
-                alphas=np.logspace(
-                    -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
-                ),
-                alpha_per_target=True,
-            ).fit(self.tvs, self.robs - self.robs_predict["baseline"])
+        self.encoder = RidgeCV(
+            alphas=np.logspace(
+                -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
+            ),
+            alpha_per_target=True,
+        ).fit(self.tvs, self.robs - self.robs_predict["baseline"])
 
-            self.encoder_weights = np.hstack(
-                (self.baseline_model.coef_, self.encoder.coef_)
-            )
-        else:
-            self.encoder = RidgeCV(
-                alphas=np.logspace(
-                    -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
-                ),
-                alpha_per_target=True,
-            ).fit(self.dm, self.robs)
-
-            self.encoder_weights = self.encoder.coef_
+        self.encoder_weights = np.hstack(
+            (self.baseline_model.coef_, self.encoder.coef_)
+        )
 
     def encoder_predict(self):
-        if not hasattr(self, "robs_predict"):
-            self.robs_predict = {}
+        if (
+            not hasattr(self, "robs_predict")
+            or "baseline" not in self.robs_predict.keys()
+        ):
+            self.baseline_predict()
+
         if not hasattr(self, "encoder"):
             self.fit_encoder()
 
-        if self.separate_drift:
-            self.robs_predict["encoder"] = self.baseline_model.predict(
-                self.tents
-            ) + self.encoder.predict(self.tvs)
-        else:
-            self.robs_predict["encoder"] = self.encoder.predict(self.dm)
-
-    def _get_scores(self, is_encoder, **kwargs):
-        if self.separate_drift and is_encoder:
-            return self._get_scores_branches(sd=True, **kwargs)
-        else:
-            return self._get_scores_branches(sd=False, **kwargs)
+        self.robs_predict["encoder"] = self.robs_predict[
+            "baseline"
+        ] + self.encoder.predict(self.tvs)
 
     def _get_predictions(self, is_encoder, **kwargs):
-        if self.separate_drift and is_encoder:
-            return self._get_predictions_sd(**kwargs)
+        if is_encoder:
+            return self._get_predictions_encoder(**kwargs)
         else:
-            return self._get_predictions_nosd(**kwargs)
+            return self._get_predictions_baseline(**kwargs)
 
-    def _get_scores_branches(self, sd=False, idxs=None, io=None, **kwargs):
-        _, test_idxs = idxs
-        robs = io[-1]
-
-        if sd:
-            model_predict, model = self._get_predictions_sd(idxs, io, **kwargs)
-        else:
-            model_predict, model = self._get_predictions_nosd(idxs, io, **kwargs)
-
-        scores = r2_score(
-            robs[test_idxs],
-            model_predict,
-            multioutput="raw_values",
-            force_finite=False,
-        )
-
-        return scores, model
-
-    def _get_predictions_nosd(self, idxs, io, model=None):
+    def _get_predictions_baseline(self, idxs, io, model=None):
         train_idxs, test_idxs = idxs
         dm, robs = io
 
@@ -279,7 +226,9 @@ class Encoder:
             ).fit(dm[train_idxs], robs[train_idxs])
         return model.predict(dm[test_idxs]), model
 
-    def _get_predictions_sd(self, idxs, io, baseline_model=None, baseline_predict=None):
+    def _get_predictions_encoder(
+        self, idxs, io, baseline_model=None, baseline_predict=None
+    ):
         train_idxs, test_idxs = idxs
         if baseline_predict is not None:
             tvs, robs = io
@@ -296,130 +245,41 @@ class Encoder:
             alpha_per_target=True,
         ).fit(
             tvs[train_idxs],
-            robs[train_idxs]
-            - baseline_predict[
-                train_idxs
-            ],  # baseline_model.predict(tents[train_idxs]),
+            robs[train_idxs] - baseline_predict[train_idxs],
         )
 
         return baseline_predict[test_idxs] + encoder.predict(tvs[test_idxs]), encoder
 
-    def get_r2(self, n_folds=20, p_train=0.8, pool=True):
+    def get_r2(self, n_folds=20, p_train=0.8):
         if not hasattr(self, "robs"):
             self.build_dm()
 
-        if pool:
-            self.yhats = {
-                k: np.zeros((self.num_trials, self.num_units))
-                for k in ["baseline", "ps_baseline", "encoder"]
-            }
+        self.yhats = {
+            k: np.zeros((self.num_trials, self.num_units))
+            for k in ["baseline", "encoder"]
+        }
 
-            for i, (train_idxs, test_idxs) in enumerate(
-                KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
-            ):
-                # train, test, save test predictions
-                self.yhats["baseline"][test_idxs], baseline_model = (
-                    self._get_predictions(
-                        is_encoder=False,
-                        io=(self.tents, self.robs),
-                        idxs=(train_idxs, test_idxs),
-                    )
-                )
+        for i, (train_idxs, test_idxs) in enumerate(
+            KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
+        ):
+            # train, test, save test predictions
+            self.yhats["baseline"][test_idxs], baseline_model = self._get_predictions(
+                is_encoder=False,
+                io=(self.tents, self.robs),
+                idxs=(train_idxs, test_idxs),
+            )
 
-                if self.separate_drift:
-                    self.yhats["encoder"][test_idxs], _ = self._get_predictions(
-                        is_encoder=True,
-                        io=(self.tents, self.tvs, self.robs),
-                        idxs=(train_idxs, test_idxs),
-                        baseline_model=baseline_model,
-                    )
+            self.yhats["encoder"][test_idxs], _ = self._get_predictions(
+                is_encoder=True,
+                io=(self.tents, self.tvs, self.robs),
+                idxs=(train_idxs, test_idxs),
+                baseline_model=baseline_model,
+            )
 
-                    self.yhats["ps_baseline"][test_idxs] = self.yhats["baseline"][
-                        test_idxs
-                    ]
-
-                else:
-                    self.yhats["encoder"][test_idxs], encoder = self._get_predictions(
-                        is_encoder=True,
-                        io=(self.dm, self.robs),
-                        idxs=(train_idxs, test_idxs),
-                    )
-
-                    if not hasattr(self, "dm_tv_ko"):
-                        self.dm_tv_ko = deepcopy(self.dm)
-                        self.dm_tv_ko[:, self.num_tents :] = 0
-
-                    self.yhats["ps_baseline"][test_idxs], _ = self._get_predictions(
-                        is_encoder=False,
-                        io=(self.dm_tv_ko, self.robs),
-                        idxs=(train_idxs, test_idxs),
-                        model=encoder,
-                    )
-
-            self.scores = {
-                k: r2_score(
-                    self.robs, yhat, multioutput="raw_values", force_finite=False
-                )
-                for k, yhat in self.yhats.items()
-            }
-        else:
-            self.scores_cv = {
-                "baseline": np.zeros((n_folds, self.num_units)),
-                "ps_baseline": np.zeros((n_folds, self.num_units)),
-                "encoder": np.zeros((n_folds, self.num_units)),
-            }
-
-            for i in range(n_folds):
-                np.random.seed(seed=i)
-
-                train_idxs = np.sort(
-                    np.random.choice(
-                        self.num_trials, int(self.num_trials * p_train), replace=False
-                    )
-                )
-                test_idxs = np.setdiff1d(np.arange(self.num_trials), train_idxs)
-
-                self.scores_cv["baseline"][i], baseline_model = self._get_scores(
-                    is_encoder=False,
-                    io=(self.tents, self.robs),
-                    idxs=(train_idxs, test_idxs),
-                )
-
-                if self.separate_drift:
-                    self.scores_cv["encoder"][i], _ = self._get_scores(
-                        is_encoder=True,
-                        io=(self.tents, self.tvs, self.robs),
-                        idxs=(train_idxs, test_idxs),
-                        baseline_model=baseline_model,
-                    )
-
-                    self.scores_cv["ps_baseline"][i] = self.scores_cv["baseline"][i]
-
-                else:
-                    self.scores_cv["encoder"][i], encoder = self._get_scores(
-                        is_encoder=True,
-                        io=(self.dm, self.robs),
-                        idxs=(train_idxs, test_idxs),
-                    )
-
-                    if not hasattr(self, "dm_tv_ko"):
-                        self.dm_tv_ko = deepcopy(self.dm)
-                        self.dm_tv_ko[:, self.num_tents :] = 0
-
-                    self.scores_cv["ps_baseline"][i], _ = self._get_scores(
-                        is_encoder=False,
-                        io=(self.dm_tv_ko, self.robs),
-                        idxs=(train_idxs, test_idxs),
-                        model=encoder,
-                    )
-
-            self.seed()
-
-            self.scores = {
-                "baseline": np.median(self.scores_cv["baseline"], axis=0),
-                "ps_baseline": np.median(self.scores_cv["ps_baseline"], axis=0),
-                "encoder": np.median(self.scores_cv["encoder"], axis=0),
-            }
+        self.scores = {
+            k: r2_score(self.robs, yhat, multioutput="raw_values", force_finite=False)
+            for k, yhat in self.yhats.items()
+        }
 
     def get_weights(self, regr, val=None):
         if val is not None:
@@ -453,6 +313,7 @@ class Encoder:
         # plot_kdes(scores_no_ps, label=r"$r^2$", ax=axes[1])
 
         # sctavg vs beta weight
+        print("oop")
         if self.tv_keys is not None:
             self.plot_sctavg_weights(
                 axes[2:4], cond="response", subtract_baseline=subtract_baseline
@@ -501,41 +362,25 @@ class Encoder:
         if cond in self.sc_tavg.keys():
             return
         if subtract_baseline:
-            if self.separate_drift:
-                # get baseline explained variance
-                if (
-                    not hasattr(self, "robs_predict")
-                    or "ps_baseline" not in self.robs_predict.keys()
-                ):
-                    print("girlboss")
-                    self.baseline_predict(pseudo=True)
-                robs_baseline = self.robs_predict["ps_baseline"]
-                self.robs_baseline = robs_baseline
+            # get baseline explained variance
+            if (
+                not hasattr(self, "robs_predict")
+                or "baseline" not in self.robs_predict.keys()
+            ):
+                self.baseline_predict()
+            robs_baseline = self.robs_predict["baseline"]
+            self.robs_baseline = robs_baseline
 
-                # get tv explained variance (besides pivot)
-                pivot_idxs = [
-                    self.dm_idxs[regr] - self.num_tents
-                    for regr in [f"{cond}_{val}" for val in tv_vals[cond]]
-                ]
-                self.tv_pivot_ko = deepcopy(self.tvs)
-                self.tv_pivot_ko[:, pivot_idxs] = 0
+            # get tv explained variance (besides pivot)
+            pivot_idxs = [
+                self.dm_idxs[regr] - self.num_tents
+                for regr in [f"{cond}_{val}" for val in tv_vals[cond]]
+            ]
+            self.tv_pivot_ko = deepcopy(self.tvs)
+            self.tv_pivot_ko[:, pivot_idxs] = 0
 
-                robs_tv = self.encoder.predict(self.tv_pivot_ko)
-                self.robs_to_subtract = robs_baseline + robs_tv
-
-            else:
-                print("ello bello")
-                pivot_idxs = [
-                    self.dm_idxs[regr]
-                    for regr in [f"{cond}_{val}" for val in tv_vals[cond]]
-                ]
-                print("blergh")
-                self.dm_pivot_ko = deepcopy(self.dm)
-                self.dm_pivot_ko[:, pivot_idxs] = 0
-                print("meep")
-
-                # robs_to_subtract = self.encoder.predict(self.dm_pivot_ko)
-                pass
+            robs_tv = self.encoder.predict(self.tv_pivot_ko)
+            self.robs_to_subtract = robs_baseline + robs_tv
 
         else:
             # robs_to_subtract = None
@@ -669,7 +514,7 @@ class Encoder:
             pres=self.tpre,
             posts=self.tpost,
             binwidth_s=self.binwidth_ms / 1000,
-            tbin_edges=self.tbin_edges,
+            tbin_edges=self.tbin_centers,
         )
 
         return NeuronViewer(
