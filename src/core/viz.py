@@ -17,6 +17,8 @@ def plot_scatter(
     xlabel="",
     ylabel="",
     title="",
+    mn=None,
+    mx=None,
     color=None,
     label=None,
     add_unity=False,
@@ -29,8 +31,8 @@ def plot_scatter(
     r = pearsonr(x, y).statistic
     gr = np.mean(x < y)
 
-    mn = 1.05 * min([np.min(x), np.min(y)])
-    mx = 1.05 * max([np.max(x), np.max(y)])
+    mn = 1.05 * min([np.min(x), np.min(y)]) if mn is None else mn
+    mx = 1.05 * max([np.max(x), np.max(y)]) if mx is None else mx
 
     ax.scatter(x, y, s=0.5, c=color, alpha=0.5, label=label)
 
@@ -315,7 +317,7 @@ def plot_kdes(
 # plot nested distros as a row of kdes
 def plot_kde_row(
     data: dict,  # dict of dicts
-    styles: dict = {},
+    line_kwargs: dict = {},
     title: str = None,
     sharey=True,
     panel_width=1.5,
@@ -335,15 +337,15 @@ def plot_kde_row(
         axes = [axes]  # plt.subplots returns a bare Axes, not an array, when ncols=1
 
     for i, (k, data_) in enumerate(data.items()):
-        plot_kdes(
+        ax = plot_kdes(
             data_,
-            label=k,
-            line_kwargs=styles,
+            line_kwargs=line_kwargs,
             ax=axes[i],
             ylabel=(i == 0),
             legend=False,
             **kwargs,
         )
+        ax.set_title(k)
     # title
     if title is not None:
         center_title(fig, axes, title)
