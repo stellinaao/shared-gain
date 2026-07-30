@@ -90,6 +90,8 @@ class Encoder:
         np.random.seed(self.random_state)
 
     def get_data(self):
+        print("THOU SHALL NOT PASS")
+
         def _edge_inclusive(t):
             return t + 0.001 if self.edge_inclusive else t
 
@@ -124,6 +126,7 @@ class Encoder:
             self.psths = {reg: self.psths[reg][:, self.idxs, :] for reg in self.regions}
 
     def build_dm(self):
+        print("THOU SHALL NOT PASS")
         if not (hasattr(self, "psths")):
             self.get_data()
         (
@@ -172,10 +175,12 @@ class Encoder:
             self.robs_predict["baseline"] = self.baseline_model.predict(self.tents)
         else:
             if self.separate_drift:
+                print("hey queen")
                 if (
                     not hasattr(self, "robs_predict")
                     or "baseline" not in self.robs_predict.keys()
                 ):
+                    print("bien sur?")
                     self.baseline_predict(pseudo=False)
 
                 self.robs_predict["ps_baseline"] = self.robs_predict["baseline"]
@@ -440,12 +445,12 @@ class Encoder:
 
         # p(resp)
         # self.plot_p_resp(axes[1]) FLAG: out of service for now
-        from core.viz import plot_kdes
+        # from core.viz import plot_kdes
 
-        scores_no_ps = deepcopy(self.scores)
-        if "ps_baseline" in scores_no_ps.keys():
-            scores_no_ps.pop("ps_baseline")
-        plot_kdes(scores_no_ps, label=r"$r^2$", ax=axes[1])
+        # scores_no_ps = deepcopy(self.scores)
+        # if "ps_baseline" in scores_no_ps.keys():
+        #     scores_no_ps.pop("ps_baseline")
+        # plot_kdes(scores_no_ps, label=r"$r^2$", ax=axes[1])
 
         # sctavg vs beta weight
         if self.tv_keys is not None:
@@ -484,26 +489,17 @@ class Encoder:
         ax.set_xlabel(r"$r^2$, drift")
         ax.set_ylabel(r"$r^2$, encoder")
 
-    def plot_sctavg_weights(self, axes, cond="response", subtract_baseline=True):
+    def get_sctavg_weights(self, cond="response", subtract_baseline=True):
         if cond not in ["response", "rewarded"]:
             raise NotImplementedError(f"cond={cond} is not currently supported.")
-
-        if axes is None:
-            fig, axes = plt.subplots(
-                ncols=2, nrows=1, figsize=(4, 2), tight_layout=True
-            )
-
         if not hasattr(self, "encoder"):
             self.fit_encoder()
 
-        if cond == "response":
-            keys = ["left", "right"]
-        elif cond == "rewarded":
-            keys = ["corr", "incorr"]
-        idxs = np.array(
-            [np.where(self.dm_names == f"{cond}_{key}")[0][0] for key in keys]
-        )
+        if not hasattr(self, "sc_tavg"):
+            self.sc_tavg = {}
 
+        if cond in self.sc_tavg.keys():
+            return
         if subtract_baseline:
             if self.separate_drift:
                 # get baseline explained variance
@@ -511,40 +507,64 @@ class Encoder:
                     not hasattr(self, "robs_predict")
                     or "ps_baseline" not in self.robs_predict.keys()
                 ):
+                    print("girlboss")
                     self.baseline_predict(pseudo=True)
                 robs_baseline = self.robs_predict["ps_baseline"]
+                self.robs_baseline = robs_baseline
 
                 # get tv explained variance (besides pivot)
-                pivot_idxs = idxs - self.num_tents
-
+                pivot_idxs = [
+                    self.dm_idxs[regr] - self.num_tents
+                    for regr in [f"{cond}_{val}" for val in tv_vals[cond]]
+                ]
                 self.tv_pivot_ko = deepcopy(self.tvs)
                 self.tv_pivot_ko[:, pivot_idxs] = 0
 
                 robs_tv = self.encoder.predict(self.tv_pivot_ko)
-                robs_to_subtract = robs_baseline + robs_tv
+                self.robs_to_subtract = robs_baseline + robs_tv
 
             else:
-                pivot_idxs = idxs
-
+                print("ello bello")
+                pivot_idxs = [
+                    self.dm_idxs[regr]
+                    for regr in [f"{cond}_{val}" for val in tv_vals[cond]]
+                ]
+                print("blergh")
                 self.dm_pivot_ko = deepcopy(self.dm)
                 self.dm_pivot_ko[:, pivot_idxs] = 0
+                print("meep")
 
-                robs_to_subtract = self.encoder.predict(self.dm_pivot_ko)
+                # robs_to_subtract = self.encoder.predict(self.dm_pivot_ko)
+                pass
 
         else:
-            robs_to_subtract = None
+            # robs_to_subtract = None
+            pass
 
-        sc_tavg = get_tavg_sc_cond(
+        a = get_tavg_sc_cond(
             self.robs,
             self.trial_data,
             cond=cond,
-            robs_to_subtract=robs_to_subtract,
+            robs_to_subtract=self.robs_to_subtract,
             subtract_robs=subtract_baseline,
         )
+        self.sc_tavg[cond] = a
+
+    def plot_sctavg_weights(self, axes, cond="response", subtract_baseline=True):
+        if not hasattr(self, "sc_tavg") or cond not in self.sc_tavg.keys():
+            self.get_sctavg_weights(cond=cond, subtract_baseline=subtract_baseline)
+        print("ello guvna")
+        if axes is None:
+            fig, axes = plt.subplots(
+                ncols=2, nrows=1, figsize=(4, 2), tight_layout=True
+            )
+
+        keys = tv_vals[cond]
+        idxs = [self.dm_idxs[regr] for regr in [f"{cond}_{key}" for key in keys]]
 
         for i in range(2):
             axes[i].scatter(
-                sc_tavg[keys[i]],
+                self.sc_tavg[cond][keys[i]],
                 self.encoder_weights[:, idxs[i]],
                 s=0.5,
                 alpha=0.5,
@@ -555,8 +575,12 @@ class Encoder:
                 norm="log",
             )
 
-            mn = min(min(sc_tavg[keys[i]]), min(self.encoder_weights[:, idxs[i]]))
-            mx = max(max(sc_tavg[keys[i]]), max(self.encoder_weights[:, idxs[i]]))
+            mn = min(
+                min(self.sc_tavg[cond][keys[i]]), min(self.encoder_weights[:, idxs[i]])
+            )
+            mx = max(
+                max(self.sc_tavg[cond][keys[i]]), max(self.encoder_weights[:, idxs[i]])
+            )
             axes[i].plot(
                 [1.05 * mn, 1.05 * mx],
                 [1.05 * mn, 1.05 * mx],
@@ -1137,9 +1161,11 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             )
 
         def get_data(self):
+            print("ignore the next warning hehe")
             super().get_data()
 
         def build_dm(self):
+            print("ignore the next warning hehe")
             super().build_dm()
 
             # self.tents will not be used to estimate robs on a subtrial basis
@@ -1211,6 +1237,7 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
 
                 encoder_.fit_baseline()
                 self.baseline_models[k] = encoder_.baseline_model
+            print("girl bye")
 
         def baseline_predict(self, pseudo=False):
             if not hasattr(self, "robs_predict"):
@@ -1296,8 +1323,6 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             ):
                 # train, test, save test predictions
                 assert self.separate_drift, "no separate drift, must separate drift!!!"
-
-                # just fix this and you'll be dandy
 
                 self.yhats["encoder"][test_idxs], _ = self._get_predictions(
                     is_encoder=True,
@@ -1403,6 +1428,87 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             return NeuronViewer(
                 num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
             )
+
+        def verify(self):
+            super().verify(r2_comp=False)
+
+        def get_sctavg_weights(self, cond="response", subtract_baseline=True):
+            if cond not in ["response", "rewarded"]:
+                raise NotImplementedError(f"cond={cond} is not currently supported.")
+
+            if not hasattr(self, "sc_tavg"):
+                self.sc_tavg = {}
+
+            if cond in self.sc_tavg.keys():
+                return
+
+            self.sc_tavg[cond] = {val: [] for val in tv_vals[cond]}
+
+            # if not hasattr(next(iter(self.t_encoders.values())), "baseline_model"):
+            print("Pump")
+            self.baseline_predict()
+            for i, e in enumerate(self.t_encoders.values()):
+                e.dm_idxs = self.dm_idxs
+                e.trial_data = self.trial_data
+                e.robs = self.robs[i]
+                e.get_sctavg_weights(cond=cond)
+
+                for k in e.sc_tavg[cond].keys():
+                    self.sc_tavg[cond][k].extend(e.sc_tavg[cond][k])
+
+            self.sc_tavg[cond] = {
+                k: np.array(arr) for k, arr in self.sc_tavg[cond].items()
+            }
+
+        def plot_sctavg_weights(
+            self, axes=None, cond="response", subtract_baseline=True
+        ):
+            if not hasattr(self, "sc_tavg") or cond not in self.sc_tavg.keys():
+                self.get_sctavg_weights(cond=cond, subtract_baseline=subtract_baseline)
+            if axes is None:
+                fig, axes = plt.subplots(
+                    ncols=2, nrows=1, figsize=(4, 2), tight_layout=True
+                )
+
+            keys = tv_vals[cond]
+            idxs = [self.dm_idxs[regr] for regr in [f"{cond}_{key}" for key in keys]]
+
+            for i in range(2):
+                axes[i].scatter(
+                    self.sc_tavg[cond][keys[i]],
+                    self.encoder_weights[:, :, idxs[i]].ravel(),
+                    s=0.5,
+                    alpha=0.5,
+                    vmin=1e-5,
+                    vmax=1e5,
+                    c=np.concatenate(
+                        [e.encoder.alpha_ for e in self.t_encoders.values()]
+                    ),
+                    cmap="viridis",
+                    norm="log",
+                )
+
+                mn = min(
+                    min(self.sc_tavg[cond][keys[i]]),
+                    min(self.encoder_weights[:, :, idxs[i]].ravel()),
+                )
+                mx = max(
+                    max(self.sc_tavg[cond][keys[i]]),
+                    max(self.encoder_weights[:, :, idxs[i]].ravel()),
+                )
+                axes[i].plot(
+                    [1.05 * mn, 1.05 * mx],
+                    [1.05 * mn, 1.05 * mx],
+                    color="#666666",
+                    linewidth=0.7,
+                    linestyle="--",
+                    zorder=0,
+                )
+                axes[i].axhline(y=0, color="k", linewidth=0.5)
+                axes[i].axvline(x=0, color="k", linewidth=0.5)
+
+                axes[i].set_xlabel(f"resid spk count, {keys[i]}")
+                axes[i].set_ylabel(f"beta weight, {keys[i]}")
 
         def plot_r2_comp(self):
             raise NotImplementedError("no baseline r2 to compare to")
