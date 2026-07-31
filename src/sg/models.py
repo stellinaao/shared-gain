@@ -1028,7 +1028,6 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
                     e.encoder_ref.forbid_data_access = True
                 e.fit_baseline(robs=self.robs_tavg)
                 self.baseline_models[k] = e.baseline_model
-            print("done")
 
         def baseline_predict(self):
             if not hasattr(self, "robs_predict"):
@@ -1048,8 +1047,11 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             ), "baseline is a different value across the tbins"
 
         def fit_encoder(self):
-            if not hasattr(self, "robs"):
-                self.build_dm()
+            if (
+                not hasattr(self, "robs_predict")
+                or "baseline" not in self.robs_predict.keys()
+            ):
+                self.baseline_predict()
 
             self.encoders = {}
             self.encoder_weights = np.zeros(
