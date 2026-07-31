@@ -526,7 +526,7 @@ class Encoder:
             pres=self.tpre,
             posts=self.tpost,
             binwidth_s=self.binwidth_ms / 1000,
-            tbin_edges=self.tbin_centers,
+            tbin_centers=self.tbin_centers,
         )
 
         return NeuronViewer(
@@ -547,7 +547,7 @@ class Encoder:
             pres=self.tpre,
             posts=self.tpost,
             binwidth_s=self.binwidth_ms / 1000,
-            tbin_edges=self.tbin_edges,
+            tbin_centers=self.tbin_centers,
             s=0.5,
             linewidths=0.5,
         )
