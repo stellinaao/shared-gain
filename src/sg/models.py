@@ -491,8 +491,10 @@ class Encoder:
             self.get_r2()
 
         r = FitRenderer(
-            y=self.robs[:, self.reg_idxs[reg]],
-            yhat=self.robs_predict[model][:, self.reg_idxs[reg]],
+            y=self.robs[:, self.reg_idxs[reg]] * (1000 / self.binwidth_ms),
+            yhat=self.robs_predict[model][:, self.reg_idxs[reg]]
+            * (1000 / self.binwidth_ms),
+            ylabel="Firing Rate (Hz)",
             rsquared=self.scores[model][self.reg_idxs[reg]],
             mode="lite",
         )
@@ -516,6 +518,7 @@ class Encoder:
             weights=self.encoder_weights[self.reg_idxs[reg], :],
             weight_names=self.dm_names,
             robs=self.robs[:, self.reg_idxs[reg]],
+            robs_ylabel="Spike Count",
             sc_tavg=sc_tavg,
             event_times=get_choice_ts(self.trial_data, mode=mode),
             spike_times=self.spike_times[reg],
@@ -1040,6 +1043,10 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
                 e.baseline_predict(robs=self.robs_tavg)
                 self.robs_predict["baseline"][i] = e.robs_predict["baseline"]
 
+            assert np.all(
+                self.robs_predict["baseline"] == self.robs_predict["baseline"][0]
+            ), "baseline is a different value across the tbins"
+
         def fit_encoder(self):
             if not hasattr(self, "robs"):
                 self.build_dm()
@@ -1127,37 +1134,54 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             ):
                 if model == "encoder":
                     self.encoder_predict()
+                elif model == "baseline":
+                    self.baseline_predict()
                 else:
                     raise ValueError(
-                        f"valid arguments for model are 'encoder,' not {model}"
+                        f"valid arguments for model are 'encoder' and 'baseline,' not {model}"
                     )
 
-            if not hasattr(self, "scores"):
-                self.get_r2()
-
-            def _transform(robs_3d, reg):
-                return (
-                    robs_3d[:, :, self.reg_idxs[reg]]
-                    .T.reshape(self.psths[reg].shape[0], -1)
-                    .T
-                )
-
-            if mode == "time":
-                r = FitRendererTime(
-                    x=self.tbin_centers,
-                    y=self.robs[:, :, self.reg_idxs[reg]],
-                    yhat=self.robs_predict[model][:, :, self.reg_idxs[reg]],
-                    rsquared=self.scores[model][self.reg_idxs[reg]],
-                )
-            elif mode == "full":
+            if model == "baseline":
                 r = FitRenderer(
-                    y=_transform(self.robs, reg),
-                    yhat=_transform(self.robs_predict[model], reg),
-                    rsquared=self.scores[model][self.reg_idxs[reg]],
+                    y=self.robs_tavg * (1 / self.stepsize_s),
+                    yhat=self.robs_predict["baseline"][0]
+                    * (1 / self.stepsize_s),  # grab the first tbin, all tbins are equal
+                    ylabel="Firing Rate (avg, Hz)",
+                    add_r2=False,
                     mode="lite",
                 )
-            else:
-                raise ValueError("mode can only be 'time' or 'full'")
+
+            elif model == "encoder":
+                if not hasattr(self, "scores"):
+                    self.get_r2()
+
+                def _transform(robs_3d, reg):
+                    return (
+                        robs_3d[:, :, self.reg_idxs[reg]]
+                        .T.reshape(self.psths[reg].shape[0], -1)
+                        .T
+                    )
+
+                if mode == "time":
+                    r = FitRendererTime(
+                        x=self.tbin_centers,
+                        y=self.robs[:, :, self.reg_idxs[reg]] * (1 / self.stepsize_s),
+                        yhat=self.robs_predict[model][:, :, self.reg_idxs[reg]]
+                        * (1 / self.stepsize_s),
+                        ylabel="Firing Rate (Hz)",
+                        rsquared=self.scores[model][self.reg_idxs[reg]],
+                    )
+                elif mode == "full":
+                    r = FitRenderer(
+                        y=_transform(self.robs, reg) * (1 / self.stepsize_s),
+                        yhat=_transform(self.robs_predict[model], reg)
+                        * (1 / self.stepsize_s),
+                        ylabel="Firing Rate (Hz)",
+                        rsquared=self.scores[model][self.reg_idxs[reg]],
+                        mode="lite",
+                    )
+                else:
+                    raise ValueError("mode can only be 'time' or 'full'")
 
             return NeuronViewer(
                 num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
