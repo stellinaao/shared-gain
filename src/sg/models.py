@@ -159,7 +159,7 @@ class Encoder:
         self.num_units = self.robs.shape[1]
 
     def fit_baseline(self, robs=None):
-        if not (hasattr(self, "tents") and hasattr(self, "robs")):
+        if not (hasattr(self, "tents") and (hasattr(self, "robs") or robs is not None)):
             self.build_dm()
 
         robs = self.robs if robs is None else robs
@@ -321,7 +321,6 @@ class Encoder:
         # plot_kdes(scores_no_ps, label=r"$r^2$", ax=axes[1])
 
         # sctavg vs beta weight
-        print("oop")
         if self.tv_keys is not None:
             self.plot_sctavg_weights(
                 axes[2:4], cond="response", subtract_baseline=subtract_baseline
@@ -932,12 +931,26 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
         def get_data(self):
             super().get_data()
 
-            self.t_encoders = {
-                f"[{start:.3f},{stop:.3f}]": enc_class(
-                    self.subj_id, self.sess_id, forbid_data_access=True, **kwargs
-                )
-                for (start, stop) in zip(self.tbin_edges, self.tbin_edges[1:])
-            }
+            if enc_class is StrategyEncoder:
+                self.t_encoders = {
+                    f"[{start:.3f},{stop:.3f}]": enc_class(
+                        self.subj_id,
+                        self.sess_id,
+                        forbid_data_access=True,
+                        strategy_filter=self.strategy_filter,
+                        **kwargs,
+                    )
+                    for (start, stop) in zip(self.tbin_edges, self.tbin_edges[1:])
+                }
+            elif enc_class is Encoder:
+                self.t_encoders = {
+                    f"[{start:.3f},{stop:.3f}]": enc_class(
+                        self.subj_id, self.sess_id, forbid_data_access=True, **kwargs
+                    )
+                    for (start, stop) in zip(self.tbin_edges, self.tbin_edges[1:])
+                }
+            else:
+                raise ValueError("what kind of encoder did you pass in??")
 
             assert len(self.t_encoders) == self.num_bins, (
                 "not one-to-one encoder per bin"
@@ -1003,12 +1016,16 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
         def fit_baseline(self):
             if not hasattr(self, "robs"):
                 self.build_dm()
-
             self.baseline_models = {}
             for i, (k, e) in enumerate(self.t_encoders.items()):
                 e.tents = self.tents
+                if enc_class is StrategyEncoder:
+                    e.encoder_ref.forbid_data_access = False
+                    e.encoder_ref.build_dm()
+                    e.encoder_ref.forbid_data_access = True
                 e.fit_baseline(robs=self.robs_tavg)
                 self.baseline_models[k] = e.baseline_model
+            print("done")
 
         def baseline_predict(self):
             if not hasattr(self, "robs_predict"):
@@ -1057,7 +1074,6 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
         def get_r2(self, n_folds=20, p_train=0.8):
             if not hasattr(self, "robs"):
                 self.build_dm()
-
             if (
                 not hasattr(self, "robs_predict")
                 or "baseline" not in self.robs_predict.keys()
@@ -1183,7 +1199,10 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
             )
 
         def verify(self):
-            super().verify(r2_comp=False)
+            if enc_class is StrategyEncoder:
+                super().verify()
+            elif enc_class is Encoder:
+                super().verify(r2_comp=False)
 
         def get_sctavg_weights(self, cond="response", subtract_baseline=True):
             if cond not in ["response", "rewarded"]:
