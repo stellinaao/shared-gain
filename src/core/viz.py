@@ -166,6 +166,7 @@ def plot_contour(
 def plot_2d_row(
     fn,
     data: dict,  # panel_label -> (x, y) tuple
+    color: dict = None,
     xlabel="",
     ylabel="",
     sharey=True,
@@ -187,15 +188,27 @@ def plot_2d_row(
         axes = [axes]
 
     for i, (panel_label, (x, y)) in enumerate(data.items()):
-        fn(
-            x=x,
-            y=y,
-            xlabel=xlabel,
-            ylabel=ylabel if i == 0 else "",
-            title=panel_label,
-            ax=axes[i],
-            **kwargs,
-        )
+        if color is None:
+            fn(
+                x=x,
+                y=y,
+                xlabel=xlabel,
+                ylabel=ylabel if i == 0 else "",
+                title=panel_label,
+                ax=axes[i],
+                **kwargs,
+            )
+        else:
+            fn(
+                x=x,
+                y=y,
+                color=color[panel_label],
+                xlabel=xlabel,
+                ylabel=ylabel if i == 0 else "",
+                title=panel_label,
+                ax=axes[i],
+                **kwargs,
+            )
 
     if title:
         center_title(fig, axes, title)
