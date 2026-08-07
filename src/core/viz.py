@@ -60,6 +60,8 @@ def plot_scatter(
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    ax.set_xlim([mn, mx])
+    ax.set_ylim([mn, mx])
 
     if title == "":
         title = f"r={r:.3f}, gr={gr:.3f}"
@@ -471,7 +473,7 @@ def plot_kde_row(
 
 
 # plot data distro as a raincloud
-def plot_raincloud(data, label="", ax=None, log=False):
+def plot_raincloud(data, label="", xlim=None, ax=None, log=False):
     if ax is None:
         _, ax = plt.subplots(figsize=(2.5, 2.5), tight_layout=True)
 
@@ -485,8 +487,12 @@ def plot_raincloud(data, label="", ax=None, log=False):
     # half violin (KDE)
     from scipy.stats import gaussian_kde
 
+    if xlim is not None:
+        x = np.linspace(xlim[0], xlim[1], 300)
+    else:
+        x = np.linspace(data.min(), data.max(), 300)
+
     kde = gaussian_kde(data)
-    x = np.linspace(data.min(), data.max(), 300)
     y = kde(x)
     y_norm = y / y.max() * 0.3  # scale height
 
@@ -516,6 +522,8 @@ def plot_raincloud(data, label="", ax=None, log=False):
 
     ax.axvline(x=0, color="#666666", linestyle="--", linewidth=0.5)
     ax.set_xlabel(label)
+    if xlim is not None:
+        ax.set_xlim(xlim)
     ax.set_yticks([])
     ax.set_ylim(0, 1.1)
     for spine in ["left", "top", "right"]:

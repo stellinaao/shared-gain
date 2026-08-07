@@ -329,14 +329,14 @@ class Encoder:
                 axes[4:6], cond="rewarded", subtract_baseline=subtract_baseline
             )
 
-    def plot_r2_distro(self, ax=None):
+    def plot_r2_distro(self, ax=None, **kwargs):
         if not hasattr(self, "scores"):
             self.get_r2()
 
         if ax is None:
             _, ax = plt.subplots(tight_layout=True)
 
-        plot_raincloud(self.scores["encoder"], label=r"$r^2$, encoder", ax=ax)
+        plot_raincloud(self.scores["encoder"], label=r"$r^2$, encoder", ax=ax, **kwargs)
 
     def plot_r2_comp(self, ax=None):
         if not hasattr(self, "scores"):
