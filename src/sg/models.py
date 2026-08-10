@@ -407,7 +407,7 @@ class Encoder:
     def plot_sctavg_weights(self, axes, cond="response", subtract_baseline=True):
         if not hasattr(self, "sc_tavg") or cond not in self.sc_tavg.keys():
             self.get_sctavg_weights(cond=cond, subtract_baseline=subtract_baseline)
-        print("ello guvna")
+        # print("ello guvna")
         if axes is None:
             fig, axes = plt.subplots(
                 ncols=2, nrows=1, figsize=(4, 2), tight_layout=True
@@ -895,7 +895,28 @@ class ShuffledEncoder:
         return ax
 
 
-def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
+def make_tre(enc_class: Type[Encoder] = Encoder, tr_type="loe", **kwargs):
+    if tr_type == "dme":
+        return make_tre_dme(enc_class=enc_class, **kwargs)
+
+    elif tr_type == "loe":
+        return make_tre_loe(enc_class=enc_class, **kwargs)
+
+    else:
+        raise ValueError(f"valid vals for tr_type are 'dme' and 'loe,' not {tr_type}")
+
+
+def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
+    class TimeResolvedEncoder(enc_class):
+        def __init__(self):
+            self.tr_type = "dme"
+
+    TimeResolvedEncoder.__name__ = f"TimeResolved{enc_class.__name__}"
+    TimeResolvedEncoder.__qualname__ = TimeResolvedEncoder.__name__
+    return TimeResolvedEncoder
+
+
+def make_tre_loe(enc_class: Type[Encoder] = Encoder, **kwargs):
     class TimeResolvedEncoder(enc_class):
         def __init__(
             self,
@@ -911,6 +932,8 @@ def make_tre(enc_class: Type[Encoder] = Encoder, **kwargs):
 
             self.subj_id = subj_id
             self.sess_id = sess_id
+
+            self.tr_type = "list_of_encs"
 
             self.stepsize_s = stepsize_s
 
