@@ -1008,7 +1008,8 @@ def get_dm(trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents, do_ohe=F
             for k in tv_keys:
                 if "rewarded" in k:
                     tvs[k] = tvs[k].replace(0, -1)
-            tvs = np.array(zscore(tvs))
+            tvs = np.array(tvs)
+            # tvs = np.array(zscore(tvs))
         # tvs = zscore(tvs, axis=0)  # FLAG
     else:
         tvs = None
