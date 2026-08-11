@@ -60,6 +60,7 @@ class Encoder:
         if self.add_svd:
             self.num_svd = kwargs.pop("num_svd", 10)
         self.add_licks = kwargs.pop("add_licks", False)
+        self.do_ohe = kwargs.pop("do_ohe", False)
 
         self.n = kwargs.pop("n", None)
         self.full_trial = kwargs.pop("full_trial", False)
@@ -153,6 +154,7 @@ class Encoder:
             num_svd=self.num_svd if self.add_svd else None,
             add_licks=self.add_licks,
             binwidth_ms=self.binwidth_ms,
+            do_ohe=self.do_ohe,
         )
 
         self.num_trials, self.num_tv = self.tvs.shape
@@ -490,11 +492,18 @@ class Encoder:
         if not hasattr(self, "scores"):
             self.get_r2()
 
+        if self.norm:
+            y = self.robs[:, self.reg_idxs[reg]]
+            yhat = self.robs_predict[model][:, self.reg_idxs[reg]]
+        else:
+            y = (self.robs[:, self.reg_idxs[reg]] * (1000 / self.binwidth_ms),)
+            yhat = self.robs_predict[model][:, self.reg_idxs[reg]]
+            (*(1000 / self.binwidth_ms),)
+
         r = FitRenderer(
-            y=self.robs[:, self.reg_idxs[reg]] * (1000 / self.binwidth_ms),
-            yhat=self.robs_predict[model][:, self.reg_idxs[reg]]
-            * (1000 / self.binwidth_ms),
-            ylabel="Firing Rate (Hz)",
+            y=y,
+            yhat=yhat,
+            ylabel="Spike Count (norm)" if self.norm else "Firing Rate (Hz)",
             rsquared=self.scores[model][self.reg_idxs[reg]],
             mode="lite",
         )
@@ -908,8 +917,78 @@ def make_tre(enc_class: Type[Encoder] = Encoder, tr_type="loe", **kwargs):
 
 def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
     class TimeResolvedEncoder(enc_class):
-        def __init__(self):
-            self.tr_type = "dme"
+        def __init__(
+            self,
+            subj_id,
+            sess_id,
+            stepsize_s=0.1,
+            **kwargs,
+        ):
+            if not (isinstance(enc_class, type) and issubclass(enc_class, Encoder)):
+                raise TypeError(
+                    f"enc_class must be a subclass of Encoder, got {enc_class}"
+                )
+
+            self.subj_id = subj_id
+            self.sess_id = sess_id
+
+            self.tr_type = "design_matrix_expansion"
+
+            self.stepsize_s = stepsize_s
+
+            if self.stepsize_s < 0.001:
+                raise ValueError("min stepsize is 1 ms")
+
+            super().__init__(
+                subj_id,
+                sess_id,
+                binwidth_ms=stepsize_s * 1000,
+                forbid_data_access=True,
+                **kwargs,
+            )
+
+            self.num_bins = int((self.tpre + self.tpost) / self.stepsize_s)
+
+            if not self.num_bins * self.stepsize_s == self.tpre + self.tpost:
+                raise ValueError(
+                    f"stepsize {stepsize_s} s must evenly divide the spanned epoch [-{self.tpre}, {self.tpost}]"
+                )
+
+        def get_data(self):
+            self.forbid_data_access = False
+            super().get_data()
+            self.forbid_data_access = True
+
+        def build_dm(self):
+            pass
+
+        def fit_baseline(self):
+            if not hasattr(self, "robs"):
+                self.build_dm()
+
+            super().fit_baseline(robs=self.robs_tavg)
+
+        def baseline_predict(self):
+            super().baseline_predict(robs=self.robs_tavg)
+
+            self.robs_predict["baseline"] = np.repeat(
+                self.robs_predict["baseline"], self.num_bins
+            )
+
+        def fit_encoder(self):
+            if (
+                not hasattr(self, "robs_predict")
+                or "baseline" not in self.robs_predict.keys()
+            ):
+                self.baseline_predict()
+
+            super().fit_encoder(baseline_robs=self.robs_tavg)
+
+        def encoder_predict(self):
+            super().encoder_predict(baseline_robs=self.robs_tavg)
+
+        def get_r2(self):
+            super().get_r2(baseline_robs=self.robs_tavg)
 
     TimeResolvedEncoder.__name__ = f"TimeResolved{enc_class.__name__}"
     TimeResolvedEncoder.__qualname__ = TimeResolvedEncoder.__name__

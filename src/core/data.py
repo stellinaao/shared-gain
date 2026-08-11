@@ -996,13 +996,19 @@ def get_reg_keys(psths, regions):
     return reg_idxs
 
 
-def get_dm(trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents):
-
+def get_dm(trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents, do_ohe=False):
     # task variables
     # non movement
     if tv_keys is not None:
-        ohe = OHE().fit(trial_data[tv_keys])
-        tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
+        if do_ohe:
+            ohe = OHE().fit(trial_data[tv_keys])
+            tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
+        else:
+            tvs = trial_data[tv_keys]
+            for k in tv_keys:
+                if "rewarded" in k:
+                    tvs[k] = tvs[k].replace(0, -1)
+            tvs = np.array(zscore(tvs))
         # tvs = zscore(tvs, axis=0)  # FLAG
     else:
         tvs = None
@@ -1031,11 +1037,12 @@ def get_dm(trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents):
     # dm
     dm = np.hstack((tents, tvs))
 
-    # names and idxs
-    tv_names = ohe.get_feature_names_out() if tv_keys is not None else []
-
-    for i, tv_name in enumerate(tv_names):
-        tv_names[i] = tv_name_map[tv_name]
+    if do_ohe:
+        tv_names = ohe.get_feature_names_out() if tv_keys is not None else []
+        for i, tv_name in enumerate(tv_names):
+            tv_names[i] = tv_name_map[tv_name]
+    else:
+        tv_names = tv_keys
 
     dm_names = np.concatenate(
         (
@@ -1047,7 +1054,6 @@ def get_dm(trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents):
     )
 
     dm_idxs = {dm_name: i for i, dm_name in enumerate(dm_names)}
-
     return dm, (tents, tvs), (dm_names, dm_idxs)
 
 
@@ -1062,6 +1068,7 @@ def get_encoder_io(
     num_svd=10,
     add_licks=True,
     binwidth_ms=25,
+    do_ohe=False,
 ):
     # neural activity (Y/O)
     robs = get_robs(psths, regions, norm)
@@ -1070,9 +1077,8 @@ def get_encoder_io(
     # trial data (X/I)
 
     dm, (tents, tvs), (dm_names, dm_idxs) = get_dm(
-        trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents
+        trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents, do_ohe=do_ohe
     )
-
     return tents, tvs, dm, robs, dm_names, dm_idxs, reg_idxs
 
 
