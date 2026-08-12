@@ -516,7 +516,7 @@ class Encoder:
             self.fit_encoder()
 
         sc_tavg = get_tavg_sc_cond(
-            self.robs[:, self.reg_idxs[reg]], self.trial_data, cond=mode
+            self.robs[:, self.reg_idxs[reg]], self.trial_data, regr=mode
         )
 
         r = PETHWeightRenderer(
