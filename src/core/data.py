@@ -821,9 +821,9 @@ def get_choice_ts(trial_data, mode="both"):
 
 # ROBS
 def get_tavg_sc_cond(
-    robs, trial_data, cond, robs_to_subtract=None, subtract_robs=False
+    robs, trial_data, regr, robs_to_subtract=None, subtract_robs=False
 ):
-    if cond == "response":
+    if regr == "response":
         left_mask = trial_data.response == 1
         right_mask = trial_data.response == -1
 
@@ -833,7 +833,7 @@ def get_tavg_sc_cond(
             "left": robs[left_mask].mean(axis=0),
             "right": robs[right_mask].mean(axis=0),
         }
-    elif cond == "rewarded":
+    elif regr == "rewarded":
         corr_mask = trial_data.rewarded == 1
         incorr_mask = trial_data.rewarded == 0
 
