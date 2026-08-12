@@ -262,6 +262,7 @@ class Encoder:
 
     def get_r2(self, n_folds=20, p_train=0.8):
         if not hasattr(self, "robs"):
+            print("hullo")
             self.build_dm()
 
         self.yhats = {
@@ -956,19 +957,95 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
             self.forbid_data_access = True
 
         def build_dm(self):
-            pass
+            if not (hasattr(self, "psths")):
+                self.get_data()
 
-        def fit_baseline(self):
-            if not hasattr(self, "robs"):
+            (
+                self.tents,
+                self.tvs,
+                _,
+                _,
+                self.dm_names,
+                self.dm_idxs,
+                self.reg_idxs,
+            ) = get_encoder_io(
+                self.psths,
+                self.trial_data,
+                self.regions,
+                norm=self.norm,
+                num_tents=self.num_tents,
+                tv_keys=self.tv_keys,
+                num_bins=self.num_bins,
+                add_svd=self.add_svd,
+                num_svd=self.num_svd if self.add_svd else None,
+                add_licks=self.add_licks,
+                binwidth_ms=self.binwidth_ms,
+                do_ohe=self.do_ohe,
+            )
+
+            def _edge_inclusive(t):
+                return t + 0.001 if self.edge_inclusive else t
+
+            self.robs, _, self.t_tbin_edges = get_psths_ref(
+                self.spike_times,
+                self.encoder_ref.trial_data
+                if enc_class is StrategyEncoder
+                else self.trial_data,
+                self.session_data,
+                self.regions,
+                tpre=_edge_inclusive(self.tpre),
+                tpost=_edge_inclusive(self.tpost),
+                binwidth_ms=self.stepsize_s * 1000,
+                alignment=self.alignment,
+                trial_start_pre=0,
+                tpre_ref=_edge_inclusive(self.tpre_ref),
+                tpost_ref=_edge_inclusive(self.tpost_ref),
+                alignment_ref=self.alignment_ref,
+                mode="new",
+                thresh=self.thresh,
+            )
+
+            if self.edge_inclusive:
+                assert np.allclose(self.t_tbin_edges, self.tbin_edges), (
+                    "alignment issue"
+                )
+            else:
+                assert np.allclose(self.t_tbin_edges, self.tbin_edges[1:-1]), (
+                    "alignment issue"
+                )
+
+            self.robs = np.array(
+                [unit for reg in self.regions for unit in self.robs[reg]]
+            ).T
+
+            if self.norm:
+                self.robs = zscore(self.robs, axis=(0, 1))
+            self.robs_tavg = self.robs.mean(axis=0)  # don't want to subsample robs_tavg
+            if enc_class is StrategyEncoder:
+                self.robs = self.robs[:, self.idxs, :]
+
+            self.num_trials = len(self.trial_data)
+            self.num_samples, self.num_tv = self.tvs.shape
+            self.num_units = self.robs.shape[-1]
+
+            self.robs = self.robs.transpose(1, 0, 2).reshape(-1, self.num_units)
+
+            assert self.num_trials * self.num_bins == self.num_samples
+
+        def fit_baseline(self, robs=None):
+            if not hasattr(self, "robs_tavg"):
                 self.build_dm()
+                print("ello mate")
 
             super().fit_baseline(robs=self.robs_tavg)
 
         def baseline_predict(self):
+            if not hasattr(self, "robs_tavg"):
+                self.build_dm()
             super().baseline_predict(robs=self.robs_tavg)
 
             self.robs_predict["baseline"] = np.repeat(
-                self.robs_predict["baseline"], self.num_bins
+                self.robs_predict["baseline"], self.num_bins, axis=0
             )
 
         def fit_encoder(self):
@@ -983,8 +1060,33 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
         def encoder_predict(self):
             super().encoder_predict(baseline_robs=self.robs_tavg)
 
-        def get_r2(self):
-            super().get_r2(baseline_robs=self.robs_tavg)
+        def get_r2(self, n_folds=20, p_train=0.8):
+            if (
+                not hasattr(self, "robs_predict")
+                or "baseline" not in self.robs_predict.keys()
+            ):
+                print("clamshell")
+                self.baseline_predict()
+
+            self.yhats = {"encoder": np.zeros((self.num_trials, self.num_units))}
+
+            for i, (train_idxs, test_idxs) in enumerate(
+                KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
+            ):
+                # train, test, save test predictions
+                self.yhats["encoder"][test_idxs], _ = self._get_predictions(
+                    is_encoder=True,
+                    io=(self.tvs, self.robs),
+                    idxs=(train_idxs, test_idxs),
+                    baseline_predict=self.robs_predict["baseline"],
+                )
+
+            self.scores = {
+                k: r2_score(
+                    self.robs, yhat, multioutput="raw_values", force_finite=False
+                )
+                for k, yhat in self.yhats.items()
+            }
 
     TimeResolvedEncoder.__name__ = f"TimeResolved{enc_class.__name__}"
     TimeResolvedEncoder.__qualname__ = TimeResolvedEncoder.__name__

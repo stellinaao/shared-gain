@@ -967,7 +967,6 @@ def get_strategy_filter_idxs(
                 ),
             }
     else:
-        # print("3")
         return {
             "both": np.arange(len(trial_data)),
             "mb": np.where(mb_mask)[0],
@@ -996,7 +995,16 @@ def get_reg_keys(psths, regions):
     return reg_idxs
 
 
-def get_dm(trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents, do_ohe=False):
+def get_dm(
+    trial_data,
+    tv_keys,
+    num_bins=None,
+    add_svd=False,
+    num_svd=None,
+    add_licks=False,
+    num_tents=5,
+    do_ohe=False,
+):
     # task variables
     # non movement
     if tv_keys is not None:
@@ -1009,8 +1017,23 @@ def get_dm(trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents, do_ohe=F
                 if "rewarded" in k:
                     tvs[k] = tvs[k].replace(0, -1)
             tvs = np.array(tvs, dtype="float32")
-            # tvs = np.array(zscore(tvs))
-        # tvs = zscore(tvs, axis=0)  # FLAG
+
+            if num_bins is not None:
+                num_trials = len(trial_data)
+
+                masks = np.zeros((num_bins, num_trials * num_bins))
+                for i in range(num_bins):
+                    motif = np.zeros(num_bins)
+                    motif[i] = 1
+                    masks[i] = np.tile(motif, num_trials)
+
+                tv_tr_interstitial = np.tile(
+                    np.repeat(tvs, num_bins, axis=0), reps=(num_bins, 1, 1)
+                )
+                tv_tr = tv_tr_interstitial * masks[:, :, None]
+                tv_tr = tv_tr.transpose(2, 0, 1).reshape(-1, num_bins * num_trials).T
+                tvs = tv_tr
+
     else:
         tvs = None
 
@@ -1036,7 +1059,10 @@ def get_dm(trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents, do_ohe=F
     tents = tent_basis_generate(xs)
 
     # dm
-    dm = np.hstack((tents, tvs))
+    if num_bins is None:
+        dm = np.hstack((tents, tvs))
+    else:
+        dm = None
 
     if do_ohe:
         tv_names = ohe.get_feature_names_out() if tv_keys is not None else []
@@ -1065,20 +1091,28 @@ def get_encoder_io(
     norm=True,
     num_tents=10,
     tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
+    num_bins=None,
     add_svd=True,
     num_svd=10,
     add_licks=True,
     binwidth_ms=25,
     do_ohe=False,
 ):
+
     # neural activity (Y/O)
     robs = get_robs(psths, regions, norm)
     reg_idxs = get_reg_keys(psths, regions)
 
     # trial data (X/I)
-
     dm, (tents, tvs), (dm_names, dm_idxs) = get_dm(
-        trial_data, tv_keys, add_svd, num_svd, add_licks, num_tents, do_ohe=do_ohe
+        trial_data,
+        tv_keys,
+        num_bins=num_bins,
+        add_svd=add_svd,
+        num_svd=num_svd,
+        add_licks=add_licks,
+        num_tents=num_tents,
+        do_ohe=do_ohe,
     )
     return tents, tvs, dm, robs, dm_names, dm_idxs, reg_idxs
 
