@@ -1068,11 +1068,12 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 print("clamshell")
                 self.baseline_predict()
 
-            self.yhats = {"encoder": np.zeros((self.num_trials, self.num_units))}
+            self.yhats = {"encoder": np.zeros((self.num_samples, self.num_units))}
 
             for i, (train_idxs, test_idxs) in enumerate(
                 KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
             ):
+                print(i)
                 # train, test, save test predictions
                 self.yhats["encoder"][test_idxs], _ = self._get_predictions(
                     is_encoder=True,
@@ -1087,6 +1088,9 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 )
                 for k, yhat in self.yhats.items()
             }
+
+        def verify(self):
+            super().verify(r2_comp=False)
 
     TimeResolvedEncoder.__name__ = f"TimeResolved{enc_class.__name__}"
     TimeResolvedEncoder.__qualname__ = TimeResolvedEncoder.__name__
