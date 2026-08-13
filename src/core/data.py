@@ -824,8 +824,10 @@ def get_tavg_sc_cond(
     robs, trial_data, regr, robs_to_subtract=None, subtract_robs=False
 ):
     if regr == "response":
+        print("ello")
         left_mask = trial_data.response == 1
         right_mask = trial_data.response == -1
+        print("bello")
 
         if subtract_robs:
             robs = robs - robs_to_subtract

@@ -394,6 +394,7 @@ class Encoder:
         else:
             # robs_to_subtract = None
             pass
+        print("maison")
 
         a = get_tavg_sc_cond(
             self.robs,
@@ -403,9 +404,11 @@ class Encoder:
             subtract_robs=subtract_baseline,
         )
         self.sc_tavg[regr] = a
+        print("joli")
 
     def plot_sctavg_weights(self, ax, regr="response", subtract_baseline=True):
         if not hasattr(self, "sc_tavg") or regr not in self.sc_tavg.keys():
+            print("jacki")
             self.get_sctavg_weights(regr=regr, subtract_baseline=subtract_baseline)
         if ax is None:
             fig, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
@@ -1024,10 +1027,12 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
             if enc_class is StrategyEncoder:
                 self.robs = self.robs[:, self.idxs, :]
 
-            self.num_trials = len(self.trial_data)
             self.num_samples, self.num_tv = self.tvs.shape
-            self.num_units = self.robs.shape[-1]
+            num_bins, self.num_trials, self.num_units = self.robs.shape
 
+            assert num_bins == self.num_bins
+
+            print(self.robs.shape)
             self.robs = self.robs.transpose(1, 0, 2).reshape(-1, self.num_units)
 
             assert self.num_trials * self.num_bins == self.num_samples
@@ -1091,6 +1096,119 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
         def verify(self):
             super().verify(r2_comp=False)
+
+        def get_sctavg_weights(
+            self, regr="response", baseline_robs=None, subtract_baseline=True
+        ):
+            if regr not in ["response", "rewarded"]:
+                raise NotImplementedError(f"regr={regr} is not currently supported.")
+            if not hasattr(self, "encoder"):
+                self.fit_encoder()
+
+            if not hasattr(self, "sc_tavg"):
+                self.sc_tavg = {}
+
+            if regr in self.sc_tavg.keys():
+                return
+            if subtract_baseline:
+                # get baseline explained variance
+                if (
+                    not hasattr(self, "robs_predict")
+                    or "baseline" not in self.robs_predict.keys()
+                ):
+                    self.baseline_predict(robs=baseline_robs)
+                robs_baseline = self.robs_predict["baseline"]
+                self.robs_baseline = robs_baseline
+
+                # get tv explained variance (besides pivot)
+                pivot_idx = self.dm_idxs[regr] - self.num_tents
+                self.tv_pivot_ko = deepcopy(self.tvs)
+                self.tv_pivot_ko[:, pivot_idx] = 0
+
+                robs_tv = self.encoder.predict(self.tv_pivot_ko)
+                self.robs_to_subtract = robs_baseline + robs_tv
+
+            else:
+                # robs_to_subtract = None
+                pass
+            print("maison")
+
+            self.sc_tavg[regr] = {k: [] for k in tv_vals[regr]}
+
+            robs_3d = self.robs.reshape(
+                self.num_trials, self.num_bins, self.num_units
+            ).transpose(1, 0, 2)
+            robs_to_subtract_3d = self.robs_to_subtract.reshape(
+                self.num_trials, self.num_bins, self.num_units
+            ).transpose(1, 0, 2)
+
+            for i in range(self.num_bins):
+                print(i)
+                tavg_sc = get_tavg_sc_cond(
+                    robs_3d[i, :, :],
+                    self.trial_data,
+                    regr=regr,
+                    robs_to_subtract=robs_to_subtract_3d[i, :, :],
+                    subtract_robs=subtract_baseline,
+                )
+
+                print("ice")
+                for k in self.sc_tavg[regr].keys():
+                    print(k)
+                    self.sc_tavg[regr][k].extend(tavg_sc[k])
+                    print(len(tavg_sc[k]))
+
+            self.sc_tavg[regr] = {k: np.array(v) for k, v in self.sc_tavg[regr].items()}
+            print("joli")
+
+        def plot_sctavg_weights(self, ax, regr="response", subtract_baseline=True):
+            if not hasattr(self, "sc_tavg") or regr not in self.sc_tavg.keys():
+                print("jacki")
+                self.get_sctavg_weights(regr=regr, subtract_baseline=subtract_baseline)
+            if ax is None:
+                fig, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
+
+            if regr == "response":
+                print()
+                robs_resid_pos = self.sc_tavg[regr]["left"]
+                robs_resid_neg = self.sc_tavg[regr]["right"]
+            elif regr == "rewarded":
+                robs_resid_pos = self.sc_tavg[regr]["corr"]
+                robs_resid_neg = self.sc_tavg[regr]["incorr"]
+
+            robs_bweights = (robs_resid_pos - robs_resid_neg) / 2
+
+            ax.scatter(
+                robs_bweights,
+                self.encoder_weights[:, self.dm_idxs[regr]],
+                s=0.5,
+                alpha=0.5,
+                vmin=1e-5,
+                vmax=1e5,
+                c=self.encoder.alpha_,
+                cmap="viridis",
+                norm="log",
+            )
+
+            mn = min(
+                min(robs_bweights), min(self.encoder_weights[:, self.dm_idxs[regr]])
+            )
+            mx = max(
+                max(robs_bweights), max(self.encoder_weights[:, self.dm_idxs[regr]])
+            )
+            ax.plot(
+                [1.05 * mn, 1.05 * mx],
+                [1.05 * mn, 1.05 * mx],
+                color="#666666",
+                linewidth=0.7,
+                linestyle="--",
+                zorder=0,
+            )
+            ax.axhline(y=0, color="k", linewidth=0.5)
+            ax.axvline(x=0, color="k", linewidth=0.5)
+
+            ax.set_xlabel(f"resid spk count, {regr}")
+            ax.set_ylabel(f"beta weight, {regr}")
 
     TimeResolvedEncoder.__name__ = f"TimeResolved{enc_class.__name__}"
     TimeResolvedEncoder.__qualname__ = TimeResolvedEncoder.__name__
