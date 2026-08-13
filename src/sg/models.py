@@ -1110,7 +1110,15 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
             if regr in self.sc_tavg.keys():
                 return
-            if subtract_baseline:
+
+            self.sc_tavg[regr] = {k: [] for k in tv_vals[regr]}
+
+            robs_3d = self.robs.reshape(
+                self.num_trials, self.num_bins, self.num_units
+            ).transpose(1, 0, 2)
+
+            for i in range(self.num_bins):
+                print(i)
                 # get baseline explained variance
                 if (
                     not hasattr(self, "robs_predict")
@@ -1121,29 +1129,17 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 self.robs_baseline = robs_baseline
 
                 # get tv explained variance (besides pivot)
-                pivot_idx = self.dm_idxs[regr] - self.num_tents
+                pivot_idx = self.dm_idxs[f"{regr}_{i}"] - self.num_tents
                 self.tv_pivot_ko = deepcopy(self.tvs)
                 self.tv_pivot_ko[:, pivot_idx] = 0
 
                 robs_tv = self.encoder.predict(self.tv_pivot_ko)
                 self.robs_to_subtract = robs_baseline + robs_tv
 
-            else:
-                # robs_to_subtract = None
-                pass
-            print("maison")
+                robs_to_subtract_3d = self.robs_to_subtract.reshape(
+                    self.num_trials, self.num_bins, self.num_units
+                ).transpose(1, 0, 2)
 
-            self.sc_tavg[regr] = {k: [] for k in tv_vals[regr]}
-
-            robs_3d = self.robs.reshape(
-                self.num_trials, self.num_bins, self.num_units
-            ).transpose(1, 0, 2)
-            robs_to_subtract_3d = self.robs_to_subtract.reshape(
-                self.num_trials, self.num_bins, self.num_units
-            ).transpose(1, 0, 2)
-
-            for i in range(self.num_bins):
-                print(i)
                 tavg_sc = get_tavg_sc_cond(
                     robs_3d[i, :, :],
                     self.trial_data,
@@ -1152,50 +1148,46 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                     subtract_robs=subtract_baseline,
                 )
 
-                print("ice")
                 for k in self.sc_tavg[regr].keys():
-                    print(k)
                     self.sc_tavg[regr][k].extend(tavg_sc[k])
-                    print(len(tavg_sc[k]))
 
             self.sc_tavg[regr] = {k: np.array(v) for k, v in self.sc_tavg[regr].items()}
-            print("joli")
 
-        def plot_sctavg_weights(self, ax, regr="response", subtract_baseline=True):
+        def plot_sctavg_weights(self, ax=None, regr="response", subtract_baseline=True):
             if not hasattr(self, "sc_tavg") or regr not in self.sc_tavg.keys():
-                print("jacki")
                 self.get_sctavg_weights(regr=regr, subtract_baseline=subtract_baseline)
             if ax is None:
                 fig, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
 
             if regr == "response":
-                print()
                 robs_resid_pos = self.sc_tavg[regr]["left"]
                 robs_resid_neg = self.sc_tavg[regr]["right"]
             elif regr == "rewarded":
                 robs_resid_pos = self.sc_tavg[regr]["corr"]
                 robs_resid_neg = self.sc_tavg[regr]["incorr"]
 
-            robs_bweights = (robs_resid_pos - robs_resid_neg) / 2
+            self.robs_bweights = (robs_resid_pos - robs_resid_neg) / 2
+            idxs = [
+                self.dm_idxs[k] for k in [f"{regr}_{i}" for i in range(self.num_bins)]
+            ]
+            self.bweights = np.concatenate(self.encoder_weights[:, idxs].T)
 
             ax.scatter(
-                robs_bweights,
-                self.encoder_weights[:, self.dm_idxs[regr]],
+                self.robs_bweights,
+                self.bweights,
                 s=0.5,
                 alpha=0.5,
                 vmin=1e-5,
                 vmax=1e5,
-                c=self.encoder.alpha_,
+                c=np.repeat(self.encoder.alpha_, self.num_bins),
                 cmap="viridis",
                 norm="log",
             )
 
-            mn = min(
-                min(robs_bweights), min(self.encoder_weights[:, self.dm_idxs[regr]])
-            )
-            mx = max(
-                max(robs_bweights), max(self.encoder_weights[:, self.dm_idxs[regr]])
-            )
+            # print(robs_bweights.shape, bweights.shape)
+            mn = min(min(self.robs_bweights), min(self.bweights))
+            mx = max(max(self.robs_bweights), max(self.bweights))
+            print(f"{mn}, {mx}")
             ax.plot(
                 [1.05 * mn, 1.05 * mx],
                 [1.05 * mn, 1.05 * mx],

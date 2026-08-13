@@ -824,10 +824,8 @@ def get_tavg_sc_cond(
     robs, trial_data, regr, robs_to_subtract=None, subtract_robs=False
 ):
     if regr == "response":
-        print("ello")
         left_mask = trial_data.response == 1
         right_mask = trial_data.response == -1
-        print("bello")
 
         if subtract_robs:
             robs = robs - robs_to_subtract
@@ -1071,7 +1069,10 @@ def get_dm(
         for i, tv_name in enumerate(tv_names):
             tv_names[i] = tv_name_map[tv_name]
     else:
-        tv_names = tv_keys
+        if num_bins is None:
+            tv_names = tv_keys
+        else:
+            tv_names = [f"{tv}_{i}" for tv in tv_keys for i in range(num_bins)]
 
     dm_names = np.concatenate(
         (
