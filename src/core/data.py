@@ -106,7 +106,7 @@ def load_sess(
     subj_idx:   the index of the subject, e.g., 0 for the first subject in your data folder
     sess_idx:   the index of the session, e.g., -1 for the last session
 
-    thresh:     the minimum firing rate to keep, defaults to 1 Hz
+    thresh:     the minimum firing rate to keep, defaults to 1 sp/s
     mode:       'old' to load data from the old cohort (MM012 & MM013), 'new' to load data from the new cohort (MR82, MR83, MR85)
     """
 

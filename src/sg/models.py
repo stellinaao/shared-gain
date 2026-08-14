@@ -501,7 +501,7 @@ class Encoder:
         r = FitRenderer(
             y=y,
             yhat=yhat,
-            ylabel="Spike Count (norm)" if self.norm else "Firing Rate (Hz)",
+            ylabel="Spike Count (norm)" if self.norm else "Firing Rate (sp/s)",
             rsquared=self.scores[model][self.reg_idxs[reg]],
             mode="lite",
         )
@@ -1202,6 +1202,67 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
             ax.set_xlabel(f"resid spk count, {regr}")
             ax.set_ylabel(f"beta weight, {regr}")
 
+        def view_fits(self, reg="DLS", model="encoder", mode="time"):
+            if not hasattr(self, "regions"):
+                self.get_data()
+            if reg not in self.regions:
+                raise ValueError(f"{reg} must be in {self.regions}")
+
+            if (
+                not hasattr(self, "robs_predict")
+                or model not in self.robs_predict.keys()
+            ):
+                if model == "encoder":
+                    self.encoder_predict()
+                elif model == "baseline":
+                    self.baseline_predict()
+                else:
+                    raise ValueError(
+                        f"valid arguments for model are 'encoder' and 'baseline,' not {model}"
+                    )
+
+            if model == "baseline":
+                r = FitRenderer(
+                    y=self.robs_tavg[:, self.reg_idxs[reg]] * (1 / self.stepsize_s),
+                    yhat=self.robs_predict["baseline"][
+                        :: self.num_bins, self.reg_idxs[reg]
+                    ]
+                    * (1 / self.stepsize_s),  # grab the first tbin, all tbins are equal
+                    ylabel="Firing Rate (avg, sp/s)",
+                    add_r2=False,
+                    mode="lite",
+                )
+
+            elif model == "encoder":
+                if not hasattr(self, "scores"):
+                    self.get_r2()
+
+                def _transform(robs):
+                    return robs.reshape(
+                        self.num_trials, self.num_bins, self.num_units
+                    ).transpose(1, 0, 2)
+
+                if mode == "time":
+                    r = FitRendererTime(
+                        x=self.tbin_centers,
+                        y=_transform(self.robs)[:, :, self.reg_idxs[reg]]
+                        * (1 / self.stepsize_s),
+                        yhat=_transform(self.robs_predict[model])[
+                            :, :, self.reg_idxs[reg]
+                        ]
+                        * (1 / self.stepsize_s),
+                        ylabel="Firing Rate (sp/s)",
+                        rsquared=self.scores[model][self.reg_idxs[reg]],
+                    )
+                elif mode == "full":
+                    return NotImplementedError()
+                else:
+                    raise ValueError("mode can only be 'time' or 'full'")
+
+            return NeuronViewer(
+                num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
+            )
+
         def view_weights(
             self, reg="DLS", regr="response", peth_mode="response", mode="trace"
         ):
@@ -1491,7 +1552,7 @@ def make_tre_loe(enc_class: Type[Encoder] = Encoder, **kwargs):
                     y=self.robs_tavg * (1 / self.stepsize_s),
                     yhat=self.robs_predict["baseline"][0]
                     * (1 / self.stepsize_s),  # grab the first tbin, all tbins are equal
-                    ylabel="Firing Rate (avg, Hz)",
+                    ylabel="Firing Rate (avg, sp/s)",
                     add_r2=False,
                     mode="lite",
                 )
@@ -1513,7 +1574,7 @@ def make_tre_loe(enc_class: Type[Encoder] = Encoder, **kwargs):
                         y=self.robs[:, :, self.reg_idxs[reg]] * (1 / self.stepsize_s),
                         yhat=self.robs_predict[model][:, :, self.reg_idxs[reg]]
                         * (1 / self.stepsize_s),
-                        ylabel="Firing Rate (Hz)",
+                        ylabel="Firing Rate (sp/s)",
                         rsquared=self.scores[model][self.reg_idxs[reg]],
                     )
                 elif mode == "full":
@@ -1521,7 +1582,7 @@ def make_tre_loe(enc_class: Type[Encoder] = Encoder, **kwargs):
                         y=_transform(self.robs, reg) * (1 / self.stepsize_s),
                         yhat=_transform(self.robs_predict[model], reg)
                         * (1 / self.stepsize_s),
-                        ylabel="Firing Rate (Hz)",
+                        ylabel="Firing Rate (sp/s)",
                         rsquared=self.scores[model][self.reg_idxs[reg]],
                         mode="lite",
                     )
