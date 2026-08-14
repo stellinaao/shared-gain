@@ -836,6 +836,7 @@ def get_tavg_sc_cond(
     elif regr == "rewarded":
         corr_mask = trial_data.rewarded == 1
         incorr_mask = trial_data.rewarded == 0
+        print(corr_mask.mean(), incorr_mask.mean())
 
         if subtract_robs:
             robs = robs - robs_to_subtract
@@ -1016,6 +1017,7 @@ def get_dm(
             for k in tv_keys:
                 if "rewarded" in k:
                     tvs[k] = tvs[k].replace(0, -1)
+            print(tvs.iloc[:5])
             tvs = np.array(tvs, dtype="float32")
 
             if num_bins is not None:

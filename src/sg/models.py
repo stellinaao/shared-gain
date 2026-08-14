@@ -408,13 +408,11 @@ class Encoder:
 
     def plot_sctavg_weights(self, ax, regr="response", subtract_baseline=True):
         if not hasattr(self, "sc_tavg") or regr not in self.sc_tavg.keys():
-            print("jacki")
             self.get_sctavg_weights(regr=regr, subtract_baseline=subtract_baseline)
         if ax is None:
             fig, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
 
         if regr == "response":
-            print()
             robs_resid_pos = self.sc_tavg[regr]["left"]
             robs_resid_neg = self.sc_tavg[regr]["right"]
         elif regr == "rewarded":
@@ -1078,7 +1076,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
             for i, (train_idxs, test_idxs) in enumerate(
                 KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
             ):
-                print(i)
                 # train, test, save test predictions
                 self.yhats["encoder"][test_idxs], _ = self._get_predictions(
                     is_encoder=True,
@@ -1117,8 +1114,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 self.num_trials, self.num_bins, self.num_units
             ).transpose(1, 0, 2)
 
-            for i in range(self.num_bins):
-                print(i)
+            for i in range(1):
                 # get baseline explained variance
                 if (
                     not hasattr(self, "robs_predict")
@@ -1130,6 +1126,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
                 # get tv explained variance (besides pivot)
                 pivot_idx = self.dm_idxs[f"{regr}_{i}"] - self.num_tents
+                print(f"{regr}_{i}", pivot_idx)
                 self.tv_pivot_ko = deepcopy(self.tvs)
                 self.tv_pivot_ko[:, pivot_idx] = 0
 
@@ -1170,7 +1167,10 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
             idxs = [
                 self.dm_idxs[k] for k in [f"{regr}_{i}" for i in range(self.num_bins)]
             ]
-            self.bweights = np.concatenate(self.encoder_weights[:, idxs].T)
+            print(idxs)
+            self.bweights = self.encoder_weights[
+                :, idxs[0]
+            ]  # np.concatenate(self.encoder_weights[:, idxs].T)
 
             ax.scatter(
                 self.robs_bweights,
@@ -1179,7 +1179,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 alpha=0.5,
                 vmin=1e-5,
                 vmax=1e5,
-                c=np.repeat(self.encoder.alpha_, self.num_bins),
+                c=self.encoder.alpha_,  # np.repeat(self.encoder.alpha_, self.num_bins),
                 cmap="viridis",
                 norm="log",
             )
@@ -1201,6 +1201,35 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
             ax.set_xlabel(f"resid spk count, {regr}")
             ax.set_ylabel(f"beta weight, {regr}")
+
+        def view_weights(
+            self, reg="DLS", regr="response", peth_mode="response", mode="trace"
+        ):
+            if not hasattr(self, "encoder_weights"):
+                self.fit_encoder()
+
+            if mode == "trace":
+                r = PETHWeightRendererTime(
+                    weights=self.encoder_weights[self.reg_idxs[reg], :],
+                    tv=regr,
+                    weight_idxs=self.dm_idxs,
+                    mode="trace",
+                    num_bins=self.num_bins,
+                    tre_mode="dme",
+                    peths=get_psths_cond(
+                        self.psths[reg], self.trial_data, mode=peth_mode
+                    ),
+                    binwidth_s=0.1,
+                    tbin_centers=self.tbin_centers,
+                )
+            elif mode == "matrix":
+                return NotImplementedError()
+            else:
+                raise ValueError("valid arguments are 'trace' and 'matrix'")
+
+            return NeuronViewer(
+                num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
+            )
 
     TimeResolvedEncoder.__name__ = f"TimeResolved{enc_class.__name__}"
     TimeResolvedEncoder.__qualname__ = TimeResolvedEncoder.__name__
