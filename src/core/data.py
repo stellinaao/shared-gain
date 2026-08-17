@@ -829,22 +829,34 @@ def get_tavg_sc_cond(
 
         if subtract_robs:
             robs = robs - robs_to_subtract
-        sc_tavg = {
-            "left": robs[left_mask].mean(axis=0),
-            "right": robs[right_mask].mean(axis=0),
-        }
+
+        if np.ndim(robs) == 2:
+            sc_tavg = {
+                "left": robs[left_mask].mean(axis=0),
+                "right": robs[right_mask].mean(axis=0),
+            }
+        elif np.ndim(robs) == 3:
+            sc_tavg = {
+                "left": robs[:, left_mask, :].mean(axis=(0, 1)),
+                "right": robs[:, right_mask, :].mean(axis=(0, 1)),
+            }
     elif regr == "rewarded":
         corr_mask = trial_data.rewarded == 1
         incorr_mask = trial_data.rewarded == 0
-        print(corr_mask.mean(), incorr_mask.mean())
 
         if subtract_robs:
             robs = robs - robs_to_subtract
 
-        sc_tavg = {
-            "corr": robs[corr_mask].mean(axis=0),
-            "incorr": robs[incorr_mask].mean(axis=0),
-        }
+        if np.ndim(robs) == 2:
+            sc_tavg = {
+                "corr": robs[corr_mask].mean(axis=0),
+                "incorr": robs[incorr_mask].mean(axis=0),
+            }
+        elif np.ndim(robs) == 3:
+            sc_tavg = {
+                "corr": robs[:, corr_mask, :].mean(axis=(0, 1)),
+                "incorr": robs[:, incorr_mask, :].mean(axis=(0, 1)),
+            }
     return sc_tavg
 
 
@@ -863,7 +875,6 @@ def get_strategy_filter_idxs(
 
     if balance_strategy:
         if cond_balance:
-            # print("hello")
             mb_cond_masks = {
                 "left_corr": (mb_mask)
                 & (trial_data["response"] == 1)
@@ -1017,7 +1028,6 @@ def get_dm(
             for k in tv_keys:
                 if "rewarded" in k:
                     tvs[k] = tvs[k].replace(0, -1)
-            print(tvs.iloc[:5])
             tvs = np.array(tvs, dtype="float32")
 
             if num_bins is not None:

@@ -394,7 +394,6 @@ class Encoder:
         else:
             # robs_to_subtract = None
             pass
-        print("maison")
 
         a = get_tavg_sc_cond(
             self.robs,
@@ -404,7 +403,6 @@ class Encoder:
             subtract_robs=subtract_baseline,
         )
         self.sc_tavg[regr] = a
-        print("joli")
 
     def plot_sctavg_weights(self, ax, regr="response", subtract_baseline=True):
         if not hasattr(self, "sc_tavg") or regr not in self.sc_tavg.keys():
@@ -1030,7 +1028,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
             assert num_bins == self.num_bins
 
-            print(self.robs.shape)
             self.robs = self.robs.transpose(1, 0, 2).reshape(-1, self.num_units)
 
             assert self.num_trials * self.num_bins == self.num_samples
@@ -1092,7 +1089,10 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
             }
 
         def verify(self):
-            super().verify(r2_comp=False)
+            if enc_class is StrategyEncoder:
+                super().verify()
+            elif enc_class is Encoder:
+                super().verify(r2_comp=False)
 
         def get_sctavg_weights(
             self, regr="response", baseline_robs=None, subtract_baseline=True
@@ -1114,7 +1114,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 self.num_trials, self.num_bins, self.num_units
             ).transpose(1, 0, 2)
 
-            for i in range(1):
+            for i in range(self.num_bins):
                 # get baseline explained variance
                 if (
                     not hasattr(self, "robs_predict")
@@ -1126,7 +1126,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
                 # get tv explained variance (besides pivot)
                 pivot_idx = self.dm_idxs[f"{regr}_{i}"] - self.num_tents
-                print(f"{regr}_{i}", pivot_idx)
                 self.tv_pivot_ko = deepcopy(self.tvs)
                 self.tv_pivot_ko[:, pivot_idx] = 0
 
@@ -1157,20 +1156,23 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 fig, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
 
             if regr == "response":
+                p_pos = (self.trial_data.response == 1).mean()
+                p_neg = (self.trial_data.response == -1).mean()
+
                 robs_resid_pos = self.sc_tavg[regr]["left"]
                 robs_resid_neg = self.sc_tavg[regr]["right"]
             elif regr == "rewarded":
+                p_pos = (self.trial_data.rewarded == 1).mean()
+                p_neg = (self.trial_data.rewarded == -1).mean()
+
                 robs_resid_pos = self.sc_tavg[regr]["corr"]
                 robs_resid_neg = self.sc_tavg[regr]["incorr"]
 
-            self.robs_bweights = (robs_resid_pos - robs_resid_neg) / 2
+            self.robs_bweights = (p_pos * robs_resid_pos - p_neg * robs_resid_neg) / 2
             idxs = [
                 self.dm_idxs[k] for k in [f"{regr}_{i}" for i in range(self.num_bins)]
             ]
-            print(idxs)
-            self.bweights = self.encoder_weights[
-                :, idxs[0]
-            ]  # np.concatenate(self.encoder_weights[:, idxs].T)
+            self.bweights = np.concatenate(self.encoder_weights[:, idxs].T)
 
             ax.scatter(
                 self.robs_bweights,
@@ -1179,15 +1181,13 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 alpha=0.5,
                 vmin=1e-5,
                 vmax=1e5,
-                c=self.encoder.alpha_,  # np.repeat(self.encoder.alpha_, self.num_bins),
+                c=np.repeat(self.encoder.alpha_, self.num_bins),
                 cmap="viridis",
                 norm="log",
             )
 
-            # print(robs_bweights.shape, bweights.shape)
             mn = min(min(self.robs_bweights), min(self.bweights))
             mx = max(max(self.robs_bweights), max(self.bweights))
-            print(f"{mn}, {mx}")
             ax.plot(
                 [1.05 * mn, 1.05 * mx],
                 [1.05 * mn, 1.05 * mx],
@@ -1251,7 +1251,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                             :, :, self.reg_idxs[reg]
                         ]
                         * (1 / self.stepsize_s),
-                        ylabel="Firing Rate (sp/s)",
+                        ylabel="fr (sp/s)",
                         rsquared=self.scores[model][self.reg_idxs[reg]],
                     )
                 elif mode == "full":
