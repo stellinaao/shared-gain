@@ -44,6 +44,8 @@ class Encoder:
         self.subj_id = subj_id
         self.sess_id = sess_id
 
+        self.num_bins = None
+
         self.random_state = kwargs.pop("random_state", 1024)
 
         self.tv_keys = kwargs.pop(
@@ -150,6 +152,7 @@ class Encoder:
             norm=self.norm,
             num_tents=self.num_tents,
             tv_keys=self.tv_keys,
+            num_bins=self.num_bins,
             add_svd=self.add_svd,
             num_svd=self.num_svd if self.add_svd else None,
             add_licks=self.add_licks,
@@ -158,7 +161,7 @@ class Encoder:
         )
 
         self.num_trials, self.num_tv = self.tvs.shape
-        self.num_units = self.robs.shape[1]
+        self.num_units = self.robs.shape[-1]
 
     def fit_baseline(self, robs=None):
         if not (hasattr(self, "tents") and (hasattr(self, "robs") or robs is not None)):
@@ -303,7 +306,7 @@ class Encoder:
             return self.encoder_weights[:, idxs]
 
     def verify(self, r2_comp=True, subtract_baseline=True):
-        ncols = 4 if self.tv_keys is not None else 2
+        ncols = 3 if self.tv_keys is not None else 2
         _, axes = plt.subplots(
             ncols=ncols, nrows=1, figsize=(ncols * 1.5, 1.5), tight_layout=True
         )
@@ -326,10 +329,10 @@ class Encoder:
         # sctavg vs beta weight
         if self.tv_keys is not None:
             self.plot_sctavg_weights(
-                axes[2], regr="response", subtract_baseline=subtract_baseline
+                axes[1], regr="response", subtract_baseline=subtract_baseline
             )
             self.plot_sctavg_weights(
-                axes[3], regr="rewarded", subtract_baseline=subtract_baseline
+                axes[2], regr="rewarded", subtract_baseline=subtract_baseline
             )
 
     def plot_r2_distro(self, ax=None, **kwargs):
@@ -624,7 +627,9 @@ class StrategyEncoder(Encoder):
             self.robs = self.encoder_ref.robs[self.idxs]
 
     def fit_baseline(self, robs=None):
+        print("hola")
         self.encoder_ref.fit_baseline(robs=robs)
+        print("adios")
         self.baseline_model = self.encoder_ref.baseline_model
 
     def get_r2(self, n_folds=20, p_train=0.8, baseline_robs=None):
@@ -982,6 +987,12 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 do_ohe=self.do_ohe,
             )
 
+            if enc_class is StrategyEncoder:
+                self.encoder_ref.forbid_data_access = False
+                self.encoder_ref.build_dm()
+                self.encoder_ref.forbid_data_access = True
+                self.tents = self.encoder_ref.tents[self.idxs]
+
             def _edge_inclusive(t):
                 return t + 0.001 if self.edge_inclusive else t
 
@@ -1004,6 +1015,25 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 thresh=self.thresh,
             )
 
+            self.robs = np.array(
+                [unit for reg in self.regions for unit in self.robs[reg]]
+            ).T
+
+            if self.norm:
+                self.robs = zscore(self.robs, axis=(0, 1))
+
+            self.robs_tavg = self.robs.mean(axis=0)  # don't want to subsample robs_tavg
+
+            if enc_class is StrategyEncoder:
+                self.robs = self.robs[:, self.idxs, :]
+
+            self.num_samples, self.num_tv = self.tvs.shape
+            num_bins, self.num_trials, self.num_units = self.robs.shape
+
+            self.robs = self.robs.transpose(1, 0, 2).reshape(-1, self.num_units)
+
+            assert num_bins == self.num_bins
+
             if self.edge_inclusive:
                 assert np.allclose(self.t_tbin_edges, self.tbin_edges), (
                     "alignment issue"
@@ -1012,23 +1042,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 assert np.allclose(self.t_tbin_edges, self.tbin_edges[1:-1]), (
                     "alignment issue"
                 )
-
-            self.robs = np.array(
-                [unit for reg in self.regions for unit in self.robs[reg]]
-            ).T
-
-            if self.norm:
-                self.robs = zscore(self.robs, axis=(0, 1))
-            self.robs_tavg = self.robs.mean(axis=0)  # don't want to subsample robs_tavg
-            if enc_class is StrategyEncoder:
-                self.robs = self.robs[:, self.idxs, :]
-
-            self.num_samples, self.num_tv = self.tvs.shape
-            num_bins, self.num_trials, self.num_units = self.robs.shape
-
-            assert num_bins == self.num_bins
-
-            self.robs = self.robs.transpose(1, 0, 2).reshape(-1, self.num_units)
 
             assert self.num_trials * self.num_bins == self.num_samples
 
@@ -1151,7 +1164,11 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
         def plot_sctavg_weights(self, ax=None, regr="response", subtract_baseline=True):
             if not hasattr(self, "sc_tavg") or regr not in self.sc_tavg.keys():
-                self.get_sctavg_weights(regr=regr, subtract_baseline=subtract_baseline)
+                self.get_sctavg_weights(
+                    regr=regr,
+                    baseline_robs=self.robs_tavg,
+                    subtract_baseline=subtract_baseline,
+                )
             if ax is None:
                 fig, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
 
@@ -1161,14 +1178,15 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
                 robs_resid_pos = self.sc_tavg[regr]["left"]
                 robs_resid_neg = self.sc_tavg[regr]["right"]
+                print(np.shape(robs_resid_pos))
             elif regr == "rewarded":
                 p_pos = (self.trial_data.rewarded == 1).mean()
-                p_neg = (self.trial_data.rewarded == -1).mean()
+                p_neg = (self.trial_data.rewarded == 0).mean()
 
                 robs_resid_pos = self.sc_tavg[regr]["corr"]
                 robs_resid_neg = self.sc_tavg[regr]["incorr"]
 
-            self.robs_bweights = (p_pos * robs_resid_pos - p_neg * robs_resid_neg) / 2
+            self.robs_bweights = p_pos * robs_resid_pos - p_neg * robs_resid_neg  # / 2
             idxs = [
                 self.dm_idxs[k] for k in [f"{regr}_{i}" for i in range(self.num_bins)]
             ]
@@ -1181,7 +1199,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 alpha=0.5,
                 vmin=1e-5,
                 vmax=1e5,
-                c=np.repeat(self.encoder.alpha_, self.num_bins),
+                c=np.tile(self.encoder.alpha_, self.num_bins),
                 cmap="viridis",
                 norm="log",
             )
