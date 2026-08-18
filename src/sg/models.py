@@ -414,13 +414,19 @@ class Encoder:
             fig, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
 
         if regr == "response":
+            p_pos = (self.trial_data.response == 1).mean()
+            p_neg = (self.trial_data.response == -1).mean()
+
             robs_resid_pos = self.sc_tavg[regr]["left"]
             robs_resid_neg = self.sc_tavg[regr]["right"]
         elif regr == "rewarded":
+            p_pos = (self.trial_data.rewarded == 1).mean()
+            p_neg = (self.trial_data.rewarded == 0).mean()
+
             robs_resid_pos = self.sc_tavg[regr]["corr"]
             robs_resid_neg = self.sc_tavg[regr]["incorr"]
 
-        robs_bweights = (robs_resid_pos - robs_resid_neg) / 2
+        robs_bweights = p_pos * robs_resid_pos - p_neg * robs_resid_neg  # / 2
 
         ax.scatter(
             robs_bweights,
