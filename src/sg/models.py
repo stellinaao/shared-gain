@@ -633,9 +633,7 @@ class StrategyEncoder(Encoder):
             self.robs = self.encoder_ref.robs[self.idxs]
 
     def fit_baseline(self, robs=None):
-        print("hola")
         self.encoder_ref.fit_baseline(robs=robs)
-        print("adios")
         self.baseline_model = self.encoder_ref.baseline_model
 
     def get_r2(self, n_folds=20, p_train=0.8, baseline_robs=None):
@@ -1054,7 +1052,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
         def fit_baseline(self, robs=None):
             if not hasattr(self, "robs_tavg"):
                 self.build_dm()
-                print("ello mate")
 
             super().fit_baseline(robs=self.robs_tavg)
 
@@ -1084,7 +1081,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 not hasattr(self, "robs_predict")
                 or "baseline" not in self.robs_predict.keys()
             ):
-                print("clamshell")
                 self.baseline_predict()
 
             self.yhats = {"encoder": np.zeros((self.num_samples, self.num_units))}
@@ -1184,7 +1180,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
                 robs_resid_pos = self.sc_tavg[regr]["left"]
                 robs_resid_neg = self.sc_tavg[regr]["right"]
-                print(np.shape(robs_resid_pos))
             elif regr == "rewarded":
                 p_pos = (self.trial_data.rewarded == 1).mean()
                 p_neg = (self.trial_data.rewarded == 0).mean()
