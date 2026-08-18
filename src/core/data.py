@@ -75,6 +75,14 @@ tv_name_map = {
     "strategy_1": "strategy_mb",
 }
 
+tv_pos_neg = {
+    "response": {"pos": "left", "neg": "right"},
+    "rewarded": {"pos": "corr", "neg": "incorr"},
+    "block_side": {"pos": "left", "neg": "right"},
+    "response_prev": {"pos": "left", "neg": "right"},
+    "rewarded_prev": {"pos": "corr", "neg": "incorr"},
+}
+
 
 # LOAD DATA
 def load_sess(
