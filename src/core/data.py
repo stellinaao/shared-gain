@@ -871,6 +871,7 @@ def get_tavg_sc_cond(
 def get_strategy_filter_idxs(
     trial_data,
     strategy="both",
+    replace=False,
     balance_strategy=True,  # conditional balancing
     cond_balance=False,
     num_trial_thresh=20,
@@ -973,6 +974,7 @@ def get_strategy_filter_idxs(
 
         # no cond balancing, just trial count
         else:
+            print("hi")
             mb_mask = trial_data["strategy"] == 1
             mf_mask = trial_data["strategy"] == -1
 
@@ -980,10 +982,10 @@ def get_strategy_filter_idxs(
 
             return {
                 "mb": np.sort(
-                    np.random.choice(np.where(mb_mask)[0], num_trials, replace=False)
+                    np.random.choice(np.where(mb_mask)[0], num_trials, replace=replace)
                 ),
                 "mf": np.sort(
-                    np.random.choice(np.where(mf_mask)[0], num_trials, replace=False)
+                    np.random.choice(np.where(mf_mask)[0], num_trials, replace=replace)
                 ),
             }
     else:

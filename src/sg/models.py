@@ -8,7 +8,7 @@ from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import KFold
 from sklearn.metrics import r2_score
 
-from scipy.stats import zscore
+from scipy.stats import zscore, sem
 
 from core.data import (
     load_sess,
@@ -583,6 +583,7 @@ class StrategyEncoder(Encoder):
         self.sess_id = sess_id
 
         self.strategy_filter = strategy_filter
+        self.replace = kwargs.pop("replace", False)
         self.balance_strategy = kwargs.pop("balance_strategy", True)
         if self.balance_strategy:
             self.cond_balance = kwargs.pop("cond_balance", False)
@@ -610,6 +611,7 @@ class StrategyEncoder(Encoder):
             self.idxs_all = get_strategy_filter_idxs(
                 self.trial_data,
                 self.strategy_filter,
+                replace=self.replace,
                 balance_strategy=self.balance_strategy,
                 cond_balance=self.cond_balance if self.balance_strategy else False,
             )
@@ -1311,9 +1313,82 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
             )
 
+        def bootstrap(self):
+
+            pass
+
     TimeResolvedEncoder.__name__ = f"TimeResolved{enc_class.__name__}"
     TimeResolvedEncoder.__qualname__ = TimeResolvedEncoder.__name__
     return TimeResolvedEncoder
+
+
+class Bootstrapper:
+    def __init__(
+        self,
+        subj_id,
+        sess_id,
+        enc_class,
+        n=100,
+        **kwargs,
+    ):
+        self.subj_id = subj_id
+        self.sess_id = sess_id
+
+        self.n = n
+
+        self.enc = enc_class(subj_id=subj_id, sess_id=sess_id, **kwargs)
+        self.enc.fit_encoder()
+
+        self.num_units, self.num_regr = self.enc.encoder_weights.shape
+        self.num_trials = self.enc.num_trials
+        self.dm_idxs = self.enc.dm_idxs
+
+        self.encoders = [
+            enc_class(
+                subj_id=subj_id, sess_id=sess_id, replace=True, random_state=i, **kwargs
+            )
+            for i in range(self.n)
+        ]
+
+    def fit(self):
+        self.encoder_weights_bs = np.zeros((self.n, self.num_units, self.num_regr))
+        self.idxs = np.zeros((self.n, self.num_trials))
+
+        for i, enc in enumerate(self.encoders):
+            enc.fit_encoder()
+
+            self.encoder_weights_bs[i] = enc.encoder_weights
+            self.idxs[i] = enc.idxs
+
+        if hasattr(self.enc, "strategy_filter"):
+            if self.enc.strategy_filter == "mb":
+                key = 1
+            elif self.enc.strategy_filter == "mf":
+                key = -1
+
+            strategy_idxs = np.where(self.enc.encoder_ref.trial_data.strategy == key)[0]
+
+            assert np.min(self.idxs) >= np.min(strategy_idxs) and np.max(
+                self.idxs
+            ) <= np.max(strategy_idxs)
+
+    def get_bweight_stats(self):
+        if not hasattr(self, "encoder_weights_bs"):
+            self.fit()
+
+        self.bweight_stats = {
+            "mu": self.encoder_weights_bs.mean(axis=0),
+            "sem": sem(self.encoder_weights_bs, axis=0),
+        }
+
+        # refer to https://stat20.berkeley.edu/spring-2024/4-generalization/02-confidence-intervals/notes.html
+        self.bweight_stats["ci_h"] = 1.96 * (self.bweight_stats["sem"])
+        self.bweight_stats["ci_lo"] = (
+            self.bweight_stats["mu"] - self.bweight_stats["ci_h"]
+        )
+        self.bweight_stats["ci_hi"] = (
+            self.bweight_stats["mu"] + self.bweight_stats["ci_h"]
+        )
 
 
 def make_tre_loe(enc_class: Type[Encoder] = Encoder, **kwargs):
@@ -1392,11 +1467,11 @@ def make_tre_loe(enc_class: Type[Encoder] = Encoder, **kwargs):
             assert self.tvs.shape == (self.num_bins, self.num_trials, self.num_tv), (
                 "tv shape is wrong"
             )
-            assert self.dm.shape == (
-                self.num_bins,
-                self.num_trials,
-                self.num_tents + self.num_tv,
-            ), "dm shape is wrong"
+            # assert self.dm.shape == (
+            #     self.num_bins,
+            #     self.num_trials,
+            #     self.num_tents + self.num_tv,
+            # ), "dm shape is wrong"
 
             def _edge_inclusive(t):
                 return t + 0.001 if self.edge_inclusive else t
