@@ -974,7 +974,6 @@ def get_strategy_filter_idxs(
 
         # no cond balancing, just trial count
         else:
-            print("hi")
             mb_mask = trial_data["strategy"] == 1
             mf_mask = trial_data["strategy"] == -1
 

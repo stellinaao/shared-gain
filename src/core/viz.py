@@ -22,6 +22,7 @@ def plot_scatter(
     mn=None,
     mx=None,
     color=None,
+    cmap="viridis",
     label=None,
     add_unity=False,
     add_lr=False,
@@ -36,7 +37,7 @@ def plot_scatter(
     mn = 1.05 * min([np.min(x), np.min(y)]) if mn is None else mn
     mx = 1.05 * max([np.max(x), np.max(y)]) if mx is None else mx
 
-    ax.scatter(x, y, s=0.5, c=color, alpha=0.5, label=label)
+    ax.scatter(x, y, s=0.5, cmap=cmap, c=color, alpha=0.5, label=label)
 
     if add_unity:
         ax.plot([mn, mx], [mn, mx], linewidth=0.5, linestyle="--", color="#666666")
@@ -303,7 +304,7 @@ def plot_trajectory(
     points = np.array([x, y]).T.reshape(-1, 1, 2)
     segments = np.concatenate([points[:-1], points[1:]], axis=1)
 
-    lc = LineCollection(segments, cmap=cmap, array=t[:-1], linewidth=1)
+    lc = LineCollection(segments, alpha=0.5, cmap=cmap, array=t[:-1], linewidth=0.5)
     lc.set_clim(vmin, vmax)
     ax.add_collection(lc)
 
@@ -382,8 +383,8 @@ def plot_kdes(
     if xlim is not None:
         (mn, mx) = xlim
     else:
-        mn = min([min(v) for v in data.values()])
-        mx = max([max(v) for v in data.values()])
+        mn = np.min([np.min(v) for v in data.values()])
+        mx = np.max([np.max(v) for v in data.values()])
     x = np.linspace(mn, mx, 300)
 
     colors = plt.get_cmap(cmap)(np.linspace(0, 1, len(data)))
