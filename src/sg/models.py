@@ -911,7 +911,7 @@ class ShuffledEncoder:
         return ax
 
 
-def make_tre(enc_class: Type[Encoder] = Encoder, tr_type="loe", **kwargs):
+def make_tre(enc_class: Type[Encoder] = Encoder, tr_type="dme", **kwargs):
     if tr_type == "dme":
         return make_tre_dme(enc_class=enc_class, **kwargs)
 

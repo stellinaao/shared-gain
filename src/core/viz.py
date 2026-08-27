@@ -281,6 +281,8 @@ def plot_scatter_groups(
 def plot_trajectory(
     x,
     y,
+    x_ci=None,
+    y_ci=None,
     mn=None,
     mx=None,
     xlabel="",
@@ -293,6 +295,9 @@ def plot_trajectory(
     mid_marker=".",
     start_size_mult=10,
     end_size_mult=2,
+    ci_color="#333333",
+    ci_alpha=0.5,
+    ci_linewidth=0.5,
     ax=None,
 ):
     if ax is None:
@@ -301,10 +306,25 @@ def plot_trajectory(
     t = np.arange(len(x))
     vmin, vmax = t.min(), t.max()
 
+    # error bars first, so everything else draws on top
+    if (x_ci is not None) or (y_ci is not None):
+        ax.errorbar(
+            x,
+            y,
+            xerr=x_ci,
+            yerr=y_ci,
+            fmt="none",
+            ecolor=ci_color,
+            alpha=ci_alpha,
+            elinewidth=ci_linewidth,
+            capsize=0,
+            zorder=1,
+        )
+
     points = np.array([x, y]).T.reshape(-1, 1, 2)
     segments = np.concatenate([points[:-1], points[1:]], axis=1)
 
-    lc = LineCollection(segments, alpha=0.5, cmap=cmap, array=t[:-1], linewidth=0.5)
+    lc = LineCollection(segments, cmap=cmap, array=t[:-1], linewidth=1, zorder=2)
     lc.set_clim(vmin, vmax)
     ax.add_collection(lc)
 
