@@ -179,16 +179,19 @@ def plot_2d_row(
     panel_width=2.5,
     panel_height=3,
     title="",  # overall row title
+    fig=None,
+    axes=None,
     **kwargs,
 ):
-    fig, axes = plt.subplots(
-        ncols=len(data),
-        nrows=1,
-        figsize=(panel_width * len(data), panel_height),
-        sharey=sharey,
-        sharex=sharex,
-        tight_layout=True,
-    )
+    if axes is None:
+        fig, axes = plt.subplots(
+            ncols=len(data),
+            nrows=1,
+            figsize=(panel_width * len(data), panel_height),
+            sharey=sharey,
+            sharex=sharex,
+            tight_layout=True,
+        )
     if len(data) == 1:
         axes = [axes]
 
