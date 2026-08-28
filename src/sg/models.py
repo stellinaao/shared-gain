@@ -58,6 +58,9 @@ class Encoder:
                 "rewarded_prev",
             ],
         )
+
+        self.response_prev_only = kwargs.pop("response_prev_only", True)
+
         self.add_interaction = kwargs.pop("add_interaction", False)
         self.add_svd = kwargs.pop("add_svd", False)
         if self.add_svd:
@@ -118,6 +121,7 @@ class Encoder:
             tpost_ref=_edge_inclusive(self.tpost_ref),
             alignment_ref=self.alignment_ref,
             binwidth_ms=self.binwidth_ms,
+            response_prev_only=self.response_prev_only,
             add_svd=self.add_svd,
             add_licks=self.add_licks,
             full_trial=self.full_trial,

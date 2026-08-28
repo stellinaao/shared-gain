@@ -98,6 +98,7 @@ def load_sess(
     tpre_ref=0.5,
     tpost_ref=1,
     alignment_ref=None,
+    response_prev_only=True,
     add_svd=False,
     add_licks=False,
     full_trial=False,
@@ -161,7 +162,7 @@ def load_sess(
         trial_data = add_prev(trial_data)
         trial_data = add_strat(trial_data, session_data)
 
-        trial_mask = get_trial_mask(trial_data)
+        trial_mask = get_trial_mask(trial_data, response_prev_only=response_prev_only)
         trial_data = trial_data[trial_mask]
 
         trial_data = add_bswitch_itrial(trial_data)
@@ -239,7 +240,7 @@ def load_sess(
         trial_data = add_strat(trial_data, session_data)
 
         trial_data["trial_start_time"] = trial_data["task_start_time"]
-        trial_mask = get_trial_mask(trial_data)
+        trial_mask = get_trial_mask(trial_data, response_prev_only=response_prev_only)
         trial_data = trial_data[trial_mask]
 
         # get psths
@@ -501,7 +502,9 @@ def add_bswitch_itrial(trial_data):
     return trial_data
 
 
-def get_trial_mask(trial_data, strategy_only=True, reward_only=False):
+def get_trial_mask(
+    trial_data, response_prev_only=True, strategy_only=True, reward_only=False
+):
     mask_resp = ~np.isnan(
         trial_data["response_time"]
     )  # always only consider for trials where there was a response
@@ -512,6 +515,9 @@ def get_trial_mask(trial_data, strategy_only=True, reward_only=False):
 
     if strategy_only:
         mask = (mask) & (~(trial_data["strategy"] == 0))
+
+    if response_prev_only:
+        mask = (mask) & (~(trial_data["response_prev"] == 0))
 
     return mask
 
