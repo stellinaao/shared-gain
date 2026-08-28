@@ -163,6 +163,8 @@ def load_sess(
         trial_mask = get_trial_mask(trial_data)
         trial_data = trial_data[trial_mask]
 
+        trial_data = add_bswitch_itrial(trial_data)
+
         # get psths
         psths, spike_times, tbin_edges = get_psths_ref(
             spike_times,
@@ -483,6 +485,18 @@ def add_strat(trial_data, session_data):
         [1, -1],
         0,
     )
+    return trial_data
+
+
+def add_bswitch_itrial(trial_data):
+    iblock = trial_data["iblock"]
+    unique_blocks = np.unique(iblock)
+
+    bswitch_itrial = []
+    for block in unique_blocks:
+        idxs = np.where(iblock == block)[0]
+        bswitch_itrial.extend(idxs - idxs[0])
+    trial_data["bswitch_itrial"] = np.array(bswitch_itrial)
     return trial_data
 
 
@@ -1033,11 +1047,26 @@ def get_dm(
             ohe = OHE().fit(trial_data[tv_keys])
             tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
         else:
+            # ohe bweight_itrial
+            bswitch_names = []
+            if "bswitch_itrial" in tv_keys:
+                bswitch_flag = True
+                ohe = OHE().fit(pd.DataFrame(trial_data["bswitch_itrial"]))
+                tvs_bswitch = np.array(
+                    ohe.transform(pd.DataFrame(trial_data["bswitch_itrial"])).todense()
+                )
+                bswitch_names = ohe.get_feature_names_out()
+                tv_keys.remove("bswitch_itrial")
+            else:
+                bswitch_flag = False
+
             tvs = trial_data[tv_keys]
             for k in tv_keys:
                 if "rewarded" in k:
                     tvs[k] = tvs[k].replace(0, -1)
             tvs = np.array(tvs, dtype="float32")
+
+            tvs = np.hstack((tvs, tvs_bswitch)) if bswitch_flag else tvs
 
             if num_bins is not None:
                 num_trials = len(trial_data)
@@ -1095,10 +1124,12 @@ def get_dm(
         else:
             tv_names = [f"{tv}_{i}" for tv in tv_keys for i in range(num_bins)]
 
+    print(bswitch_names)
     dm_names = np.concatenate(
         (
             [f"tents_{i}" for i in range(tents.shape[1])],
             tv_names,
+            bswitch_names,
             svd_names,
             lick_names,
         )

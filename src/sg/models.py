@@ -265,7 +265,6 @@ class Encoder:
 
     def get_r2(self, n_folds=20, p_train=0.8):
         if not hasattr(self, "robs"):
-            print("hullo")
             self.build_dm()
 
         self.yhats = {
