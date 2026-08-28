@@ -58,6 +58,7 @@ class Encoder:
                 "rewarded_prev",
             ],
         )
+        self.add_interaction = kwargs.pop("add_interaction", False)
         self.add_svd = kwargs.pop("add_svd", False)
         if self.add_svd:
             self.num_svd = kwargs.pop("num_svd", 10)
@@ -153,6 +154,7 @@ class Encoder:
             num_tents=self.num_tents,
             tv_keys=self.tv_keys,
             num_bins=self.num_bins,
+            add_interaction=self.add_interaction,
             add_svd=self.add_svd,
             num_svd=self.num_svd if self.add_svd else None,
             add_licks=self.add_licks,

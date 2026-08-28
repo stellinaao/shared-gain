@@ -20,6 +20,7 @@ import shutup
 
 from sklearn.preprocessing import OneHotEncoder as OHE
 from scipy.stats import zscore
+from itertools import product
 
 from spks.utils import get_cluster_spike_times
 from spks.event_aligned import compute_spike_count
@@ -1034,6 +1035,7 @@ def get_dm(
     trial_data,
     tv_keys,
     num_bins=None,
+    add_interaction=False,
     add_svd=False,
     num_svd=None,
     add_licks=False,
@@ -1046,6 +1048,10 @@ def get_dm(
         if do_ohe:
             ohe = OHE().fit(trial_data[tv_keys])
             tvs = np.array(ohe.transform(trial_data[tv_keys]).todense())
+
+            tv_names = ohe.get_feature_names_out() if tv_keys is not None else []
+            for i, tv_name in enumerate(tv_names):
+                tv_names[i] = tv_name_map[tv_name]
         else:
             # ohe bweight_itrial
             bswitch_names = []
@@ -1065,10 +1071,36 @@ def get_dm(
                 if "rewarded" in k:
                     tvs[k] = tvs[k].replace(0, -1)
             tvs = np.array(tvs, dtype="float32")
+            tv_names = tv_keys
 
             tvs = np.hstack((tvs, tvs_bswitch)) if bswitch_flag else tvs
 
+            interaction_names = []
+            if add_interaction:
+                tv_regr_names = np.concatenate((tv_names, bswitch_names))
+
+                regr_pairs = product(tv_regr_names, tv_regr_names)
+
+                tvs_interaction = []
+
+                for regr_a, regr_b in regr_pairs:
+                    if (
+                        regr_a != regr_b
+                        and not ("bswitch" in regr_a and "bswitch" in regr_b)
+                        and f"{regr_b}_{regr_a}" not in interaction_names
+                    ):
+                        idx_a = np.where(tv_regr_names == regr_a)[0]
+                        idx_b = np.where(tv_regr_names == regr_b)[0]
+
+                        tvs_interaction.append(tvs[:, idx_a] * tvs[:, idx_b])
+                        interaction_names.append(f"{regr_a}_{regr_b}")
+                tvs_interaction = np.transpose(tvs_interaction, (1, 0, 2))[:, :, 0]
+
+                print(np.shape(tvs), np.shape(tvs_interaction))
+                tvs = np.hstack((tvs, tvs_interaction))
+
             if num_bins is not None:
+                tv_names = [f"{tv}_{i}" for tv in tv_keys for i in range(num_bins)]
                 num_trials = len(trial_data)
 
                 masks = np.zeros((num_bins, num_trials * num_bins))
@@ -1114,22 +1146,12 @@ def get_dm(
     else:
         dm = None
 
-    if do_ohe:
-        tv_names = ohe.get_feature_names_out() if tv_keys is not None else []
-        for i, tv_name in enumerate(tv_names):
-            tv_names[i] = tv_name_map[tv_name]
-    else:
-        if num_bins is None:
-            tv_names = tv_keys
-        else:
-            tv_names = [f"{tv}_{i}" for tv in tv_keys for i in range(num_bins)]
-
-    print(bswitch_names)
     dm_names = np.concatenate(
         (
             [f"tents_{i}" for i in range(tents.shape[1])],
             tv_names,
             bswitch_names,
+            interaction_names,
             svd_names,
             lick_names,
         )
@@ -1147,6 +1169,7 @@ def get_encoder_io(
     num_tents=10,
     tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
     num_bins=None,
+    add_interaction=True,
     add_svd=True,
     num_svd=10,
     add_licks=True,
@@ -1163,6 +1186,7 @@ def get_encoder_io(
         trial_data,
         tv_keys,
         num_bins=num_bins,
+        add_interaction=add_interaction,
         add_svd=add_svd,
         num_svd=num_svd,
         add_licks=add_licks,
