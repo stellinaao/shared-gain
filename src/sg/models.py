@@ -621,10 +621,10 @@ class StrategyEncoder(Encoder):
                 cond_balance=self.cond_balance if self.balance_strategy else False,
             )
             self.idxs = self.idxs_all[self.strategy_filter]
-            if len(self.idxs) < self.min_num_trials:
-                raise ValueError(
-                    f"# trials after balancing for trial count (len(self.idxs)) is less than {self.min_num_trials}"
-                )
+        if len(self.idxs) < self.min_num_trials:
+            raise ValueError(
+                f"# trials after balancing for trial count (len(self.idxs)) is less than {self.min_num_trials}"
+            )
 
         self.trial_data = self.trial_data.iloc[self.idxs]
         self.psths = {reg: self.psths[reg][:, self.idxs, :] for reg in self.regions}
