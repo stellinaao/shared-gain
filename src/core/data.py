@@ -1102,7 +1102,6 @@ def get_dm(
                         interaction_names.append(f"{regr_a}_{regr_b}")
                 tvs_interaction = np.transpose(tvs_interaction, (1, 0, 2))[:, :, 0]
 
-                print(np.shape(tvs), np.shape(tvs_interaction))
                 tvs = np.hstack((tvs, tvs_interaction))
 
             if num_bins is not None:
