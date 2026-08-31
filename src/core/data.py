@@ -828,11 +828,11 @@ def get_choice_ts(trial_data, mode="both"):
     elif mode == "rewarded":
         choice_ts = {
             "corr": trial_data[(lc_mask) | (rc_mask)]["trial_start_time"]
-            + trial_data[(lc_mask) | (rc_mask)]["response_time"]
-            + 0.5,
+            + trial_data[(lc_mask) | (rc_mask)]["response_time"],
+            # + 0.5,
             "incorr": trial_data[(li_mask) | (ri_mask)]["trial_start_time"]
-            + trial_data[(li_mask) | (ri_mask)]["response_time"]
-            + 0.5,
+            + trial_data[(li_mask) | (ri_mask)]["response_time"],
+            # + 0.5,
         }
     elif mode == "strategy":
         choice_ts = {

@@ -552,7 +552,11 @@ class Encoder:
             num_units=self.psths[reg].shape[0], render_func=r, fig_dir=FIGURES_DIR
         )
 
-    def view_peths(self, reg="DLS", mode="response", flag=True):
+    def view_peths(
+        self,
+        reg="DLS",
+        mode="response",
+    ):
         if reg not in self.regions:
             raise ValueError(f"{reg} must be in {self.regions}")
 
