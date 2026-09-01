@@ -166,6 +166,7 @@ class Encoder:
             do_ohe=self.do_ohe,
         )
 
+        self.tvs = np.hstack((self.tvs, self.robs.mean(axis=1).reshape(-1, 1)))
         self.num_trials, self.num_tv = self.tvs.shape
         self.num_units = self.robs.shape[-1]
 
