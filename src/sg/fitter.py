@@ -130,7 +130,9 @@ class Encoder:
         self.taskvar_fit = False
 
     def fit_all(self, cids=None, update_cids=True):
+        print("serve")
         self.get_data()
+        print("8 down")
         if self.enough_trials:
             self.fit_baseline()
             self.fit_taskvar()
@@ -183,8 +185,11 @@ class Encoder:
         if self.sanity_check == 1:
             self.psths["DMS"] *= 20
 
+        print("un")
+
         # get idxs_subsamp if specified
         if self.balance_strategy and self.idxs_subsamp is None:
+            print("deux")
             mb_mask = self.trial_data["strategy"] == 1
             mf_mask = self.trial_data["strategy"] == -1
 
@@ -257,6 +262,7 @@ class Encoder:
             self.idxs_subsamp_balance = self.idxs_subsamp
 
         elif self.balance_strategy and self.idxs_subsamp is not None:
+            print("trois")
             if len(self.idxs_subsamp) < 20:
                 return
             self.enough_trials = True
@@ -265,10 +271,12 @@ class Encoder:
             self.idxs_subsamp_balance = np.sort(self.idxs_subsamp_balance)
 
         else:
+            print("quatre")
             if self.trial_data.shape[0] > 20:
                 self.enough_trials = True
 
         if self.balance_strategy:
+            print("cinq")
             trial_data_balance = self.trial_data.iloc[self.idxs_subsamp_balance]
             psths_balance = {
                 region: self.psths[region][:, self.idxs_subsamp_balance, :]
@@ -309,6 +317,7 @@ class Encoder:
 
         # full case, no trial indexing
         elif not self.balance_strategy and self.idxs_subsamp is None:
+            print("six")
             (
                 self.data_gd,
                 self.train_dl,
@@ -331,10 +340,12 @@ class Encoder:
             self.sample = self.data_gd[:]
             self.robs = self.sample["robs"].detach().cpu().numpy()
         else:
+            print("sept")
             raise NotImplementedError(
                 "balance_strategy=True and idxs_subsamp is not None is not implemented yet"
             )
 
+        print("damn!")
         self.strategy = self.trial_data["strategy"]
         self.rewarded = self.trial_data["rewarded"]
         self.response = self.trial_data["response"]
@@ -494,7 +505,9 @@ class LVMFamily(Encoder):
         if fit_lvms:
             if self.enough_trials and self.num_units > 0:
                 if not self.no_mult:
+                    print("hai")
                     self.fit_ae_gain()
+                    print("bai")
                 if not self.no_addt:
                     self.fit_ae_offset()
                 if not self.no_mult and not self.no_addt:

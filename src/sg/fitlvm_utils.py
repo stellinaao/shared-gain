@@ -114,19 +114,17 @@ def get_dataset_dm(
         print(f"originally {sum([len(psths[region]) for region in regions])} units")
 
     # dfs
-    """
     adiff = np.abs(
         robs - np.mean(robs, axis=0)
     )  # abs diff from avg rate of units across all trials, np.mean: shape = (# cells,), adiff: shape = (# trials, # cells)
     mad = np.median(adiff)  # scalar
     dfs = (adiff / mad) < 5  # shape = (# trials, # cells)
-    """
 
     # filter for good units
-    # good = np.mean(dfs, axis=0) == 1 # at least 80% of the trials were good
-    # print(f"good units {np.sum(good)}/{len(good)}")
-    # robs = robs[:,good]
-    # dfs = dfs[:,good]
+    good = np.mean(dfs, axis=0) == 1  # at least 80% of the trials were good
+    print(f"good units {np.sum(good)}/{len(good)}")
+    robs = robs[:, good]
+    dfs = dfs[:, good]
 
     # normalize
     if norm:
@@ -146,7 +144,7 @@ def get_dataset_dm(
         )
 
     robs = robs[idxs, :]
-    """dfs = dfs[idxs, :]"""
+    dfs = dfs[idxs, :]
 
     # TRIAL DATA
     # task variables (a.k.a. stim in liska)
@@ -164,7 +162,7 @@ def get_dataset_dm(
     data_dict = {
         "robs": torch.tensor(robs, dtype=torch.float32),
         "reg_keys": torch.tensor(reg_keys, dtype=torch.float32),
-        # "dfs": torch.tensor(dfs, dtype=torch.float32),
+        "dfs": torch.tensor(dfs, dtype=torch.float32),
         "tv": torch.tensor(tvs, dtype=torch.float32),
         "tents": torch.tensor(tents, dtype=torch.float32),
         "indices": torch.tensor(
@@ -1094,6 +1092,7 @@ def get_data_model(
     sanity_check=0,
     tuber=None,
 ):
+    print("hey girl")
     data_gd, data_dict = get_dataset_dm(
         psths,
         trial_data,
@@ -1105,10 +1104,12 @@ def get_data_model(
         binwidth_ms=25,
         sanity_check=sanity_check,
     )
+    print("pluto")
 
     train_dl, val_dl, test_dl, indices = get_dataloaders(
         data_gd, batch_size=264, folds=4, use_dropout=True
     )
+    print("juno")
 
     sample = data_gd[:]
     num_trials, num_tv = sample["tv"].shape
@@ -1152,11 +1153,13 @@ def get_dataloaders(data_gd, folds=5, batch_size=64, use_dropout=True, seed=1234
 
         # apply the masks and create the train, val, and test sets
         # note that dfs is a mask too, so we are incorporating the tvt set mask logic with the og dfs logic
+        print("hey so")
         train_ds.covariates["dfs"] = torch.tensor(
             np.logical_and(train_ds.covariates["dfs"].cpu().numpy(), train_mask),
             dtype=torch.float32,
             device=data_gd.device,
         )
+        print("YEAH")
         val_ds.covariates["dfs"] = torch.tensor(
             np.logical_and(val_ds.covariates["dfs"].cpu().numpy(), val_mask),
             dtype=torch.float32,
