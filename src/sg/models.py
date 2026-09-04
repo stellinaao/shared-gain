@@ -166,7 +166,6 @@ class Encoder:
             do_ohe=self.do_ohe,
         )
 
-        self.tvs = np.hstack((self.tvs, self.robs.mean(axis=1).reshape(-1, 1)))
         self.num_trials, self.num_tv = self.tvs.shape
         self.num_units = self.robs.shape[-1]
 
@@ -272,6 +271,7 @@ class Encoder:
 
     def get_r2(self, n_folds=20, p_train=0.8):
         if not hasattr(self, "robs"):
+            print("hello?")
             self.build_dm()
 
         self.yhats = {
@@ -321,6 +321,7 @@ class Encoder:
         if r2_comp:
             self.plot_r2_comp(axes[0])
         else:
+            print("milk")
             self.plot_r2_distro(axes[0])
 
         # p(resp)
@@ -343,6 +344,7 @@ class Encoder:
 
     def plot_r2_distro(self, ax=None, **kwargs):
         if not hasattr(self, "scores"):
+            print("hello")
             self.get_r2()
 
         if ax is None:
@@ -979,7 +981,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
         def build_dm(self):
             if not (hasattr(self, "psths")):
                 self.get_data()
-
             (
                 self.tents,
                 self.tvs,
@@ -996,6 +997,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 num_tents=self.num_tents,
                 tv_keys=self.tv_keys,
                 num_bins=self.num_bins,
+                add_interaction=self.add_interaction,
                 add_svd=self.add_svd,
                 num_svd=self.num_svd if self.add_svd else None,
                 add_licks=self.add_licks,
@@ -1093,6 +1095,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 not hasattr(self, "robs_predict")
                 or "baseline" not in self.robs_predict.keys()
             ):
+                print("rice")
                 self.baseline_predict()
 
             self.yhats = {"encoder": np.zeros((self.num_samples, self.num_units))}
@@ -1119,6 +1122,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
             if enc_class is StrategyEncoder:
                 super().verify()
             elif enc_class is Encoder:
+                print("cereal")
                 super().verify(r2_comp=False)
 
         def get_sctavg_weights(
