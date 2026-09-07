@@ -998,7 +998,91 @@ def get_strategy_filter_idxs(
             mb_mask = trial_data["strategy"] == 1
             mf_mask = trial_data["strategy"] == -1
 
+            idxs_mb = np.where(mb_mask)[0]
+            idxs_mf = np.where(mf_mask)[0]
+
+            trial_data_mb = trial_data.iloc[idxs_mb]
+            trial_type_mb = {
+                "lc": (
+                    (trial_data_mb.response == 1) & (trial_data_mb.rewarded == 1)
+                ).mean(),
+                "rc": (
+                    (trial_data_mb.response == -1) & (trial_data_mb.rewarded == 1)
+                ).mean(),
+                "li": (
+                    (trial_data_mb.response == 1) & (trial_data_mb.rewarded == 0)
+                ).mean(),
+                "ri": (
+                    (trial_data_mb.response == -1) & (trial_data_mb.rewarded == 0)
+                ).mean(),
+            }
+
+            trial_data_mf = trial_data.iloc[idxs_mf]
+            trial_type_mf = {
+                "lc": (
+                    (trial_data_mf.response == 1) & (trial_data_mf.rewarded == 1)
+                ).mean(),
+                "rc": (
+                    (trial_data_mf.response == -1) & (trial_data_mf.rewarded == 1)
+                ).mean(),
+                "li": (
+                    (trial_data_mf.response == 1) & (trial_data_mf.rewarded == 0)
+                ).mean(),
+                "ri": (
+                    (trial_data_mf.response == -1) & (trial_data_mf.rewarded == 0)
+                ).mean(),
+            }
+
+            if 0 in trial_type_mb.values() or 0 in trial_type_mf.values():
+                raise ValueError("trial types not all represented in mb/mf trials")
+
             num_trials = min(mb_mask.sum(), mf_mask.sum())
+
+            all_tt = False
+
+            while not all_tt:
+                idxs_mb = np.sort(
+                    np.random.choice(np.where(mb_mask)[0], num_trials, replace=replace)
+                )
+                idxs_mf = np.sort(
+                    np.random.choice(np.where(mf_mask)[0], num_trials, replace=replace)
+                )
+
+                trial_data_mb = trial_data.iloc[idxs_mb]
+                trial_type_mb = {
+                    "lc": (
+                        (trial_data_mb.response == 1) & (trial_data_mb.rewarded == 1)
+                    ).mean(),
+                    "rc": (
+                        (trial_data_mb.response == -1) & (trial_data_mb.rewarded == 1)
+                    ).mean(),
+                    "li": (
+                        (trial_data_mb.response == 1) & (trial_data_mb.rewarded == 0)
+                    ).mean(),
+                    "ri": (
+                        (trial_data_mb.response == -1) & (trial_data_mb.rewarded == 0)
+                    ).mean(),
+                }
+
+                trial_data_mf = trial_data.iloc[idxs_mf]
+                trial_type_mf = {
+                    "lc": (
+                        (trial_data_mf.response == 1) & (trial_data_mf.rewarded == 1)
+                    ).mean(),
+                    "rc": (
+                        (trial_data_mf.response == -1) & (trial_data_mf.rewarded == 1)
+                    ).mean(),
+                    "li": (
+                        (trial_data_mf.response == 1) & (trial_data_mf.rewarded == 0)
+                    ).mean(),
+                    "ri": (
+                        (trial_data_mf.response == -1) & (trial_data_mf.rewarded == 0)
+                    ).mean(),
+                }
+
+                all_tt = (0 not in trial_type_mb.values()) & (
+                    0 not in trial_type_mf.values()
+                )
 
             return {
                 "mb": np.sort(

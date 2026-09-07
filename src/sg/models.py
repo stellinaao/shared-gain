@@ -699,7 +699,7 @@ class ShuffledEncoder:
             k for k in self.encoder_full.tv_idxs.keys() if "tents" not in k
         ]
 
-    def get_cvr2(self, pivot, n_iters=3):
+    def get_cvr2(self, pivot, n_iters=20):
         if pivot not in self.regressors:
             raise ValueError(f"pivot {pivot} is not in {self.regressors}")
 
@@ -733,7 +733,7 @@ class ShuffledEncoder:
 
         self.encoders_cvr2[pivot] = encoder_shuffle
 
-    def get_dr2(self, pivot, n_iters=3):
+    def get_dr2(self, pivot, n_iters=20):
         if pivot not in self.regressors:
             raise ValueError(f"pivot {pivot} is not in {self.regressors}")
 
@@ -785,7 +785,7 @@ class ShuffledEncoder:
         for pivot in pivots:
             self.get_dr2(pivot)
 
-    def plot_cvr2(self, add_full_r2=False):
+    def plot_cvr2(self, mode="bar", add_full_r2=False):
         if (
             not hasattr(self, "cvr2")
             or len(np.setdiff1d(self.regressors, list(self.cvr2.keys()))) > 0
@@ -795,34 +795,50 @@ class ShuffledEncoder:
         cvr2_mean = [self.cvr2[pivot].mean() for pivot in self.regressors]
         cvr2_std = [self.cvr2[pivot].std() for pivot in self.regressors]
 
-        fig, ax = plt.subplots(tight_layout=True)
-        ax.bar(self.regressors, cvr2_mean, width=0.5)
-        ax.errorbar(
-            x=self.regressors,
-            y=cvr2_mean,
-            yerr=cvr2_std,
-            color="k",
-            fmt=".",
-            capsize=2,
-        )
+        fig, ax = plt.subplots(figsize=(4, 3), tight_layout=True)
 
-        if not hasattr(self.encoder_full, "scores"):
-            self.encoder_full.get_r2()
-
-        if add_full_r2:
-            ax.axhline(
-                y=self.encoder_full.scores["encoder"].mean(),
-                color="#666666",
-                linewidth=0.5,
-                linestyle="--",
-                label=r"full $r^2$",
+        if mode == "bar":
+            ax.bar(self.regressors, cvr2_mean, width=0.5)
+            ax.errorbar(
+                x=self.regressors,
+                y=cvr2_mean,
+                yerr=cvr2_std,
+                color="k",
+                fmt=".",
+                capsize=2,
             )
-            ax.legend(loc="upper right")
+
+            if not hasattr(self.encoder_full, "scores"):
+                self.encoder_full.get_r2()
+
+            if add_full_r2:
+                ax.axhline(
+                    y=self.encoder_full.scores["encoder"].mean(),
+                    color="#666666",
+                    linewidth=0.5,
+                    linestyle="--",
+                    label=r"full $r^2$",
+                )
+                ax.legend(loc="upper right")
+        elif mode == "boxplot":
+            ax.boxplot(
+                self.cvr2.values(),
+                patch_artist=True,
+                boxprops={"facecolor": "#40DAFCBB", "edgecolor": "k"},
+                medianprops={"color": "k", "linewidth": 0.5},
+                flierprops={
+                    "marker": ".",
+                    "markersize": 2,
+                    "markerfacecolor": "#40DAFC",
+                    "alpha": 0.6,
+                },
+            )
+            ax.set_xticklabels(self.regressors, rotation=90)
 
         ax.set_ylabel(r"cv $r^2$")
         ax.tick_params(axis="x", labelrotation=90)
 
-    def plot_dr2(self, add_full_r2=False):
+    def plot_dr2(self, mode="bar", add_full_r2=False):
         if (
             not hasattr(self, "dr2")
             or len(np.setdiff1d(self.regressors, list(self.dr2.keys()))) > 0
@@ -832,29 +848,45 @@ class ShuffledEncoder:
         dr2_mean = [self.dr2[pivot].mean() for pivot in self.regressors]
         dr2_std = [self.dr2[pivot].std() for pivot in self.regressors]
 
-        fig, ax = plt.subplots(tight_layout=True)
-        ax.bar(self.regressors, dr2_mean, width=0.5)
-        ax.errorbar(
-            x=self.regressors,
-            y=dr2_mean,
-            yerr=dr2_std,
-            color="k",
-            fmt=".",
-            capsize=2,
-        )
+        fig, ax = plt.subplots(figsize=(4, 3), tight_layout=True)
 
-        if not hasattr(self.encoder_full, "scores"):
-            self.encoder_full.get_r2()
-
-        if add_full_r2:
-            ax.axhline(
-                y=self.encoder_full.scores["encoder"].mean(),
-                color="#666666",
-                linewidth=0.5,
-                linestyle="--",
-                label=r"full $r^2$",
+        if mode == "bar":
+            ax.bar(self.regressors, dr2_mean, width=0.5)
+            ax.errorbar(
+                x=self.regressors,
+                y=dr2_mean,
+                yerr=dr2_std,
+                color="k",
+                fmt=".",
+                capsize=2,
             )
-            ax.legend(loc="upper right")
+
+            if not hasattr(self.encoder_full, "scores"):
+                self.encoder_full.get_r2()
+
+            if add_full_r2:
+                ax.axhline(
+                    y=self.encoder_full.scores["encoder"].mean(),
+                    color="#666666",
+                    linewidth=0.5,
+                    linestyle="--",
+                    label=r"full $r^2$",
+                )
+                ax.legend(loc="upper right")
+        elif mode == "barplot":
+            ax.boxplot(
+                self.dr2.values(),
+                patch_artist=True,
+                boxprops={"facecolor": "#40DAFCBB", "edgecolor": "k"},
+                medianprops={"color": "k", "linewidth": 0.5},
+                flierprops={
+                    "marker": ".",
+                    "markersize": 2,
+                    "markerfacecolor": "#40DAFC",
+                    "alpha": 0.6,
+                },
+            )
+            ax.set_xticklabels(self.regressors, rotation=90)
 
         ax.set_ylabel(r"$\Delta r^2$")
         ax.tick_params(axis="x", labelrotation=90)
