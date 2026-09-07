@@ -271,7 +271,6 @@ class Encoder:
 
     def get_r2(self, n_folds=20, p_train=0.8):
         if not hasattr(self, "robs"):
-            print("hello?")
             self.build_dm()
 
         self.yhats = {
@@ -697,13 +696,13 @@ class ShuffledEncoder:
         self.encoder_full = Encoder(subj_id, sess_id, **kwargs)
         self.encoder_full.get_r2()
 
-        self.task_vars = self.encoder_full.tv_keys
+        self.regressors = [
+            k for k in self.encoder_full.dm_idxs.keys() if "tents" not in k
+        ]
 
     def get_cvr2(self, pivot, n_iters=3):
-        # TODO: rerun the shuffle several times
-
-        if pivot not in self.task_vars:
-            raise ValueError(f"pivot {pivot} is not in {self.task_vars}")
+        if pivot not in self.regressors:
+            raise ValueError(f"pivot {pivot} is not in {self.regressors}")
 
         if not hasattr(self, "cvr2"):
             self.cvr2_unit = {}
@@ -717,15 +716,14 @@ class ShuffledEncoder:
 
         for i in range(n_iters):
             encoder_shuffle = Encoder(self.subj_id, self.sess_id, **self.kwargs)
-            encoder_shuffle.get_data()
+            encoder_shuffle.build_dm()
 
             # shuffle all taskvars besides the pivot
-            for tv in encoder_shuffle.tv_keys:
+            for tv in self.regressors:
                 if not tv == pivot:
-                    encoder_shuffle.trial_data[tv] = (
-                        encoder_shuffle.trial_data[tv]
-                        .sample(frac=1, random_state=i)
-                        .to_numpy()
+                    idx = encoder_shuffle.dm_idxs[tv] - encoder_shuffle.num_tents
+                    encoder_shuffle.tvs[:, idx] = np.random.permutation(
+                        encoder_shuffle.tvs[:, idx]
                     )
 
             encoder_shuffle.get_r2()
@@ -737,8 +735,8 @@ class ShuffledEncoder:
         self.encoders_cvr2[pivot] = encoder_shuffle
 
     def get_dr2(self, pivot, n_iters=3):
-        if pivot not in self.task_vars:
-            raise ValueError(f"pivot {pivot} is not in {self.task_vars}")
+        if pivot not in self.regressors:
+            raise ValueError(f"pivot {pivot} is not in {self.regressors}")
 
         if not hasattr(self, "dr2"):
             self.dr2_unit = {}
@@ -752,13 +750,12 @@ class ShuffledEncoder:
 
         for i in range(n_iters):
             encoder_shuffle = Encoder(self.subj_id, self.sess_id, **self.kwargs)
-            encoder_shuffle.get_data()
+            encoder_shuffle.build_dm()
 
             # shuffle the pivot
-            encoder_shuffle.trial_data[pivot] = (
-                encoder_shuffle.trial_data[pivot]
-                .sample(frac=1, random_state=i)
-                .to_numpy()
+            idx = encoder_shuffle.dm_idxs[pivot] - encoder_shuffle.num_tents
+            encoder_shuffle.tvs[:, idx] = np.random.permutation(
+                encoder_shuffle.tvs[:, idx]
             )
 
             encoder_shuffle.get_r2()
@@ -773,36 +770,36 @@ class ShuffledEncoder:
 
     def get_cvr2_all(self):
         pivots = (
-            self.task_vars
+            self.regressors
             if not hasattr(self, "cvr2")
-            else np.setdiff1d(self.task_vars, list(self.cvr2.keys()))
+            else np.setdiff1d(self.regressors, list(self.cvr2.keys()))
         )
         for pivot in pivots:
             self.get_cvr2(pivot)
 
     def get_dr2_all(self):
         pivots = (
-            self.task_vars
+            self.regressors
             if not hasattr(self, "dr2")
-            else np.setdiff1d(self.task_vars, list(self.dr2.keys()))
+            else np.setdiff1d(self.regressors, list(self.dr2.keys()))
         )
         for pivot in pivots:
             self.get_dr2(pivot)
 
-    def plot_cvr2(self):
+    def plot_cvr2(self, add_full_r2=False):
         if (
             not hasattr(self, "cvr2")
-            or len(np.setdiff1d(self.task_vars, list(self.cvr2.keys()))) > 0
+            or len(np.setdiff1d(self.regressors, list(self.cvr2.keys()))) > 0
         ):
             self.get_cvr2_all()
 
-        cvr2_mean = [self.cvr2[pivot].mean() for pivot in self.task_vars]
-        cvr2_std = [self.cvr2[pivot].std() for pivot in self.task_vars]
+        cvr2_mean = [self.cvr2[pivot].mean() for pivot in self.regressors]
+        cvr2_std = [self.cvr2[pivot].std() for pivot in self.regressors]
 
         fig, ax = plt.subplots(tight_layout=True)
-        ax.bar(self.task_vars, cvr2_mean, width=0.5)
+        ax.bar(self.regressors, cvr2_mean, width=0.5)
         ax.errorbar(
-            x=self.task_vars,
+            x=self.regressors,
             y=cvr2_mean,
             yerr=cvr2_std,
             color="k",
@@ -812,32 +809,34 @@ class ShuffledEncoder:
 
         if not hasattr(self.encoder_full, "scores"):
             self.encoder_full.get_r2()
-        ax.axhline(
-            y=self.encoder_full.scores["encoder"].mean(),
-            color="#666666",
-            linewidth=0.5,
-            linestyle="--",
-            label=r"full $r^2$",
-        )
-        ax.legend(loc="upper right")
+
+        if add_full_r2:
+            ax.axhline(
+                y=self.encoder_full.scores["encoder"].mean(),
+                color="#666666",
+                linewidth=0.5,
+                linestyle="--",
+                label=r"full $r^2$",
+            )
+            ax.legend(loc="upper right")
 
         ax.set_ylabel(r"cv $r^2$")
-        ax.tick_params(axis="x", labelrotation=45)
+        ax.tick_params(axis="x", labelrotation=90)
 
-    def plot_dr2(self):
+    def plot_dr2(self, add_full_r2=False):
         if (
             not hasattr(self, "dr2")
-            or len(np.setdiff1d(self.task_vars, list(self.dr2.keys()))) > 0
+            or len(np.setdiff1d(self.regressors, list(self.dr2.keys()))) > 0
         ):
             self.get_dr2_all()
 
-        dr2_mean = [self.dr2[pivot].mean() for pivot in self.task_vars]
-        dr2_std = [self.dr2[pivot].std() for pivot in self.task_vars]
+        dr2_mean = [self.dr2[pivot].mean() for pivot in self.regressors]
+        dr2_std = [self.dr2[pivot].std() for pivot in self.regressors]
 
         fig, ax = plt.subplots(tight_layout=True)
-        ax.bar(self.task_vars, dr2_mean, width=0.5)
+        ax.bar(self.regressors, dr2_mean, width=0.5)
         ax.errorbar(
-            x=self.task_vars,
+            x=self.regressors,
             y=dr2_mean,
             yerr=dr2_std,
             color="k",
@@ -847,40 +846,42 @@ class ShuffledEncoder:
 
         if not hasattr(self.encoder_full, "scores"):
             self.encoder_full.get_r2()
-        ax.axhline(
-            y=self.encoder_full.scores["encoder"].mean(),
-            color="#666666",
-            linewidth=0.5,
-            linestyle="--",
-            label=r"full $r^2$",
-        )
-        ax.legend(loc="upper right")
+
+        if add_full_r2:
+            ax.axhline(
+                y=self.encoder_full.scores["encoder"].mean(),
+                color="#666666",
+                linewidth=0.5,
+                linestyle="--",
+                label=r"full $r^2$",
+            )
+            ax.legend(loc="upper right")
 
         ax.set_ylabel(r"$\Delta r^2$")
-        ax.tick_params(axis="x", labelrotation=45)
+        ax.tick_params(axis="x", labelrotation=90)
 
     def plot_bound_r2(self, ax=None):
         if (
             not hasattr(self, "cvr2")
-            or len(np.setdiff1d(self.task_vars, list(self.cvr2.keys()))) > 0
+            or len(np.setdiff1d(self.regressors, list(self.cvr2.keys()))) > 0
         ):
             self.get_cvr2_all()
         if (
             not hasattr(self, "dr2")
-            or len(np.setdiff1d(self.task_vars, list(self.dr2.keys()))) > 0
+            or len(np.setdiff1d(self.regressors, list(self.dr2.keys()))) > 0
         ):
             self.get_dr2_all()
 
         if ax is None:
             _, ax = plt.subplots(tight_layout=True)
 
-        n = len(self.task_vars)
+        n = len(self.regressors)
         x = np.arange(n)
 
-        cvr2_mean = np.array([self.cvr2[pivot].mean() for pivot in self.task_vars])
-        cvr2_std = np.array([self.cvr2[pivot].std() for pivot in self.task_vars])
-        dr2_mean = np.array([self.dr2[pivot].mean() for pivot in self.task_vars])
-        dr2_std = np.array([self.dr2[pivot].std() for pivot in self.task_vars])
+        cvr2_mean = np.array([self.cvr2[pivot].mean() for pivot in self.regressors])
+        cvr2_std = np.array([self.cvr2[pivot].std() for pivot in self.regressors])
+        dr2_mean = np.array([self.dr2[pivot].mean() for pivot in self.regressors])
+        dr2_std = np.array([self.dr2[pivot].std() for pivot in self.regressors])
 
         ax.errorbar(
             x=x,
@@ -914,8 +915,8 @@ class ShuffledEncoder:
         )
 
         ax.set_xticks(x)
-        ax.set_xticklabels(self.task_vars)
-        ax.tick_params(axis="x", labelrotation=45)
+        ax.set_xticklabels(self.regressors)
+        ax.tick_params(axis="x", labelrotation=90)
         ax.set_ylabel(r"$r^2$")
 
         ax.legend(loc="upper right")
