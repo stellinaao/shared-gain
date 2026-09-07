@@ -146,8 +146,8 @@ class Encoder:
             self.tents,
             self.tvs,
             self.robs,
-            self.dm_names,
-            self.dm_idxs,
+            self.tv_names,
+            self.tv_idxs,
             self.reg_idxs,
         ) = get_encoder_io(
             self.psths,
@@ -181,6 +181,8 @@ class Encoder:
             alpha_per_target=True,
         ).fit(self.tents, robs)
 
+        self.baseline_weights = self.baseline_model.coef_
+
     def baseline_predict(self, robs=None):
         if not hasattr(self, "robs_predict"):
             self.robs_predict = {}
@@ -207,9 +209,7 @@ class Encoder:
             alpha_per_target=True,
         ).fit(self.tvs, self.robs - self.robs_predict["baseline"])
 
-        self.encoder_weights = np.hstack(
-            (self.baseline_model.coef_, self.encoder.coef_)
-        )
+        self.encoder_weights = self.encoder.coef_
 
     def encoder_predict(self, baseline_robs=None):
         if (
@@ -301,12 +301,12 @@ class Encoder:
 
     def get_weights(self, regr, val=None):
         if val is not None:
-            return self.encoder_weights[:, self.dm_idxs[f"{regr}_{val}"]]
+            return self.encoder_weights[:, self.tv_idxs[f"{regr}_{val}"]]
         else:
             if regr in self.tv_keys:
-                idxs = [self.dm_idxs[f"{regr}_{val}"] for val in tv_vals[regr]]
+                idxs = [self.tv_idxs[f"{regr}_{val}"] for val in tv_vals[regr]]
             elif regr == "tents":
-                idxs = [self.dm_idxs[f"{regr}_{val}"] for val in range(self.num_tents)]
+                idxs = [self.tv_idxs[f"{regr}_{val}"] for val in range(self.num_tents)]
             return self.encoder_weights[:, idxs]
 
     def verify(self, r2_comp=True, subtract_baseline=True):
@@ -393,7 +393,7 @@ class Encoder:
             self.robs_baseline = robs_baseline
 
             # get tv explained variance (besides pivot)
-            pivot_idx = self.dm_idxs[regr] - self.num_tents
+            pivot_idx = self.tv_idxs[regr]
             self.tv_pivot_ko = deepcopy(self.tvs)
             self.tv_pivot_ko[:, pivot_idx] = 0
 
@@ -436,7 +436,7 @@ class Encoder:
 
         ax.scatter(
             robs_bweights,
-            self.encoder_weights[:, self.dm_idxs[regr]],
+            self.encoder_weights[:, self.tv_idxs[regr]],
             s=0.5,
             alpha=0.5,
             vmin=1e-5,
@@ -446,8 +446,8 @@ class Encoder:
             norm="log",
         )
 
-        mn = min(min(robs_bweights), min(self.encoder_weights[:, self.dm_idxs[regr]]))
-        mx = max(max(robs_bweights), max(self.encoder_weights[:, self.dm_idxs[regr]]))
+        mn = min(min(robs_bweights), min(self.encoder_weights[:, self.tv_idxs[regr]]))
+        mx = max(max(robs_bweights), max(self.encoder_weights[:, self.tv_idxs[regr]]))
         ax.plot(
             [1.05 * mn, 1.05 * mx],
             [1.05 * mn, 1.05 * mx],
@@ -536,7 +536,7 @@ class Encoder:
 
         r = PETHWeightRenderer(
             weights=self.encoder_weights[self.reg_idxs[reg], :],
-            weight_names=self.dm_names,
+            weight_names=self.tv_names,
             robs=self.robs[:, self.reg_idxs[reg]],
             robs_ylabel="Spike Count",
             sc_tavg=sc_tavg,
@@ -696,7 +696,7 @@ class ShuffledEncoder:
         self.encoder_full.get_r2()
 
         self.regressors = [
-            k for k in self.encoder_full.dm_idxs.keys() if "tents" not in k
+            k for k in self.encoder_full.tv_idxs.keys() if "tents" not in k
         ]
 
     def get_cvr2(self, pivot, n_iters=3):
@@ -720,7 +720,7 @@ class ShuffledEncoder:
             # shuffle all taskvars besides the pivot
             for tv in self.regressors:
                 if not tv == pivot:
-                    idx = encoder_shuffle.dm_idxs[tv] - encoder_shuffle.num_tents
+                    idx = encoder_shuffle.tv_idxs[tv]
                     encoder_shuffle.tvs[:, idx] = np.random.permutation(
                         encoder_shuffle.tvs[:, idx]
                     )
@@ -752,7 +752,7 @@ class ShuffledEncoder:
             encoder_shuffle.build_dm()
 
             # shuffle the pivot
-            idx = encoder_shuffle.dm_idxs[pivot] - encoder_shuffle.num_tents
+            idx = encoder_shuffle.tv_idxs[pivot]
             encoder_shuffle.tvs[:, idx] = np.random.permutation(
                 encoder_shuffle.tvs[:, idx]
             )
@@ -982,8 +982,8 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 self.tents,
                 self.tvs,
                 _,
-                self.dm_names,
-                self.dm_idxs,
+                self.tv_names,
+                self.tv_idxs,
                 self.reg_idxs,
             ) = get_encoder_io(
                 self.psths,
@@ -1152,7 +1152,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 self.robs_baseline = robs_baseline
 
                 # get tv explained variance (besides pivot)
-                pivot_idx = self.dm_idxs[f"{regr}_{i}"] - self.num_tents
+                pivot_idx = self.tv_idxs[f"{regr}_{i}"]
                 self.tv_pivot_ko = deepcopy(self.tvs)
                 self.tv_pivot_ko[:, pivot_idx] = 0
 
@@ -1201,7 +1201,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
             self.robs_bweights = p_pos * robs_resid_pos - p_neg * robs_resid_neg  # / 2
             idxs = [
-                self.dm_idxs[k] for k in [f"{regr}_{i}" for i in range(self.num_bins)]
+                self.tv_idxs[k] for k in [f"{regr}_{i}" for i in range(self.num_bins)]
             ]
             self.bweights = np.concatenate(self.encoder_weights[:, idxs].T)
 
@@ -1304,7 +1304,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 r = PETHWeightRendererTime(
                     weights=self.encoder_weights[self.reg_idxs[reg], :],
                     tv=regr,
-                    weight_idxs=self.dm_idxs,
+                    weight_idxs=self.tv_idxs,
                     mode="trace",
                     num_bins=self.num_bins,
                     tre_mode="dme",
@@ -1351,7 +1351,7 @@ class Bootstrapper:
 
         self.num_units, self.num_regr = self.enc.encoder_weights.shape
         self.num_trials = self.enc.num_trials
-        self.dm_idxs = self.enc.dm_idxs
+        self.tv_idxs = self.enc.tv_idxs
 
         self.encoders = [
             enc_class(

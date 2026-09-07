@@ -1145,20 +1145,19 @@ def get_dm(
     xs = np.linspace(0, num_trials - 1, num_tents)
     tents = tent_basis_generate(xs)
 
-    dm_names = np.concatenate(
-        (
-            [f"tents_{i}" for i in range(tents.shape[1])],
-            tv_names,
-            bswitch_names,
-            interaction_names,
-            svd_names,
-            lick_names,
-        )
-    )
+    tv_names = {
+        "task_vars": tv_names,
+        "bswitch_itrial": bswitch_names,
+        "interaction": interaction_names,
+        "svd": svd_names,
+        "lick": lick_names,
+    }
 
-    dm_idxs = {dm_name: i for i, dm_name in enumerate(dm_names)}
+    tv_idxs = {
+        tv_name: i for i, tv_name in enumerate(np.concatenate(list(tv_names.values())))
+    }
 
-    return (tents, tvs), (dm_names, dm_idxs)
+    return (tents, tvs), (tv_names, tv_idxs)
 
 
 def get_encoder_io(
@@ -1182,7 +1181,7 @@ def get_encoder_io(
     reg_idxs = get_reg_keys(psths, regions)
 
     # trial data (X/I)
-    (tents, tvs), (dm_names, dm_idxs) = get_dm(
+    (tents, tvs), (tv_names, tv_idxs) = get_dm(
         trial_data,
         tv_keys,
         num_bins=num_bins,
@@ -1193,7 +1192,7 @@ def get_encoder_io(
         num_tents=num_tents,
         do_ohe=do_ohe,
     )
-    return tents, tvs, robs, dm_names, dm_idxs, reg_idxs
+    return tents, tvs, robs, tv_names, tv_idxs, reg_idxs
 
 
 # BALANCING
