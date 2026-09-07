@@ -145,7 +145,6 @@ class Encoder:
         (
             self.tents,
             self.tvs,
-            self.dm,
             self.robs,
             self.dm_names,
             self.dm_idxs,
@@ -982,7 +981,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
             (
                 self.tents,
                 self.tvs,
-                _,
                 _,
                 self.dm_names,
                 self.dm_idxs,

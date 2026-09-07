@@ -1145,12 +1145,6 @@ def get_dm(
     xs = np.linspace(0, num_trials - 1, num_tents)
     tents = tent_basis_generate(xs)
 
-    # dm
-    if num_bins is None:
-        dm = np.hstack((tents, tvs))
-    else:
-        dm = None
-
     dm_names = np.concatenate(
         (
             [f"tents_{i}" for i in range(tents.shape[1])],
@@ -1164,7 +1158,7 @@ def get_dm(
 
     dm_idxs = {dm_name: i for i, dm_name in enumerate(dm_names)}
 
-    return dm, (tents, tvs), (dm_names, dm_idxs)
+    return (tents, tvs), (dm_names, dm_idxs)
 
 
 def get_encoder_io(
@@ -1188,7 +1182,7 @@ def get_encoder_io(
     reg_idxs = get_reg_keys(psths, regions)
 
     # trial data (X/I)
-    dm, (tents, tvs), (dm_names, dm_idxs) = get_dm(
+    (tents, tvs), (dm_names, dm_idxs) = get_dm(
         trial_data,
         tv_keys,
         num_bins=num_bins,
@@ -1199,7 +1193,7 @@ def get_encoder_io(
         num_tents=num_tents,
         do_ohe=do_ohe,
     )
-    return tents, tvs, dm, robs, dm_names, dm_idxs, reg_idxs
+    return tents, tvs, robs, dm_names, dm_idxs, reg_idxs
 
 
 # BALANCING
