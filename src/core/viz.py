@@ -389,7 +389,9 @@ def plot_trajectory(
 # plot multiple distros as kdes
 def plot_kdes(
     data: dict,
+    bw_method=1,
     xlim=None,
+    norm="linear",
     label="",
     ylabel=True,
     legend=True,
@@ -408,12 +410,19 @@ def plot_kdes(
     else:
         mn = np.min([np.min(v) for v in data.values()])
         mx = np.max([np.max(v) for v in data.values()])
-    x = np.linspace(mn, mx, 300)
+
+    if norm == "linear":
+        x = np.linspace(mn, mx, 300)
+    elif norm == "log":
+        print(mn, mx)
+        x = np.logspace(np.log10(mn), np.log10(mx), 300, base=10)
+    else:
+        raise ValueError("norm can be either 'linear' or 'log'")
 
     colors = plt.get_cmap(cmap)(np.linspace(0, 1, len(data)))
 
     for (data_label, data_vals), default_color in zip(data.items(), colors):
-        kde = gaussian_kde(data_vals)
+        kde = gaussian_kde(data_vals, bw_method=bw_method)
         y = kde(x)
 
         style = {"color": default_color, "linewidth": 0.5}
@@ -437,6 +446,7 @@ def plot_kdes(
         ax.set_ylabel("density")
     if legend:
         ax.legend()
+    ax.set_xscale(norm)
 
     return ax
 
