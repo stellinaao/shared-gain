@@ -401,7 +401,7 @@ def plot_kdes(
     ax=None,
 ):
     if ax is None:
-        _, ax = plt.subplots(figsize=(2.5, 2.5), tight_layout=True)
+        fig, ax = plt.subplots(figsize=(2.5, 2.5), tight_layout=True)
 
     from scipy.stats import gaussian_kde
 
@@ -448,7 +448,7 @@ def plot_kdes(
         ax.legend()
     ax.set_xscale(norm)
 
-    return ax
+    return fig, ax
 
 
 # plot nested distros as a row of kdes

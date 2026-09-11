@@ -1366,6 +1366,7 @@ class Bootstrapper:
         subj_id,
         sess_id,
         enc_class,
+        pivot=None,
         n=100,
         **kwargs,
     ):
@@ -1377,22 +1378,42 @@ class Bootstrapper:
         self.enc = enc_class(subj_id=subj_id, sess_id=sess_id, **kwargs)
         self.enc.fit_encoder()
 
+        self.pivot = pivot
+
+        if self.pivot is not None and self.pivot not in self.enc.tv_idxs.keys():
+            raise ValueError(f"{self.pivot} is not in {self.enc.tv_idxs.keys()}")
+
         self.num_units, self.num_regr = self.enc.encoder_weights.shape
         self.num_trials = self.enc.num_trials
         self.tv_idxs = self.enc.tv_idxs
 
-        self.encoders = [
-            enc_class(
-                subj_id=subj_id, sess_id=sess_id, replace=True, random_state=i, **kwargs
-            )
-            for i in range(self.n)
-        ]
+        try:
+            self.encoders = [
+                enc_class(
+                    subj_id=subj_id,
+                    sess_id=sess_id,
+                    replace=True,
+                    random_state=i,
+                    **kwargs,
+                )
+                for i in range(self.n)
+            ]
+        except AttributeError:
+            self.encoders = [
+                enc_class(subj_id=subj_id, sess_id=sess_id, random_state=i, **kwargs)
+                for i in range(self.n)
+            ]
 
     def fit(self):
         self.encoder_weights_bs = np.zeros((self.n, self.num_units, self.num_regr))
         self.idxs = np.zeros((self.n, self.num_trials))
 
         for i, enc in enumerate(self.encoders):
+            if self.pivot is not None:
+                enc.build_dm()
+                enc.tvs[:, enc.tv_idxs[self.pivot]] = np.random.permutation(
+                    enc.tvs[:, enc.tv_idxs[self.pivot]]
+                )
             enc.fit_encoder()
 
             self.encoder_weights_bs[i] = enc.encoder_weights
@@ -1427,3 +1448,112 @@ class Bootstrapper:
         self.bweight_stats["ci_hi"] = (
             self.bweight_stats["mu"] + self.bweight_stats["ci_h"]
         )
+
+
+class BootstrapperShuffle:
+    def __init__(
+        self,
+        subj_id,
+        sess_id,
+        enc_class,
+        pivots=None,
+        n=100,
+        **kwargs,
+    ):
+        self.subj_id = subj_id
+        self.sess_id = sess_id
+
+        self.bs_emp = Bootstrapper(
+            subj_id=subj_id,
+            sess_id=sess_id,
+            enc_class=enc_class,
+            pivot=None,
+            n=n,
+            **kwargs,
+        )
+
+        self.enc = self.bs_emp.enc
+        self.tv_keys = self.enc.tv_keys
+        self.tv_idxs = self.enc.tv_idxs
+
+        if pivots is None:
+            self.pivots = list(self.bs_emp.enc.tv_idxs.keys())
+        else:
+            self.pivots = pivots
+
+        self.bss = [
+            Bootstrapper(
+                subj_id=subj_id,
+                sess_id=sess_id,
+                enc_class=enc_class,
+                pivot=pivot,
+                n=n,
+                **kwargs,
+            )
+            for pivot in self.pivots
+        ]
+
+    def fit(self):
+        print("emp")
+        self.bs_emp.fit()
+        self.encoder_weights_bs_emp = self.bs_emp.encoder_weights_bs
+
+        self.encoder_weights_bs_null = np.zeros_like(self.bs_emp.encoder_weights_bs)
+
+        for bs in self.bss:
+            print(bs.pivot)
+            bs.fit()
+
+            pivot_idx = self.tv_idxs[bs.pivot]
+            self.encoder_weights_bs_null[:, :, pivot_idx] = bs.encoder_weights_bs[
+                :, :, pivot_idx
+            ]
+
+    def get_bweight_stats(self):
+        if not hasattr(self.bs_emp, "bweight_stats"):
+            self.fit()
+
+        print("emp, -")
+        self.bs_emp.get_bweight_stats()
+        self.bweight_stats_emp = self.bs_emp.bweight_stats
+
+        self.bweight_stats_null = {
+            metric: np.zeros_like(metric_arr)
+            for metric, metric_arr in self.bweight_stats_emp.items()
+        }
+
+        for bs in self.bss:
+            print(bs.pivot)
+            bs.get_bweight_stats()
+
+            pivot_idx = self.tv_idxs[bs.pivot]
+            for metric in self.bweight_stats_null.keys():
+                self.bweight_stats_null[metric][:, pivot_idx] = bs.bweight_stats[
+                    metric
+                ][:, pivot_idx]
+
+    def get_ci_idxs(self):
+        if not hasattr(self, "bweight_stats_emp"):
+            self.get_bweight_stats()
+        print("a")
+        self.ci_idxs = {
+            pivot: np.where(
+                (
+                    self.bweight_stats_emp["mu"][:, self.tv_idxs[pivot]]
+                    > self.bweight_stats_null["ci_hi"][:, self.tv_idxs[pivot]]
+                )
+                | (
+                    self.bweight_stats_emp["mu"][:, self.tv_idxs[pivot]]
+                    < self.bweight_stats_null["ci_lo"][:, self.tv_idxs[pivot]]
+                )
+            )[0]
+            for pivot in self.pivots
+        }
+
+        self.ci_idxs_reg = {
+            pivot: {
+                reg: np.intersect1d(self.ci_idxs[pivot], self.enc.reg_idxs[reg])
+                for reg in self.enc.regions
+            }
+            for pivot in self.pivots
+        }
