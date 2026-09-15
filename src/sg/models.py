@@ -18,8 +18,8 @@ from core.data import (
     get_tavg_sc_cond,
     get_choice_ts,
     get_psths_cond,
-    tv_vals,
 )
+from core.tv_consts import tv_vals
 
 from core.viz import plot_raincloud
 
