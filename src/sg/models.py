@@ -683,14 +683,16 @@ class ShuffledEncoder:
         self,
         subj_id,
         sess_id,
+        enc_class: Type[Encoder] = Encoder,
         **kwargs,
     ):
         self.subj_id = subj_id
         self.sess_id = sess_id
+        self.enc_class = enc_class
 
         self.kwargs = kwargs
 
-        self.encoder_full = Encoder(subj_id, sess_id, **kwargs)
+        self.encoder_full = enc_class(subj_id, sess_id, **kwargs)
         self.encoder_full.get_r2()
 
         self.regressors = [
@@ -712,7 +714,9 @@ class ShuffledEncoder:
         self.cvr2[pivot] = np.zeros((n_iters,))
 
         for i in range(n_iters):
-            encoder_shuffle = Encoder(self.subj_id, self.sess_id, **self.kwargs)
+            encoder_shuffle = self.enc_class(
+                self.subj_id, self.sess_id, random_state=i, **self.kwargs
+            )
             encoder_shuffle.build_dm()
 
             # shuffle all taskvars besides the pivot
@@ -746,7 +750,9 @@ class ShuffledEncoder:
         self.dr2[pivot] = np.zeros((n_iters,))
 
         for i in range(n_iters):
-            encoder_shuffle = Encoder(self.subj_id, self.sess_id, **self.kwargs)
+            encoder_shuffle = self.enc_class(
+                self.subj_id, self.sess_id, random_state=i, **self.kwargs
+            )
             encoder_shuffle.build_dm()
 
             # shuffle the pivot
@@ -1375,6 +1381,8 @@ class Bootstrapper:
 
         self.n = n
 
+        self.enc_class = enc_class
+
         self.enc = enc_class(subj_id=subj_id, sess_id=sess_id, **kwargs)
         self.enc.fit_encoder()
 
@@ -1398,7 +1406,7 @@ class Bootstrapper:
                 )
                 for i in range(self.n)
             ]
-        except AttributeError:
+        except ValueError:
             self.encoders = [
                 enc_class(subj_id=subj_id, sess_id=sess_id, random_state=i, **kwargs)
                 for i in range(self.n)
@@ -1406,7 +1414,8 @@ class Bootstrapper:
 
     def fit(self):
         self.encoder_weights_bs = np.zeros((self.n, self.num_units, self.num_regr))
-        self.idxs = np.zeros((self.n, self.num_trials))
+        if self.enc_class is StrategyEncoder:
+            self.idxs = np.zeros((self.n, self.num_trials))
 
         for i, enc in enumerate(self.encoders):
             if self.pivot is not None:
@@ -1417,7 +1426,8 @@ class Bootstrapper:
             enc.fit_encoder()
 
             self.encoder_weights_bs[i] = enc.encoder_weights
-            self.idxs[i] = enc.idxs
+            if hasattr(self, "idxs"):
+                self.idxs[i] = enc.idxs
 
         if hasattr(self.enc, "strategy_filter"):
             if self.enc.strategy_filter == "mb":
@@ -1535,7 +1545,6 @@ class BootstrapperShuffle:
     def get_ci_idxs(self):
         if not hasattr(self, "bweight_stats_emp"):
             self.get_bweight_stats()
-        print("a")
         self.ci_idxs = {
             pivot: np.where(
                 (
