@@ -660,3 +660,89 @@ def plot_ridges_sess(data_sess, key, sess_ids, data_label):
     grid.set_axis_labels(x_var=data_label, y_var="")
 
     plt.rcParams.update(saved_params)
+
+
+""" VALUES """
+
+
+# plot one bar per group within each condition (vertical)
+def plot_grouped_bar_v(
+    data,
+    ylabel="",
+    title="",
+    colors=None,
+    ax=None,
+):
+    # data: {condition: {group: value}}
+    if ax is None:
+        _, ax = plt.subplots(figsize=(3, 2), tight_layout=True)
+
+    conditions = list(data)
+    groups = list(data[conditions[0]])
+
+    if colors is None:
+        colors = {g: f"C{i}" for i, g in enumerate(groups)}
+
+    x = np.arange(len(conditions))
+    width = 0.8 / len(groups)
+
+    for i, g in enumerate(groups):
+        ax.bar(
+            x + (i - (len(groups) - 1) / 2) * width,
+            [data[c][g] for c in conditions],
+            width,
+            color=colors[g],
+            linewidth=0,
+            label=g,
+        )
+
+    ax.legend(loc="upper right")
+    ax.axhline(y=0, linewidth=0.5, color="k")
+
+    ax.set_xticks(x, conditions, rotation=45, ha="right")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+
+    return ax
+
+
+# plot one bar per group within each condition (horizontal)
+def plot_grouped_bar_h(
+    data,
+    ylabel="",
+    title="",
+    colors=None,
+    legend=True,
+    ax=None,
+):
+    # data: {condition: {group: value}}
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
+
+    conditions = list(data)
+    groups = list(data[conditions[0]])
+    if colors is None:
+        colors = {g: f"C{i}" for i, g in enumerate(groups)}
+
+    y = np.arange(len(conditions))
+    height = 0.8 / len(groups)
+
+    for i, g in enumerate(groups):
+        ax.barh(
+            y + (i - (len(groups) - 1) / 2) * height,
+            [data[c][g] for c in conditions],
+            height,
+            color=colors[g],
+            linewidth=0,
+            label=g,
+        )
+
+    if legend:
+        ax.legend(loc="upper right")
+    ax.axvline(x=0, linewidth=0.5, color="k")
+
+    ax.set_yticks(y, conditions)
+    ax.set_xlabel(ylabel)
+    ax.set_title(title)
+
+    return fig, ax
