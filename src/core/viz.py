@@ -16,6 +16,8 @@ from utils.viz_utils import center_title
 def plot_scatter(
     x,
     y,
+    xerr=None,
+    yerr=None,
     xlabel="",
     ylabel="",
     title="",
@@ -34,10 +36,39 @@ def plot_scatter(
     r = pearsonr(x, y).statistic
     gr = np.mean(x < y)
 
-    mn = 1.05 * min([np.min(x), np.min(y)]) if mn is None else mn
-    mx = 1.05 * max([np.max(x), np.max(y)]) if mx is None else mx
+    mn = (
+        (
+            1.05 * min([np.min(x), np.min(y)])
+            if xerr is None
+            else 1.05 * min([np.min(x - xerr), np.min(y - yerr)])
+        )
+        if mn is None
+        else mn
+    )
+    mx = (
+        (
+            1.05 * max([np.max(x), np.max(y)])
+            if xerr is None
+            else 1.05 * max([np.max(x + xerr), np.max(y + yerr)])
+        )
+        if mx is None
+        else mx
+    )
 
     ax.scatter(x, y, s=0.5, cmap=cmap, c=color, alpha=0.5, label=label)
+
+    if xerr is not None or yerr is not None:
+        ax.errorbar(
+            x,
+            y,
+            xerr=xerr,
+            yerr=yerr,
+            fmt="none",
+            ecolor="#888888",
+            elinewidth=0.5,
+            alpha=0.5,
+            zorder=1,
+        )
 
     if add_unity:
         ax.plot([mn, mx], [mn, mx], linewidth=0.5, linestyle="--", color="#666666")
@@ -717,7 +748,7 @@ def plot_grouped_bar_h(
 ):
     # data: {condition: {group: value}}
     if ax is None:
-        fig, ax = plt.subplots(figsize=(2, 2), tight_layout=True)
+        fig, ax = plt.subplots(figsize=(3, 3), tight_layout=True)
 
     conditions = list(data)
     groups = list(data[conditions[0]])
