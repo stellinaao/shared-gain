@@ -422,7 +422,8 @@ def plot_kdes(
     data: dict,
     bw_method=1,
     xlim=None,
-    norm="linear",
+    xnorm="linear",
+    ynorm=True,
     label="",
     ylabel=True,
     legend=True,
@@ -442,9 +443,9 @@ def plot_kdes(
         mn = np.min([np.min(v) for v in data.values()])
         mx = np.max([np.max(v) for v in data.values()])
 
-    if norm == "linear":
+    if xnorm == "linear":
         x = np.linspace(mn, mx, 300)
-    elif norm == "log":
+    elif xnorm == "log":
         print(mn, mx)
         x = np.logspace(np.log10(mn), np.log10(mx), 300, base=10)
     else:
@@ -455,6 +456,9 @@ def plot_kdes(
     for (data_label, data_vals), default_color in zip(data.items(), colors):
         kde = gaussian_kde(data_vals, bw_method=bw_method)
         y = kde(x)
+
+        if ynorm:
+            y /= np.max(y)
 
         style = {"color": default_color, "linewidth": 0.5}
         style.update(line_kwargs.get(data_label, {}))
@@ -477,7 +481,7 @@ def plot_kdes(
         ax.set_ylabel("density")
     if legend:
         ax.legend()
-    ax.set_xscale(norm)
+    ax.set_xscale(xnorm)
 
     return fig, ax
 
