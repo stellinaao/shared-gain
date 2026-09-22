@@ -309,6 +309,12 @@ class Encoder:
                 idxs = [self.tv_idxs[f"{regr}_{val}"] for val in range(self.num_tents)]
             return self.encoder_weights[:, idxs]
 
+    def get_xtion_key(self, regr_a, regr_b):
+        if f"{regr_a}_{regr_b}" in self.tv_idxs.keys():
+            return f"{regr_a}_{regr_b}"
+        else:
+            return f"{regr_b}_{regr_a}"
+
     def verify(self, r2_comp=True, subtract_baseline=True):
         ncols = 3 if self.tv_keys is not None else 2
         _, axes = plt.subplots(
@@ -778,6 +784,7 @@ class ShuffledEncoder:
             else np.setdiff1d(self.regressors, list(self.cvr2.keys()))
         )
         for pivot in pivots:
+            print(pivot)
             self.get_cvr2(pivot)
 
     def get_dr2_all(self):
@@ -787,6 +794,7 @@ class ShuffledEncoder:
             else np.setdiff1d(self.regressors, list(self.dr2.keys()))
         )
         for pivot in pivots:
+            print(pivot)
             self.get_dr2(pivot)
 
     def plot_cvr2(self, mode="bar", add_full_r2=False):

@@ -148,5 +148,6 @@ def pprint_flat(dct: dict = None):
         print(f"{key:<20} {val}")
 
 
-def beta_str(regr, val):
-    return rf"$\beta_{{\mathrm{{{regr}\_{val}}}}}$"
+def b_regr_tex(regr):
+    regr_tex = regr.replace("_", r"\_")
+    return rf"$\beta_{{\mathrm{{{regr_tex}}}}}$"

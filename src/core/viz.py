@@ -3,6 +3,7 @@ import numpy as np
 import seaborn as sns
 
 from matplotlib.collections import LineCollection
+from matplotlib.colors import LogNorm
 
 from sklearn.linear_model import LinearRegression
 from scipy.stats import pearsonr
@@ -24,6 +25,9 @@ def plot_scatter(
     mn=None,
     mx=None,
     color=None,
+    color_log=False,
+    vmin=None,
+    vmax=None,
     cmap="viridis",
     label=None,
     add_unity=False,
@@ -55,7 +59,22 @@ def plot_scatter(
         else mx
     )
 
-    ax.scatter(x, y, s=0.5, cmap=cmap, c=color, alpha=0.5, label=label)
+    if color_log:
+        vmin = vmin if vmin is not None else color[color > 0].min()
+        vmax = vmax if vmax is not None else color.max()
+        sc = ax.scatter(
+            x,
+            y,
+            s=0.5,
+            cmap=cmap,
+            c=color,
+            alpha=0.8,
+            label=label,
+            norm=LogNorm(vmin=vmin, vmax=vmax),
+        )
+        plt.colorbar(sc, ax=ax)
+    else:
+        ax.scatter(x, y, s=0.5, cmap=cmap, c=color, alpha=0.5, label=label)
 
     if xerr is not None or yerr is not None:
         ax.errorbar(
@@ -87,8 +106,8 @@ def plot_scatter(
         )
         ax.legend(loc="upper right")
 
-    ax.axhline(y=0, linewidth=0.5, color="k")
-    ax.axvline(x=0, linewidth=0.5, color="k")
+    ax.axhline(y=0, linewidth=0.5, color="#888888", zorder=-20)
+    ax.axvline(x=0, linewidth=0.5, color="#888888", zorder=-20)
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -423,7 +442,7 @@ def plot_kdes(
     bw_method=1,
     xlim=None,
     xnorm="linear",
-    ynorm=True,
+    ynorm=False,
     label="",
     ylabel=True,
     legend=True,
@@ -697,7 +716,63 @@ def plot_ridges_sess(data_sess, key, sess_ids, data_label):
     plt.rcParams.update(saved_params)
 
 
-""" VALUES """
+""" GROUPED DISTROS """
+
+
+# plot one violin per group within each condition (vertical)
+def plot_grouped_violin(
+    data,
+    ylabel="",
+    title="",
+    colors=None,
+    ax=None,
+):
+    # data: {condition: {group: values}}  (values = array-like of samples)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(3, 3), tight_layout=True)
+
+    conditions = list(data)
+    groups = list(data[conditions[0]])
+
+    if colors is None:
+        colors = {g: f"C{i}" for i, g in enumerate(groups)}
+
+    x = np.arange(len(conditions))
+    width = 0.8 / len(groups)
+
+    for i, g in enumerate(groups):
+        positions = x + (i - (len(groups) - 1) / 2) * width
+        vp = ax.violinplot(
+            [data[c][g] for c in conditions],
+            positions=positions,
+            widths=width * 0.9,
+            bw_method=0.2,
+            showmeans=False,
+            showmedians=True,
+            showextrema=True,
+        )
+        for body in vp["bodies"]:
+            body.set_facecolor(colors[g])
+            body.set_edgecolor("k")
+            body.set_linewidth(0.5)
+            body.set_alpha(0.8)
+        for element in ("cmedians", "cmaxes", "cmins", "cbars"):
+            vp[element].set_color("k")
+            vp[element].set_linewidth(0.5)
+        # dummy patch for legend
+        ax.bar(np.nan, np.nan, color=colors[g], linewidth=0, label=g)
+
+    ax.legend(loc="upper right")
+    ax.axhline(y=0, linewidth=0.5, color="k")
+
+    ax.set_xticks(x, conditions, rotation=45, ha="right")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+
+    return fig, ax
+
+
+""" GROUPED VALUES """
 
 
 # plot one bar per group within each condition (vertical)
