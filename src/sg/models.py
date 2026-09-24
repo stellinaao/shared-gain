@@ -777,7 +777,7 @@ class ShuffledEncoder:
 
         self.encoders_dr2[pivot] = encoder_shuffle
 
-    def get_cvr2_all(self):
+    def get_cvr2_all(self, n_iters=20):
         pivots = (
             self.regressors
             if not hasattr(self, "cvr2")
@@ -785,9 +785,9 @@ class ShuffledEncoder:
         )
         for pivot in pivots:
             print(pivot)
-            self.get_cvr2(pivot)
+            self.get_cvr2(pivot, n_iters=n_iters)
 
-    def get_dr2_all(self):
+    def get_dr2_all(self, n_iters=20):
         pivots = (
             self.regressors
             if not hasattr(self, "dr2")
@@ -795,7 +795,7 @@ class ShuffledEncoder:
         )
         for pivot in pivots:
             print(pivot)
-            self.get_dr2(pivot)
+            self.get_dr2(pivot, n_iters=20)
 
     def plot_cvr2(self, mode="bar", add_full_r2=False):
         if (

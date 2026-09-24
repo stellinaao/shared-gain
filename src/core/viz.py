@@ -6,7 +6,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import LogNorm
 
 from sklearn.linear_model import LinearRegression
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, sem
 
 from utils.viz_utils import center_title
 
@@ -443,6 +443,7 @@ def plot_kdes(
     xlim=None,
     xnorm="linear",
     ynorm=False,
+    do_sem=False,
     label="",
     ylabel=True,
     legend=True,
@@ -463,7 +464,7 @@ def plot_kdes(
         mx = np.max([np.max(v) for v in data.values()])
 
     if xnorm == "linear":
-        x = np.linspace(mn, mx, 300)
+        x, step = np.linspace(mn, mx, 300, retstep=True)
     elif xnorm == "log":
         print(mn, mx)
         x = np.logspace(np.log10(mn), np.log10(mx), 300, base=10)
@@ -473,22 +474,39 @@ def plot_kdes(
     colors = plt.get_cmap(cmap)(np.linspace(0, 1, len(data)))
 
     for (data_label, data_vals), default_color in zip(data.items(), colors):
-        kde = gaussian_kde(data_vals, bw_method=bw_method)
-        y = kde(x)
+        if not do_sem:
+            kde = gaussian_kde(data_vals, bw_method=bw_method)
+            y = kde(x)
+            y_sem = None
+        else:
+            kde = None
+            ys = np.array(
+                [gaussian_kde(data_vals_)(x) for data_vals_ in data_vals]
+            )  # data_vals should be (k, n), where k is the number of distros of that kind
+            y = ys.mean(axis=0)
+            y_sem = sem(ys, axis=0)
 
         if ynorm:
-            y /= np.max(y)
+            y = (y * 100) * step
+            y_sem = (y_sem * 100) * step
 
         style = {"color": default_color, "linewidth": 0.5}
         style.update(line_kwargs.get(data_label, {}))
 
         ax.plot(x, y, label=data_label, **style)
+        if y_sem is not None:
+            ax.fill_between(x, y - y_sem, y + y_sem, alpha=0.25, **style)
 
         if add_means:
-            avg = np.mean(data_vals)
+            avg = np.mean([np.mean(data_vals_) for data_vals_ in data_vals])
+            if kde is not None:
+                kde_avg = kde(avg)
+            else:
+                idx = np.searchsorted(x, avg)
+                kde_avg = y[idx - 1 : idx + 1].mean()
             ax.plot(
                 avg,
-                kde(avg),
+                kde_avg,
                 marker="v",
                 color=style["color"],
                 markersize=1,
@@ -497,7 +515,10 @@ def plot_kdes(
             ax.axvline(x=avg, **style)
     ax.set_xlabel(label)
     if ylabel:
-        ax.set_ylabel("density")
+        if ynorm:
+            ax.set_ylabel("percentage of cells")
+        else:
+            ax.set_ylabel("density")
     if legend:
         ax.legend()
     ax.set_xscale(xnorm)
@@ -819,6 +840,7 @@ def plot_grouped_bar_v(
 # plot one bar per group within each condition (horizontal)
 def plot_grouped_bar_h(
     data,
+    do_sem=False,
     ylabel="",
     title="",
     colors=None,
@@ -838,10 +860,17 @@ def plot_grouped_bar_h(
     height = 0.8 / len(groups)
 
     for i, g in enumerate(groups):
+        if do_sem:
+            data_mu = [np.mean(data[c][g]) for c in conditions]
+            data_sem = [sem(data[c][g]) for c in conditions]
+        else:
+            data_mu = [data[c][g] for c in conditions]
+            data_sem = None
         ax.barh(
             y + (i - (len(groups) - 1) / 2) * height,
-            [data[c][g] for c in conditions],
+            data_mu,
             height,
+            xerr=data_sem,
             color=colors[g],
             linewidth=0,
             label=g,
