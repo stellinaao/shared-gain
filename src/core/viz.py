@@ -30,8 +30,10 @@ def plot_scatter(
     vmax=None,
     cmap="viridis",
     label=None,
+    add_title=True,
     add_unity=False,
     add_lr=False,
+    lr_color="#BA3737",
     ax=None,
 ):
     if ax is None:
@@ -101,7 +103,7 @@ def plot_scatter(
             [mn, mx],
             [m * mn + b, m * mx + b],
             linewidth=0.5,
-            color="#BA3737",
+            color=lr_color,
             label=f"{m:.3f}x+{b:.3f}",
         )
         ax.legend(loc="upper right")
@@ -114,11 +116,12 @@ def plot_scatter(
     ax.set_xlim([mn, mx])
     ax.set_ylim([mn, mx])
 
-    if title == "":
-        title = f"r={r:.3f}, gr={gr:.3f}"
-    else:
-        title = f"{title} (r={r:.3f}), gr={gr:.3f}"
-    ax.set_title(title)
+    if add_title:
+        if title == "":
+            title = f"r={r:.3f}, gr={gr:.3f}"
+        else:
+            title = f"{title} (r={r:.3f}), gr={gr:.3f}"
+        ax.set_title(title)
 
     return ax
 
@@ -481,7 +484,10 @@ def plot_kdes(
         else:
             kde = None
             ys = np.array(
-                [gaussian_kde(data_vals_)(x) for data_vals_ in data_vals]
+                [
+                    gaussian_kde(data_vals_, bw_method=bw_method)(x)
+                    for data_vals_ in data_vals
+                ]
             )  # data_vals should be (k, n), where k is the number of distros of that kind
             y = ys.mean(axis=0)
             y_sem = sem(ys, axis=0)
@@ -871,6 +877,9 @@ def plot_grouped_bar_h(
             data_mu,
             height,
             xerr=data_sem,
+            error_kw=dict(capsize=2, elinewidth=1, capthick=1)
+            if data_sem is not None
+            else None,
             color=colors[g],
             linewidth=0,
             label=g,
