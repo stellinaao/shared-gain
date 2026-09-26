@@ -24,6 +24,8 @@ def plot_scatter(
     title="",
     mn=None,
     mx=None,
+    xscale="linear",
+    yscale="linear",
     color=None,
     color_log=False,
     vmin=None,
@@ -115,6 +117,8 @@ def plot_scatter(
     ax.set_ylabel(ylabel)
     ax.set_xlim([mn, mx])
     ax.set_ylim([mn, mx])
+    ax.set_xscale(xscale)
+    ax.set_yscale(yscale)
 
     if add_title:
         if title == "":

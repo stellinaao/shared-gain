@@ -53,7 +53,6 @@ class Encoder:
             [
                 "response",
                 "rewarded",
-                "block_side",
                 "response_prev",
                 "rewarded_prev",
             ],
