@@ -1421,7 +1421,7 @@ class Bootstrapper:
 
     def fit(self):
         self.encoder_weights_bs = np.zeros((self.n, self.num_units, self.num_regr))
-        if self.enc_class is StrategyEncoder:
+        if self.enc_class is StrategyEncoder or hasattr(self.enc, "strategy_filter"):
             self.idxs = np.zeros((self.n, self.num_trials))
 
         for i, enc in enumerate(self.encoders):
