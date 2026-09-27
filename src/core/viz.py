@@ -461,6 +461,8 @@ def plot_kdes(
 ):
     if ax is None:
         fig, ax = plt.subplots(figsize=(2.5, 2.5), tight_layout=True)
+    else:
+        fig = ax.get_figure()
 
     from scipy.stats import gaussian_kde
 

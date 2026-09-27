@@ -1018,6 +1018,13 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
             super().get_data()
             self.forbid_data_access = True
 
+            self.epoch_keys = {
+                i: self.tbin_edges[i : i + 2] for i in range(self.num_bins)
+            }
+            self.epoch_keys_str = [
+                f"[{lo:g}, {hi:g}]" for lo, hi in self.epoch_keys.values()
+            ]
+
         def build_dm(self):
             if not (hasattr(self, "psths")):
                 self.get_data()
