@@ -118,7 +118,6 @@ def load_sess(
         session_data = pd.read_pickle(fpath / "session_data.pkl")
         trial_data = pd.read_csv(fpath / "trialdata.csv")
         regions = np.array(list(neural_data.keys()))
-        print("ckpt 1")
 
         # trial_data edits and addendums
         trial_data["trial_start_time"] = session_data["events"].iloc[
@@ -137,7 +136,6 @@ def load_sess(
 
         trial_data = add_bswitch_itrial(trial_data)
 
-        print("ckpt 2")
         # get psths
         psths, spike_times, tbin_edges = get_psths_ref(
             spike_times,
@@ -155,8 +153,6 @@ def load_sess(
             mode,
             thresh=1,
         )
-
-        print("get psths")
 
         # add svds
         if add_svd:
@@ -189,7 +185,6 @@ def load_sess(
                 trial_data = trial_data.join(licks_df)
             else:
                 trial_data[licks_df.columns] = licks_df.reset_index(drop=True).values
-        print("done")
         return spike_times, trial_data, psths, session_data, regions, tbin_edges
     elif mode == "old":
         # load data and set variables needed for aligning spikes to behavioral events

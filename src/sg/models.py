@@ -71,7 +71,7 @@ class Encoder:
         self.n = kwargs.pop("n", None)
         self.full_trial = kwargs.pop("full_trial", False)
 
-        self.norm = kwargs.pop("norm", False)
+        self.norm = kwargs.pop("norm", True)
         self.max_reg = kwargs.pop("max_reg", 5)
 
         self.num_tents = kwargs.pop("num_tents", 5)
