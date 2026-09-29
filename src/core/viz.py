@@ -32,6 +32,7 @@ def plot_scatter(
     vmax=None,
     cmap="viridis",
     label=None,
+    add_colorbar=False,
     add_title=True,
     add_unity=False,
     add_lr=False,
@@ -76,9 +77,11 @@ def plot_scatter(
             label=label,
             norm=LogNorm(vmin=vmin, vmax=vmax),
         )
-        plt.colorbar(sc, ax=ax)
     else:
-        ax.scatter(x, y, s=0.5, cmap=cmap, c=color, alpha=0.5, label=label)
+        sc = ax.scatter(x, y, s=0.5, cmap=cmap, c=color, alpha=0.5, label=label)
+
+    if add_colorbar:
+        plt.colorbar(sc, ax=ax)
 
     if xerr is not None or yerr is not None:
         ax.errorbar(

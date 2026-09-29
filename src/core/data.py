@@ -118,6 +118,7 @@ def load_sess(
         session_data = pd.read_pickle(fpath / "session_data.pkl")
         trial_data = pd.read_csv(fpath / "trialdata.csv")
         regions = np.array(list(neural_data.keys()))
+        print("ckpt 1")
 
         # trial_data edits and addendums
         trial_data["trial_start_time"] = session_data["events"].iloc[
@@ -136,6 +137,7 @@ def load_sess(
 
         trial_data = add_bswitch_itrial(trial_data)
 
+        print("ckpt 2")
         # get psths
         psths, spike_times, tbin_edges = get_psths_ref(
             spike_times,
@@ -153,6 +155,8 @@ def load_sess(
             mode,
             thresh=1,
         )
+
+        print("get psths")
 
         # add svds
         if add_svd:
@@ -185,7 +189,7 @@ def load_sess(
                 trial_data = trial_data.join(licks_df)
             else:
                 trial_data[licks_df.columns] = licks_df.reset_index(drop=True).values
-
+        print("done")
         return spike_times, trial_data, psths, session_data, regions, tbin_edges
     elif mode == "old":
         # load data and set variables needed for aligning spikes to behavioral events
@@ -1095,6 +1099,7 @@ def get_dm(
     tv_keys,
     num_bins=None,
     add_interaction=False,
+    interaction_regrs=None,
     add_svd=False,
     num_svd=None,
     add_licks=False,
@@ -1140,6 +1145,9 @@ def get_dm(
 
                 regr_pairs = product(tv_regr_names, tv_regr_names)
 
+                if interaction_regrs is None:
+                    interaction_regrs = tv_regr_names  # all task variables should interact with each other
+
                 tvs_interaction = []
 
                 for regr_a, regr_b in regr_pairs:
@@ -1147,6 +1155,7 @@ def get_dm(
                         regr_a != regr_b
                         and not ("bswitch" in regr_a and "bswitch" in regr_b)
                         and f"{regr_b}_{regr_a}" not in interaction_names
+                        and (regr_a in interaction_regrs or regr_b in interaction_regrs)
                     ):
                         idx_a = np.where(tv_regr_names == regr_a)[0]
                         idx_b = np.where(tv_regr_names == regr_b)[0]
@@ -1222,6 +1231,7 @@ def get_encoder_io(
     tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
     num_bins=None,
     add_interaction=True,
+    interaction_regrs=None,
     add_svd=True,
     num_svd=10,
     add_licks=True,
@@ -1239,6 +1249,7 @@ def get_encoder_io(
         tv_keys,
         num_bins=num_bins,
         add_interaction=add_interaction,
+        interaction_regrs=interaction_regrs,
         add_svd=add_svd,
         num_svd=num_svd,
         add_licks=add_licks,

@@ -61,6 +61,7 @@ class Encoder:
         self.response_prev_only = kwargs.pop("response_prev_only", True)
 
         self.add_interaction = kwargs.pop("add_interaction", False)
+        self.interaction_regrs = kwargs.pop("interaction_regrs", None)
         self.add_svd = kwargs.pop("add_svd", False)
         if self.add_svd:
             self.num_svd = kwargs.pop("num_svd", 10)
@@ -157,6 +158,7 @@ class Encoder:
             tv_keys=self.tv_keys,
             num_bins=self.num_bins,
             add_interaction=self.add_interaction,
+            interaction_regrs=self.interaction_regrs,
             add_svd=self.add_svd,
             num_svd=self.num_svd if self.add_svd else None,
             add_licks=self.add_licks,
@@ -1043,6 +1045,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 num_tents=self.num_tents,
                 tv_keys=self.tv_keys,
                 num_bins=self.num_bins,
+                interaction_regrs=self.interaction_regrs,
                 add_interaction=self.add_interaction,
                 add_svd=self.add_svd,
                 num_svd=self.num_svd if self.add_svd else None,
