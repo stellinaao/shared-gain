@@ -72,16 +72,23 @@ def plot_scatter(
             y,
             s=0.5,
             cmap=cmap,
+            vmin=-0.2,
+            vmax=0.2,
             c=color,
             alpha=0.8,
             label=label,
             norm=LogNorm(vmin=vmin, vmax=vmax),
         )
     else:
-        sc = ax.scatter(x, y, s=0.5, cmap=cmap, c=color, alpha=0.5, label=label)
+        sc = ax.scatter(
+            x, y, s=0.5, cmap=cmap, c=color, alpha=0.5, vmin=-0.2, vmax=0.2, label=label
+        )
 
     if add_colorbar:
-        plt.colorbar(sc, ax=ax)
+        plt.colorbar(
+            sc,
+            ax=ax,
+        )
 
     if xerr is not None or yerr is not None:
         ax.errorbar(
