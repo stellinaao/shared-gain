@@ -1,5 +1,6 @@
-colors_region = {"DMS": "#E85B15", "DLS": "#15A2E8"}
+colors_region = {"ACC_M2": "#6BCD2A", "DMS": "#E85B15", "DLS": "#15A2E8"}
 colors_region_epoch = {
+    "ACC_M2": {0: "#227F2B", 1: "#5AAC23", 2: "#C4F344"},
     "DMS": {0: "#8D2B1E", 1: "#E85B15", 2: "#F89A1F"},
     "DLS": {0: "#2435A4", 1: "#156DE8", 2: "#00DDFF"},
 }

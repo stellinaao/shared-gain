@@ -324,9 +324,9 @@ class Encoder:
 
         # baseline vs encoder r2
         if r2_comp:
-            self.plot_r2_comp(axes[0])
+            self.plot_r2_comp(ax=axes[0])
         else:
-            self.plot_r2_distro(axes[0])
+            self.plot_r2_distro(ax=axes[0])
 
         # p(resp)
         # self.plot_p_resp(axes[1]) FLAG: out of service for now
@@ -355,7 +355,7 @@ class Encoder:
 
         plot_raincloud(self.scores["encoder"], label=r"$r^2$, encoder", ax=ax, **kwargs)
 
-    def plot_r2_comp(self, ax=None):
+    def plot_r2_comp(self, reg=None, ax=None):
         if not hasattr(self, "scores"):
             try:
                 self.get_r2()
@@ -365,7 +365,17 @@ class Encoder:
         if ax is None:
             _, ax = plt.subplots(tight_layout=True)
 
-        ax.scatter(self.scores["baseline"], self.scores["encoder"], s=0.5, alpha=0.5)
+        if reg is None:
+            ax.scatter(
+                self.scores["baseline"], self.scores["encoder"], s=0.5, alpha=0.5
+            )
+        else:
+            ax.scatter(
+                self.scores["baseline"][self.reg_idxs[reg]],
+                self.scores["encoder"][self.reg_idxs[reg]],
+                s=0.5,
+                alpha=0.5,
+            )
         ax.plot([-0.5, 1], [-0.5, 1], color="#666666", linestyle="--", linewidth=0.5)
         ax.plot([-0.5, 1], [-0.5, 1], color="#666666", linestyle="--", linewidth=0.5)
         ax.axhline(y=0, color="k", linewidth=0.5)
@@ -373,6 +383,7 @@ class Encoder:
 
         ax.set_xlabel(r"$r^2$, drift")
         ax.set_ylabel(r"$r^2$, encoder")
+        return ax
 
     def get_sctavg_weights(
         self, regr="response", baseline_robs=None, subtract_baseline=True
