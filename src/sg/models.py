@@ -597,6 +597,15 @@ class Encoder:
         )
 
 
+class SharedGain(Encoder):
+    def __init__(self, subj_id, sess_id, n_latents, **kwargs):
+        self.subj_id = subj_id
+        self.sess_id = sess_id
+
+        self.n_latents = n_latents
+        super().__init__(subj_id, sess_id, **kwargs)
+
+
 class StrategyEncoder(Encoder):
     def __init__(
         self,
