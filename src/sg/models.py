@@ -546,16 +546,16 @@ class Encoder:
         if not hasattr(self, "encoder"):
             self.fit_encoder()
 
-        sc_tavg = get_tavg_sc_cond(
-            self.robs[:, self.reg_idxs[reg]], self.trial_data, regr=mode
-        )
+        # sc_tavg = get_tavg_sc_cond(
+        #     self.robs[:, self.reg_idxs[reg]], self.trial_data, regr=mode
+        # )
 
         r = PETHWeightRenderer(
             weights=self.encoder_weights[self.reg_idxs[reg], :],
-            weight_names=self.tv_names,
+            weight_names=self.tv_idxs.keys(),
             robs=self.robs[:, self.reg_idxs[reg]],
             robs_ylabel="Spike Count",
-            sc_tavg=sc_tavg,
+            # sc_tavg=sc_tavg,
             event_times=get_choice_ts(self.trial_data, mode=mode),
             spike_times=self.spike_times[reg],
             peths=get_psths_cond(self.psths[reg], self.trial_data, mode=mode),
