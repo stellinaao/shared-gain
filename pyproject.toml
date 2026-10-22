@@ -165,3 +165,6 @@ testpaths = ["tests"]
 markers = [
     "fast: marks tests as fast unit tests",
 ]
+
+[tool.uv.extra-build-dependencies]
+ssm = ["cython", "numpy"]
