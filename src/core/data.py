@@ -135,6 +135,7 @@ def load_sess(
         trial_data = trial_data[trial_mask]
 
         trial_data = add_bswitch_itrial(trial_data)
+        trial_data = add_strategy_model_params(subj_id, sess_id, trial_data)
 
         # get psths
         psths, spike_times, tbin_edges = get_psths_ref(
@@ -432,6 +433,136 @@ def get_unit_spike_times(spike_times, spike_clusters, neural_data, regions):
             )
 
     return unit_spike_times
+
+
+def add_strategy_model_params(subj_id, sess_id, trial_data):
+    model_params, strategy_blocks = get_model_params(subj_id, sess_id)
+    rpes, qs = get_mf_params(trial_data, model_params, strategy_blocks)
+    spes, bs = get_mb_params(trial_data, model_params, strategy_blocks)
+
+    mb_mask = trial_data["strategy"] == 1
+
+    trial_data["spe"] = np.nan
+    trial_data["b_L"] = np.nan
+    trial_data["b_R"] = np.nan
+
+    trial_data.loc[mb_mask, "spe"] = spes
+    trial_data.loc[mb_mask, "b_L"] = bs["L"]
+    trial_data.loc[mb_mask, "b_R"] = bs["R"]
+
+    mf_mask = trial_data["strategy"] == -1
+
+    trial_data["rpe"] = np.nan
+    trial_data["q_L"] = np.nan
+    trial_data["q_R"] = np.nan
+
+    trial_data.loc[mf_mask, "rpe"] = rpes
+    trial_data.loc[mf_mask, "q_L"] = qs["L"]
+    trial_data.loc[mf_mask, "q_R"] = qs["R"]
+
+    return trial_data
+
+
+def get_model_params(subj_id, sess_id):
+    with np.load(DATA_DIR / subj_id / "hmm_outputs.npz") as f:
+        agent_params_obs = f["agent_params_obs"]  # (158, 2)
+        hist_predicted_states = f["hist_predicted_states"]  # (158,)
+        block_bounds = f["block_bounds"].tolist()
+
+    session_ids_active = session_ids[np.where(subject_ids == subj_id)[0][0]]
+    session_ids_archive = [
+        sess_id
+        for sess_id in os.listdir(DATA_DIR / "archive" / subj_id)
+        if session_pattern.match(sess_id)
+    ]
+
+    session_ids_15 = np.sort(np.concatenate((session_ids_active, session_ids_archive)))
+
+    sess_idx_15 = np.where(session_ids_15 == sess_id)[0][0]
+    bounds = [0, *block_bounds[:15]]
+    bound_idxs = bounds[sess_idx_15 : sess_idx_15 + 1 + 1]
+
+    model_params = agent_params_obs[bound_idxs[0] : bound_idxs[1]]
+    strategy_blocks = hist_predicted_states[bound_idxs[0] : bound_idxs[1]]
+
+    return model_params, strategy_blocks
+
+
+def get_mf_params(trial_data, model_params, strategy_blocks):
+    mf_blocks = np.where(strategy_blocks == 0)[0]
+    mf_params = model_params[mf_blocks]
+
+    qs = {"L": [], "R": []}
+    rpes = []
+
+    for i, (block_idx, (alpha, _)) in enumerate(zip(mf_blocks, mf_params)):
+        response_block = trial_data["response"][trial_data["iblock"] == block_idx + 1]
+        rewarded_block = trial_data["rewarded"][trial_data["iblock"] == block_idx + 1]
+
+        for j, (choice, reward) in enumerate(zip(response_block, rewarded_block)):
+            choice_key = "L" if choice == 1 else ("R" if choice == -1 else None)
+
+            assert choice_key is not None
+            choice_key_c = "R" if choice_key == "L" else "L"
+
+            if i == 0 and j == 0:
+                q_stale = 0.5
+                q_stale_c = 0.5
+            else:
+                q_stale = qs[choice_key][-1]
+                q_stale_c = qs[choice_key_c][-1]
+
+            rpe = reward - q_stale
+            rpes.append(rpe)
+
+            qs[choice_key].append(q_stale + alpha * rpe)
+            qs[choice_key_c].append(q_stale_c)
+
+    rpes = np.array(rpes)
+    qs = {k: np.array(v) for k, v in qs.items()}
+
+    return rpes, qs
+
+
+def get_mb_params(trial_data, model_params, strategy_blocks):
+    mb_blocks = np.where(strategy_blocks == 1)[0]
+    mb_params = model_params[mb_blocks]
+
+    bs = {"L": [], "R": []}
+    spes = []
+
+    for i, (block_idx, (p_switch, p_reward)) in enumerate(zip(mb_blocks, mb_params)):
+        response_block = trial_data["response"][trial_data["iblock"] == block_idx + 1]
+        rewarded_block = trial_data["rewarded"][trial_data["iblock"] == block_idx + 1]
+
+        for j, (choice, reward) in enumerate(zip(response_block, rewarded_block)):
+            choice_key = "L" if choice == 1 else ("R" if choice == -1 else None)
+
+            assert choice_key is not None
+            choice_key_c = "R" if choice_key == "L" else "L"
+
+            if i == 0 and j == 0:
+                b_stale = 0.5
+                b_stale_c = 0.5
+            else:
+                b_stale = bs[choice_key][-1]
+                b_stale_c = bs[choice_key_c][-1]
+
+            spe = reward - b_stale  # reward is fine assuming 100:0 and not 90:10
+            spes.append(spe)
+
+            b = (
+                (1 - p_switch) * p_reward * b_stale
+                + (p_switch) * (1 - p_reward) * b_stale_c
+            ) / (p_reward * b_stale + (1 - p_reward) * b_stale_c)
+
+            bs[choice_key].append(b)
+            bs[choice_key_c].append(1 - b)
+
+    spes = np.array(spes)
+    bs = {k: np.array(v) for k, v in bs.items()}
+
+    return spes, bs
 
 
 def add_prev(trial_data):
@@ -1093,6 +1224,7 @@ def get_dm(
     trial_data,
     tv_keys,
     num_bins=None,
+    strategy_params=None,  # or "both" or "mb" or "mf"
     add_interaction=False,
     interaction_regrs=None,
     add_svd=False,
@@ -1125,6 +1257,7 @@ def get_dm(
             else:
                 bswitch_flag = False
 
+            # task vars
             tvs = trial_data[tv_keys]
             for k in tv_keys:
                 if "rewarded" in k:
@@ -1134,9 +1267,29 @@ def get_dm(
 
             tvs = np.hstack((tvs, tvs_bswitch)) if bswitch_flag else tvs
 
+            # strategy vars
+            strategy_names = []
+            if strategy_params is not None:
+                if strategy_params == "mb":
+                    strategy_names = ["spe"]
+                elif strategy_params == "mf":
+                    strategy_names = ["rpe"]
+                elif strategy_params == "both":
+                    strategy_names = ["spe", "rpe"]
+                else:
+                    raise ValueError(
+                        "invalid strategy_params value, only 'mb', 'mf', or 'both'"
+                    )
+
+                tvs_strategy = trial_data[strategy_names]
+                tvs_strategy = np.array(tvs_strategy, dtype="float32")
+                tvs = np.hstack((tvs, tvs_strategy))
+
             interaction_names = []
             if add_interaction:
-                tv_regr_names = np.concatenate((tv_names, bswitch_names))
+                tv_regr_names = np.concatenate(
+                    (tv_names, bswitch_names, strategy_names)
+                )
 
                 regr_pairs = product(tv_regr_names, tv_regr_names)
 
@@ -1205,6 +1358,7 @@ def get_dm(
     tv_names = {
         "task_vars": tv_names,
         "bswitch_itrial": bswitch_names,
+        "strategy_params": strategy_names,
         "interaction": interaction_names,
         "svd": svd_names,
         "lick": lick_names,
@@ -1225,6 +1379,7 @@ def get_encoder_io(
     num_tents=10,
     tv_keys=["response", "rewarded", "block_side", "response_prev", "rewarded_prev"],
     num_bins=None,
+    strategy_params=None,
     add_interaction=True,
     interaction_regrs=None,
     add_svd=True,
@@ -1243,6 +1398,7 @@ def get_encoder_io(
         trial_data,
         tv_keys,
         num_bins=num_bins,
+        strategy_params=strategy_params,
         add_interaction=add_interaction,
         interaction_regrs=interaction_regrs,
         add_svd=add_svd,
