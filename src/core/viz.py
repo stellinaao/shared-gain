@@ -3,7 +3,7 @@ import numpy as np
 import seaborn as sns
 
 from matplotlib.collections import LineCollection
-from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, to_rgb
 
 from sklearn.linear_model import LinearRegression
 from scipy.stats import pearsonr, sem
@@ -766,6 +766,7 @@ def plot_ridges_sess(data_sess, key, sess_ids, data_label):
 def plot_grouped_violin(
     data,
     ylabel="",
+    ylim=None,
     title="",
     colors=None,
     ax=None,
@@ -808,9 +809,72 @@ def plot_grouped_violin(
     ax.legend(loc="upper right")
     ax.axhline(y=0, linewidth=0.5, color="k")
 
+    ax.set_ylim(ylim)
+
     ax.set_xticks(x, conditions, rotation=45, ha="right")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
+
+    return fig, ax
+
+
+def plot_grouped_boxes(data: dict, ylim=None, colors: dict = {}, widths=None, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(2.5, 2.5), tight_layout=True)
+    else:
+        fig = ax.get_figure()
+
+    rng = np.random.default_rng(0)
+
+    # data is {group: {hue: values}}; groups go along x, hues sit side by side
+    groups = list(data)
+    hues = list(dict.fromkeys(h for sub in data.values() for h in sub))
+    default_colors = plt.get_cmap("tab10")(np.linspace(0, 1, len(hues)))
+    w = 0.8 / len(hues)
+    bw = w * 0.9 if widths is None else widths
+
+    for j, (hue, default_color) in enumerate(zip(hues, default_colors)):
+        color = colors.get(hue, default_color)
+        offset = (j - (len(hues) - 1) / 2) * w
+        pos, sets = [], []
+        for i, group in enumerate(groups):
+            vals = np.asarray(data[group].get(hue, []), dtype=float)
+            vals = vals[np.isfinite(vals)]
+            if len(vals) > 0:
+                pos.append(i + offset)
+                sets.append(vals)
+        if not sets:
+            continue
+
+        # whiskers at the 5th/95th percentiles; every point is drawn below
+        parts = ax.boxplot(
+            sets,
+            positions=pos,
+            widths=bw,
+            whis=(5, 95),
+            showfliers=False,
+            patch_artist=True,
+            manage_ticks=False,
+            boxprops={
+                "facecolor": (*to_rgb(color), 0.4),
+                "edgecolor": "k",
+                "linewidth": 0.5,
+            },
+            whiskerprops={"color": "k", "linewidth": 0.5},
+            capprops={"color": "k", "linewidth": 0.5},
+            medianprops={"color": "k", "linewidth": 0.8, "zorder": 4},
+        )
+        parts["boxes"][0].set_label(hue)
+
+        for p, vals in zip(pos, sets):
+            x = p + (rng.random(len(vals)) - 0.5) * bw * 0.5
+            ax.scatter(x, vals, color=color, s=1.5, alpha=0.2, linewidths=0, zorder=3)
+
+    ax.set_ylim(ylim)
+
+    ax.axhline(y=0, color="#666666", linestyle="--", linewidth=0.5)
+    ax.set_xticks(np.arange(len(groups)), groups, rotation=45, ha="right")
+    ax.legend()
 
     return fig, ax
 

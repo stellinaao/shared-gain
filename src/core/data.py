@@ -53,6 +53,13 @@ session_ids = [
 
 probes = ["imec0", "imec1"]
 
+default_sessions = {
+    "MR82": "20251027_152036",
+    "MR83": "20251024_151229",
+    "MR94": "20260911_172344",
+    "MR95": "20260910_180540",
+}
+
 
 # LOAD DATA
 def load_sess(
@@ -470,11 +477,14 @@ def get_model_params(subj_id, sess_id):
         block_bounds = f["block_bounds"].tolist()
 
     session_ids_active = session_ids[np.where(subject_ids == subj_id)[0][0]]
-    session_ids_archive = [
-        sess_id
-        for sess_id in os.listdir(DATA_DIR / "archive" / subj_id)
-        if session_pattern.match(sess_id)
-    ]
+    try:
+        session_ids_archive = [
+            sess_id
+            for sess_id in os.listdir(DATA_DIR / "archive" / subj_id)
+            if session_pattern.match(sess_id)
+        ]
+    except FileNotFoundError:
+        session_ids_archive = []
 
     session_ids_15 = np.sort(np.concatenate((session_ids_active, session_ids_archive)))
 
@@ -551,9 +561,12 @@ def get_mb_params(trial_data, model_params, strategy_blocks):
             spe = reward - b_stale  # reward is fine assuming 100:0 and not 90:10
             spes.append(spe)
 
+            p_reward_cond = p_reward if reward else (1 - p_reward)
+            p_reward_cond_c = (1 - p_reward) if reward else p_reward
+
             b = (
-                (1 - p_switch) * p_reward * b_stale
-                + (p_switch) * (1 - p_reward) * b_stale_c
+                (1 - p_switch) * p_reward_cond * b_stale
+                + (p_switch) * p_reward_cond_c * b_stale_c
             ) / (p_reward * b_stale + (1 - p_reward) * b_stale_c)
 
             bs[choice_key].append(b)
