@@ -1368,6 +1368,7 @@ def get_dm(
     xs = np.linspace(0, num_trials - 1, num_tents)
     tents = tent_basis_generate(xs)
 
+    tv_names_ = tv_names
     tv_names = {
         "task_vars": tv_names,
         "bswitch_itrial": bswitch_names,
@@ -1380,6 +1381,10 @@ def get_dm(
     tv_idxs = {
         tv_name: i for i, tv_name in enumerate(np.concatenate(list(tv_names.values())))
     }
+
+    tv_names["base_regressors"] = np.concatenate(
+        [tv_names_, bswitch_names, strategy_names]
+    )
 
     return (tents, tvs), (tv_names, tv_idxs)
 

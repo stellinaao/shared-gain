@@ -624,7 +624,7 @@ class StrategyEncoder(Encoder):
         self.balance_strategy = kwargs.pop("balance_strategy", True)
         if self.balance_strategy:
             self.cond_balance = kwargs.pop("cond_balance", False)
-        self.min_num_trials = kwargs.pop("min_num_trials", 20)
+        self.min_num_trials = kwargs.pop("min_num_trials", 40)
 
         self.idxs = kwargs.pop("idxs", None)
 
