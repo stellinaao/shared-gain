@@ -1218,11 +1218,23 @@ def get_robs(psths, regions, norm=True):
         # ** 0.5
     )
 
+    robs_nonorm = robs
+
     if norm:
         s = np.std(robs, axis=0) + 1e-10
         mu = np.mean(robs, axis=0)
         robs = (robs - mu) / s
-    return robs
+    return robs, robs_nonorm
+
+
+def norm_robs(robs_ref, robs=None):
+    s = np.std(robs_ref, axis=0) + 1e-10
+    mu = np.mean(robs_ref, axis=0)
+
+    robs_ref_norm = (robs_ref - mu) / s
+    robs_norm = (robs - mu) / s if robs is not None else None
+
+    return robs_ref_norm, robs_norm
 
 
 def get_reg_keys(psths, regions):
@@ -1408,7 +1420,7 @@ def get_encoder_io(
 ):
 
     # neural activity (Y/O)
-    robs = get_robs(psths, regions, norm)
+    robs, robs_nonorm = get_robs(psths, regions, norm)
     reg_idxs = get_reg_keys(psths, regions)
 
     # trial data (X/I)
@@ -1425,7 +1437,7 @@ def get_encoder_io(
         num_tents=num_tents,
         do_ohe=do_ohe,
     )
-    return tents, tvs, robs, tv_names, tv_idxs, reg_idxs
+    return tents, tvs, robs, robs_nonorm, tv_names, tv_idxs, reg_idxs
 
 
 # BALANCING

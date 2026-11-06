@@ -18,6 +18,7 @@ from core.data import (
     get_tavg_sc_cond,
     get_choice_ts,
     get_psths_cond,
+    norm_robs,
 )
 from core.tv_consts import tv_vals
 
@@ -147,6 +148,7 @@ class Encoder:
             self.tents,
             self.tvs,
             self.robs,
+            self.robs_nonorm,
             self.tv_names,
             self.tv_idxs,
             self.reg_idxs,
@@ -238,13 +240,18 @@ class Encoder:
         train_idxs, test_idxs = idxs
         dm, robs = io
 
+        if self.norm:
+            robs_train, _ = norm_robs(robs[train_idxs])
+        else:
+            robs_train = robs[train_idxs]
+
         if model is None:
             model = RidgeCV(
                 alphas=np.logspace(
                     -self.max_reg, self.max_reg, 2 * self.max_reg + 1, base=10
                 ),
                 alpha_per_target=True,
-            ).fit(dm[train_idxs], robs[train_idxs])
+            ).fit(dm[train_idxs], robs_train)
         return model.predict(dm[test_idxs]), model
 
     def _get_predictions_encoder(
@@ -256,6 +263,11 @@ class Encoder:
         else:
             tents, tvs, robs = io
 
+        if self.norm:
+            robs_train, _ = norm_robs(robs[train_idxs])
+        else:
+            robs_train = robs[train_idxs]
+
         if baseline_predict is None:
             baseline_predict = baseline_model.predict(tents)
 
@@ -266,7 +278,8 @@ class Encoder:
             alpha_per_target=True,
         ).fit(
             tvs[train_idxs],
-            robs[train_idxs] - baseline_predict[train_idxs],
+            robs_train
+            - baseline_predict[train_idxs],  # figure out what to do for baseline
         )
 
         return baseline_predict[test_idxs] + encoder.predict(tvs[test_idxs]), encoder
@@ -280,27 +293,45 @@ class Encoder:
             for k in ["baseline", "encoder"]
         }
 
+        if self.norm:
+            robs_tr_norm = np.zeros_like(self.robs)
+
         for i, (train_idxs, test_idxs) in enumerate(
             KFold(n_splits=n_folds, shuffle=True, random_state=0).split(self.robs)
         ):
             # train, test, save test predictions
             self.yhats["baseline"][test_idxs], baseline_model = self._get_predictions(
                 is_encoder=False,
-                io=(self.tents, self.robs),
+                io=(self.tents, self.robs_nonorm),
                 idxs=(train_idxs, test_idxs),
             )
 
             self.yhats["encoder"][test_idxs], _ = self._get_predictions(
                 is_encoder=True,
-                io=(self.tents, self.tvs, self.robs),
+                io=(self.tents, self.tvs, self.robs_nonorm),
                 idxs=(train_idxs, test_idxs),
                 baseline_model=baseline_model,
             )
 
-        self.scores = {
-            k: r2_score(self.robs, yhat, multioutput="raw_values", force_finite=False)
-            for k, yhat in self.yhats.items()
-        }
+            if self.norm:
+                _, robs_tr_norm[test_idxs] = norm_robs(
+                    self.robs[train_idxs], self.robs[test_idxs]
+                )
+
+        if self.norm:
+            self.scores = {
+                k: r2_score(
+                    robs_tr_norm, yhat, multioutput="raw_values", force_finite=False
+                )
+                for k, yhat in self.yhats.items()
+            }
+        else:
+            self.scores = {
+                k: r2_score(
+                    self.robs, yhat, multioutput="raw_values", force_finite=False
+                )
+                for k, yhat in self.yhats.items()
+            }
 
     def get_weights(self, regr, val=None):
         if val is not None:
@@ -1055,6 +1086,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
             (
                 self.tents,
                 self.tvs,
+                _,
                 _,
                 self.tv_names,
                 self.tv_idxs,
