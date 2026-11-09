@@ -10,8 +10,6 @@ Last Modified: 2026-04-05
 Python Version: 3.11.14
 """
 
-import pickle
-
 import numpy as np
 import pandas as pd
 import re
@@ -24,7 +22,6 @@ from itertools import product
 
 from core.tv_consts import tv_name_map
 
-from spks.utils import get_cluster_spike_times
 from spks.event_aligned import compute_spike_count
 
 # from damn.alignment import compute_spike_count
@@ -93,7 +90,6 @@ def load_sess(
     sess_idx:   the index of the session, e.g., -1 for the last session
 
     thresh:     the minimum firing rate to keep, defaults to 1 sp/s
-    mode:       'old' to load data from the old cohort (MM012 & MM013), 'new' to load data from the new cohort (MR82, MR83, MR85)
     """
 
     if (subj_id is None and subj_idx is None) or (sess_id is None and sess_idx is None):
@@ -106,152 +102,87 @@ def load_sess(
                 subj_idx = np.where(subject_ids == subj_id)[0][0]
             sess_id = session_ids[subj_idx][sess_idx]
 
-    if subj_id == "MM012" or subj_id == "MM013":
-        mode = "old"
-    elif subj_id.startswith("MR"):
-        mode = "new"
+    fpath = DATA_DIR / subj_id / sess_id
+    if not fpath.exists():
+        raise FileNotFoundError
 
-    if mode == "new":
-        fpath = DATA_DIR / subj_id / sess_id
-        if not fpath.exists():
-            raise FileNotFoundError
+    # load from pkl
+    neural_data = pd.read_pickle(fpath / "neural_data.pkl")
 
-        # load from pkl
-        neural_data = pd.read_pickle(fpath / "neural_data.pkl")
+    spike_times = {
+        region: values["spike_times"] for region, values in neural_data.items()
+    }
+    session_data = pd.read_pickle(fpath / "session_data.pkl")
+    trial_data = pd.read_csv(fpath / "trialdata.csv")
+    regions = np.array(list(neural_data.keys()))
 
-        spike_times = {
-            region: values["spike_times"] for region, values in neural_data.items()
-        }
-        session_data = pd.read_pickle(fpath / "session_data.pkl")
-        trial_data = pd.read_csv(fpath / "trialdata.csv")
-        regions = np.array(list(neural_data.keys()))
+    # trial_data edits and addendums
+    trial_data["trial_start_time"] = session_data["events"].iloc[
+        np.where(np.array(session_data["event_labels"]) == "trial_start")[0][0]
+    ]["event_timestamps"]
 
-        # trial_data edits and addendums
-        trial_data["trial_start_time"] = session_data["events"].iloc[
-            np.where(np.array(session_data["event_labels"]) == "trial_start")[0][0]
-        ]["event_timestamps"]
+    trial_data["block_side"] = np.where(
+        trial_data["current_block_side"] == "left", 1, -1
+    )
 
-        trial_data["block_side"] = np.where(
-            trial_data["current_block_side"] == "left", 1, -1
-        )
+    trial_data = add_prev(trial_data)
+    trial_data = add_strat(trial_data, session_data)
 
-        trial_data = add_prev(trial_data)
-        trial_data = add_strat(trial_data, session_data)
+    trial_mask = get_trial_mask(trial_data, response_prev_only=response_prev_only)
+    trial_data = trial_data[trial_mask]
 
-        trial_mask = get_trial_mask(trial_data, response_prev_only=response_prev_only)
-        trial_data = trial_data[trial_mask]
+    trial_data = add_bswitch_itrial(trial_data)
+    trial_data = add_strategy_model_params(subj_id, sess_id, trial_data)
 
-        trial_data = add_bswitch_itrial(trial_data)
-        trial_data = add_strategy_model_params(subj_id, sess_id, trial_data)
+    # get psths
+    psths, spike_times, tbin_edges = get_psths_ref(
+        spike_times,
+        trial_data,
+        session_data,
+        regions,
+        tpre,
+        tpost,
+        binwidth_ms,
+        alignment,
+        trial_start_pre,
+        tpre_ref,
+        tpost_ref,
+        alignment_ref,
+        thresh=1,
+    )
 
-        # get psths
-        psths, spike_times, tbin_edges = get_psths_ref(
-            spike_times,
+    # add svds
+    if add_svd:
+        svds_df = get_svd_df(
+            subj_id,
+            sess_id,
             trial_data,
             session_data,
-            regions,
-            tpre,
-            tpost,
-            binwidth_ms,
-            alignment,
-            trial_start_pre,
-            tpre_ref,
-            tpost_ref,
-            alignment_ref,
-            mode,
-            thresh=1,
-        )
-
-        # add svds
-        if add_svd:
-            svds_df = get_svd_df(
-                subj_id,
-                sess_id,
-                trial_data,
-                session_data,
-                alignment=alignment,
-                tpre=tpre,
-                tpost=tpost,
-                full_trial=full_trial,
-            )
-            if full_trial:
-                trial_data = trial_data.join(svds_df)
-            else:
-                trial_data[svds_df.columns] = svds_df.reset_index(drop=True).values
-        if add_licks:
-            licks_df = get_licks_df(
-                subj_id,
-                sess_id,
-                trial_data,
-                session_data,
-                alignment=alignment,
-                tpre=tpre,
-                tpost=tpost,
-                full_trial=full_trial,
-            )
-            if full_trial:
-                trial_data = trial_data.join(licks_df)
-            else:
-                trial_data[licks_df.columns] = licks_df.reset_index(drop=True).values
-        return spike_times, trial_data, psths, session_data, regions, tbin_edges
-    elif mode == "old":
-        # load data and set variables needed for aligning spikes to behavioral events
-        if subj_idx is None:
-            subj_idx = np.where(np.array(subject_ids) == subj_id)[0][0]
-        if sess_idx is None:
-            sess_idx = np.where(session_ids[subj_idx] == sess_id)[0][0]
-        _, _, trial_data_r, neural_data, animal_data, session_data = load_data_sess(
-            subj_idx=subj_idx, sess_idx=sess_idx
-        )
-        spike_clusters, spike_times, _, _, _, regions = get_align_vars(
-            neural_data, animal_data
-        )
-        spike_times = get_unit_spike_times(
-            spike_times, spike_clusters, neural_data, regions
-        )
-        regions = np.concatenate(regions)
-
-        # trial_data addendums
-        trial_data = add_prev(trial_data_r)
-        trial_data = add_strat(trial_data, session_data)
-
-        trial_data["trial_start_time"] = trial_data["task_start_time"]
-        trial_mask = get_trial_mask(trial_data, response_prev_only=response_prev_only)
-        trial_data = trial_data[trial_mask]
-
-        # get psths
-        psths, trial_mask, zstd_units = get_psths(
-            spike_times,
-            trial_data,
-            session_data,
-            regions,
+            alignment=alignment,
             tpre=tpre,
             tpost=tpost,
-            binwidth_ms=binwidth_ms,
+            full_trial=full_trial,
+        )
+        if full_trial:
+            trial_data = trial_data.join(svds_df)
+        else:
+            trial_data[svds_df.columns] = svds_df.reset_index(drop=True).values
+    if add_licks:
+        licks_df = get_licks_df(
+            subj_id,
+            sess_id,
+            trial_data,
+            session_data,
             alignment=alignment,
-            trial_start_pre=trial_start_pre,
-            reward_only=False,
-            prev_filter=False,
-            mode=mode,
+            tpre=tpre,
+            tpost=tpost,
+            full_trial=full_trial,
         )
-        # update spike_times with the removed units
-        for reg in regions:
-            if len(zstd_units[reg]) > 0:
-                spike_times[reg] = [
-                    st_unit
-                    for i, st_unit in enumerate(spike_times[reg])
-                    if i not in set(zstd_units[reg])
-                ]
-
-        trial_data = trial_data[trial_mask]
-
-        psths, spike_times = rem_low_fr(
-            psths, spike_times, thresh=thresh, binwidth_ms=binwidth_ms
-        )
-
-        return spike_times, trial_data, psths, session_data, regions, tbin_edges
-    else:
-        raise ValueError("valid values for mode are 'old' and 'new.'")
+        if full_trial:
+            trial_data = trial_data.join(licks_df)
+        else:
+            trial_data[licks_df.columns] = licks_df.reset_index(drop=True).values
+    return spike_times, trial_data, psths, session_data, regions, tbin_edges
 
 
 def get_psths_ref(
@@ -267,7 +198,6 @@ def get_psths_ref(
     tpre_ref,
     tpost_ref,
     alignment_ref,
-    mode,
     thresh=1,
 ):
     psths, trial_mask, tbin_edges = get_psths(
@@ -283,7 +213,6 @@ def get_psths_ref(
         do_rem_zstd=False,
         reward_only=False,
         prev_filter=False,
-        mode=mode,
     )
 
     if alignment_ref is not None and (
@@ -308,7 +237,6 @@ def get_psths_ref(
             do_rem_zstd=False,  # so that there are no indexing issues later
             reward_only=False,
             prev_filter=False,
-            mode=mode,
         )
 
     else:
@@ -325,121 +253,6 @@ def get_psths_ref(
     )
 
     return psths, spike_times, tbin_edges
-
-
-def load_data(thresh=1):
-    trial_data_r = []
-    trial_data = []
-    session_data = []
-    unit_spike_times = []
-    regions = []
-
-    for subj_idx in range(len(subject_ids)):
-        print(f"Subject: {subject_ids[subj_idx]}")
-        (
-            trial_data_r_subj,
-            trial_data_subj,
-            session_data_subj,
-            unit_spike_times_subj,
-            regions_subj,
-        ) = load_subj(subj_idx, thresh=thresh)
-
-        trial_data_r.append(trial_data_r_subj)
-        trial_data.append(trial_data_subj)
-        session_data.append(session_data_subj)
-        unit_spike_times.append(unit_spike_times_subj)
-        regions.append(regions_subj)
-
-    return trial_data_r, trial_data, session_data, unit_spike_times, regions
-
-
-def load_subj(subj_idx, thresh=1):
-    trial_data_r = []
-    trial_data = []
-    session_data = []
-    unit_spike_times = []
-    regions = []
-
-    for sess_idx in range(len(session_ids[subj_idx])):
-        print(f"> Session: {session_ids[subj_idx][sess_idx]}")
-        (
-            trial_data_r_sess,
-            trial_data_sess,
-            session_data_sess,
-            unit_spike_times_lite_sess,
-            regions_sess,
-        ) = load_sess(subj_idx, sess_idx, thresh=thresh)
-        trial_data_r.append(trial_data_r_sess)
-        trial_data.append(trial_data_sess)
-        session_data.append(session_data_sess)
-        unit_spike_times.append(unit_spike_times_lite_sess)
-        regions.append(regions_sess)
-
-    return trial_data_r, trial_data, session_data, unit_spike_times, regions
-
-
-def load_data_sess(
-    subj_id=None, sess_id=None, subj_idx=None, sess_idx=None, mode="new"
-):
-    fpath_data = DATA_DIR / subject_ids[subj_idx] / session_ids[subj_idx][sess_idx]
-
-    riglog = np.load(
-        f"{fpath_data}/riglog.npy", allow_pickle="TRUE"
-    ).item()  # log from the rig of events that happened
-    corrected_onsets = np.load(
-        f"{fpath_data}/corrected_onsets.npy", allow_pickle="TRUE"
-    ).item()  # TTL timestamps of behavioral events
-    trial_data = pd.read_csv(
-        f"{fpath_data}/trialdata.csv"
-    )  # information about task on each trial
-
-    # neural_data is a dict which has information about the spike-sorted neural data
-    neural_data = []
-    for probe in probes:
-        with open(f"{fpath_data}/{probe}_neural_data.pkl", "rb") as f:
-            neural_data.append(pickle.load(f))
-
-    # animal_data is a dict which has information about the animal/implant locations
-    with open(f"{fpath_data}/animal_data.pkl", "rb") as f:
-        animal_data = pickle.load(f)
-
-    # session_data is a dict which has information about the session, such as the strategy IDs for each block
-    with open(f"{fpath_data}/session_data.pkl", "rb") as f:
-        session_data = pickle.load(f)
-
-    return riglog, corrected_onsets, trial_data, neural_data, animal_data, session_data
-
-
-def get_align_vars(neural_data, animal_data):
-    sc = [
-        neural_data[probe_idx]["spike_clusters"]
-        for probe_idx, probe in enumerate(probes)
-    ]
-    st = [
-        neural_data[probe_idx]["spike_times"] for probe_idx, probe in enumerate(probes)
-    ]
-    srate = neural_data[0][
-        "sampling_rate"
-    ]  # hardcode as 0 probe idx because it should be same across all probes
-    frame_rate = neural_data[0]["frame_rate"]
-    apsyncdata = neural_data[0]["apsyncdata"]
-    regions = [animal_data[f"{probe}_regions"] for probe in probes]
-
-    return sc, st, srate, frame_rate, apsyncdata, regions
-
-
-def get_unit_spike_times(spike_times, spike_clusters, neural_data, regions):
-    unit_spike_times = {}
-    for probe_idx, probe in enumerate(probes):
-        for region in regions[probe_idx]:
-            # unit_spike_times['ACC'][0] retrieves the spike times for the first unit in ACC
-            unit_spike_times[region] = get_cluster_spike_times(
-                spike_times[probe_idx],
-                spike_clusters[probe_idx],
-                good_unit_ids=neural_data[probe_idx][f"{region}_units"],
-            )
-
-    return unit_spike_times
 
 
 def add_strategy_model_params(subj_id, sess_id, trial_data):
@@ -750,7 +563,6 @@ def get_psths(
     do_rem_zstd=True,
     shuffle=False,
     prev_filter=True,
-    mode="new",
 ):
     mask_resp = (
         ~np.isnan(trial_data["response_time"])
@@ -774,17 +586,8 @@ def get_psths(
     elif alignment == "trial_start":
         ts = trial_data["trial_start_time"][mask] - trial_start_pre
     elif alignment == "reward":
-        try:
-            ts = trial_data["trial_start_time"][mask] + trial_data["outcome_time"][mask]
-        except KeyError:
-            if mode == "old":
-                ts = (
-                    trial_data["trial_start_time"][mask]
-                    + trial_data["response_time"][mask]
-                    + 0.2
-                )
-            else:
-                raise KeyError
+        ts = trial_data["trial_start_time"][mask] + trial_data["outcome_time"][mask]
+
     else:
         raise ValueError(f"{alignment} alignment not implemented yet")
 
@@ -806,10 +609,6 @@ def get_psths(
     )
 
     _, tbin_edges, _ = compute_spike_count(ts, tasks[0][1], tpre, tpost, binwidth_ms)
-
-    # psth_matrix, timebin_edges, event_index = compute_spike_count(
-    #     event_times=ts, spike_times=tasks[0][1], pre_seconds=tpre+0.001, post_seconds=tpost+0.001, binwidth_ms=binwidth_ms,
-    # )
 
     idx = 0
     for reg in regions:
@@ -1218,13 +1017,11 @@ def get_robs(psths, regions, norm=True):
         # ** 0.5
     )
 
-    robs_nonorm = robs
-
     if norm:
         s = np.std(robs, axis=0) + 1e-10
         mu = np.mean(robs, axis=0)
         robs = (robs - mu) / s
-    return robs, robs_nonorm
+    return robs
 
 
 def norm_robs(robs_ref, robs=None):
@@ -1364,6 +1161,7 @@ def get_dm(
     if add_svd:
         svd_keys = [f"SVD_{i}" for i in range(num_svd)]
         tvs_svd = zscore(trial_data[svd_keys], axis=0)
+        print(np.shape(tvs), np.shape(tvs_svd))
         tvs = np.hstack((tvs, tvs_svd)) if tvs is not None else tvs_svd
         svd_names = [f"svd_{i}" for i in range(num_svd)]
 
@@ -1420,7 +1218,7 @@ def get_encoder_io(
 ):
 
     # neural activity (Y/O)
-    robs, robs_nonorm = get_robs(psths, regions, norm)
+    robs = get_robs(psths, regions, norm)
     reg_idxs = get_reg_keys(psths, regions)
 
     # trial data (X/I)
@@ -1437,7 +1235,8 @@ def get_encoder_io(
         num_tents=num_tents,
         do_ohe=do_ohe,
     )
-    return tents, tvs, robs, robs_nonorm, tv_names, tv_idxs, reg_idxs
+    print("GRAH")
+    return tents, tvs, robs, tv_names, tv_idxs, reg_idxs
 
 
 # BALANCING
