@@ -73,6 +73,7 @@ def load_sess(
     alignment_ref=None,
     response_prev_only=True,
     add_svd=False,
+    svd_stepsize=None,
     add_licks=False,
     full_trial=False,
     trial_start_pre=0,
@@ -158,6 +159,7 @@ def load_sess(
             sess_id,
             trial_data,
             session_data,
+            svd_stepsize=svd_stepsize,
             alignment=alignment,
             tpre=tpre,
             tpost=tpost,
@@ -448,7 +450,9 @@ def get_trial_mask(
 
 
 # SVD
-def get_svd_df(subj_id, sess_id, trial_data, session_data, **trial_idx_kwargs):
+def get_svd_df(
+    subj_id, sess_id, trial_data, session_data, svd_stepsize=None, **trial_idx_kwargs
+):
     trial_start = session_data["events"]["event_timestamps"][0]
     movie_frame = session_data["events"]["event_timestamps"][1]
 
@@ -461,14 +465,27 @@ def get_svd_df(subj_id, sess_id, trial_data, session_data, **trial_idx_kwargs):
     ).item()
 
     frame_trial_idxs = get_event_trial_idxs(
-        trial_start, trial_data, movie_frame, **trial_idx_kwargs
+        trial_start,
+        trial_data,
+        movie_frame,
+        svd_stepsize=svd_stepsize,
+        **trial_idx_kwargs,
     )
 
-    svd_tavg = np.zeros((len(frame_trial_idxs), 200))
-    for i, (start, end) in enumerate(frame_trial_idxs):
-        svd_tavg[i] = movements["SVT"][:, start:end].mean(axis=1)
+    if svd_stepsize is None:
+        svd_tavg = np.zeros((len(frame_trial_idxs), 200))
+        for i, (start, end) in enumerate(frame_trial_idxs):
+            svd_tavg[i] = movements["SVT"][:, start:end].mean(axis=1)
 
-    svd_df = pd.DataFrame(svd_tavg, columns=[f"SVD_{i}" for i in range(200)])
+        svd_df = pd.DataFrame(svd_tavg, columns=[f"SVD_{i}" for i in range(200)])
+    else:
+        svd_tavg = np.zeros((frame_trial_idxs.shape[0], frame_trial_idxs.shape[1], 200))
+
+        for trial_i in range(len(frame_trial_idxs)):
+            for bin_i, (start, end) in enumerate(frame_trial_idxs[trial_i]):
+                svd_tavg[trial_i][bin_i] = movements["SVT"][:, start:end].mean(axis=1)
+
+        svd_df = pd.DataFrame({f"SVD_{i}": list(svd_tavg[:, :, i]) for i in range(200)})
 
     return svd_df
 
@@ -498,6 +515,7 @@ def get_event_trial_idxs(
     trial_start,
     trial_data,
     movie_frame,
+    svd_stepsize=None,
     alignment="choice",
     tpre=None,
     tpost=None,
@@ -527,13 +545,30 @@ def get_event_trial_idxs(
 
         trial_idxs = np.vstack((ts - tpre, ts + tpost)).T
 
-        frame_trial_idxs = np.zeros((len(trial_idxs), 2), dtype=np.int32)
+        if svd_stepsize is None:
+            frame_trial_idxs = np.zeros((len(trial_idxs), 2), dtype=np.int32)
 
-        for trial_i, (trial_pre, trial_post) in enumerate(trial_idxs):
-            start_idx = np.searchsorted(movie_frame, trial_pre)
-            end_idx = np.searchsorted(movie_frame, trial_post)
+            for trial_i, (trial_pre, trial_post) in enumerate(trial_idxs):
+                start_idx = np.searchsorted(movie_frame, trial_pre)
+                end_idx = np.searchsorted(movie_frame, trial_post)
 
-            frame_trial_idxs[trial_i] = (start_idx, end_idx)
+                frame_trial_idxs[trial_i] = (start_idx, end_idx)
+        else:
+            num_bins = int((tpre + tpost) / svd_stepsize)
+
+            # assert num_bins == (tpre+tpost)/svd_stepsize, f"svd stepsize {svd_stepsize} doesn't evenly divide the interval {tpre}, {tpost}, {tpre+tpost}, {(tpre+tpost)/svd_stepsize}"
+
+            frame_trial_idxs = np.zeros((len(trial_idxs), num_bins, 2), dtype=np.int32)
+
+            for trial_i, (trial_pre, trial_post) in enumerate(trial_idxs):
+                for i in range(num_bins):
+                    s = trial_pre + i * svd_stepsize
+                    e = trial_pre + (i + 1) * svd_stepsize
+
+                    start_idx = np.searchsorted(movie_frame, s)
+                    end_idx = np.searchsorted(movie_frame, e)
+
+                    frame_trial_idxs[trial_i][i] = (start_idx, end_idx)
 
     return frame_trial_idxs
 
@@ -1160,8 +1195,19 @@ def get_dm(
     svd_names = []
     if add_svd:
         svd_keys = [f"SVD_{i}" for i in range(num_svd)]
-        tvs_svd = zscore(trial_data[svd_keys], axis=0)
-        print(np.shape(tvs), np.shape(tvs_svd))
+
+        is_tre = isinstance(trial_data[svd_keys[0]].iloc[0], np.ndarray)
+
+        if is_tre:
+            tvs_svd = zscore(
+                np.stack(
+                    [np.concatenate(trial_data[k].to_list()) for k in svd_keys], axis=1
+                ),
+                axis=0,
+            )
+        else:
+            tvs_svd = zscore(trial_data[svd_keys], axis=0)
+
         tvs = np.hstack((tvs, tvs_svd)) if tvs is not None else tvs_svd
         svd_names = [f"svd_{i}" for i in range(num_svd)]
 
@@ -1235,7 +1281,6 @@ def get_encoder_io(
         num_tents=num_tents,
         do_ohe=do_ohe,
     )
-    print("GRAH")
     return tents, tvs, robs, tv_names, tv_idxs, reg_idxs
 
 

@@ -98,7 +98,7 @@ class Encoder:
     def seed(self):
         np.random.seed(self.random_state)
 
-    def get_data(self):
+    def get_data(self, svd_stepsize=None):
         if self.forbid_data_access:
             raise AttributeError("tried to get data when forbidden")
 
@@ -125,6 +125,7 @@ class Encoder:
             response_prev_only=self.response_prev_only,
             add_svd=self.add_svd,
             add_licks=self.add_licks,
+            svd_stepsize=svd_stepsize,
             full_trial=self.full_trial,
             thresh=self.thresh,
         )
@@ -1038,7 +1039,7 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
 
         def get_data(self):
             self.forbid_data_access = False
-            super().get_data()
+            super().get_data(svd_stepsize=self.stepsize_s)
             self.forbid_data_access = True
 
             self.epoch_keys = {
@@ -1051,7 +1052,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
         def build_dm(self):
             if not (hasattr(self, "psths")):
                 self.get_data()
-            print("AH")
             (
                 self.tents,
                 self.tvs,
@@ -1076,7 +1076,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 binwidth_ms=self.binwidth_ms,
                 do_ohe=self.do_ohe,
             )
-            print("BAH")
 
             if enc_class is StrategyEncoder:
                 self.encoder_ref.forbid_data_access = False
@@ -1102,7 +1101,6 @@ def make_tre_dme(enc_class: Type[Encoder] = Encoder, **kwargs):
                 tpre_ref=_edge_inclusive(self.tpre_ref),
                 tpost_ref=_edge_inclusive(self.tpost_ref),
                 alignment_ref=self.alignment_ref,
-                mode="new",
                 thresh=self.thresh,
             )
 
