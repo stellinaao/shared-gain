@@ -450,6 +450,38 @@ def get_trial_mask(
 
 
 # SVD
+def get_spouts_active(trial_data, movie_frame):
+    choice_ts = trial_data["trial_start_time"] + trial_data["response_time"]  # s
+    trial_start_ts = trial_data["trial_start_time"]
+
+    spout_out_ts = np.vstack((choice_ts + 0.17, choice_ts + 0.23)).T
+    spout_in_mini_ts = np.vstack((trial_start_ts + 0, trial_start_ts + 0.07)).T
+    spout_in_full_ts = np.vstack((trial_start_ts + 0.77, trial_start_ts + 0.87)).T
+
+    si_mini_idx = np.searchsorted(movie_frame, spout_in_mini_ts)
+    si_full_idx = np.searchsorted(movie_frame, spout_in_full_ts)
+    so_idx = np.searchsorted(movie_frame, spout_out_ts)
+
+    spouts_active = np.zeros((len(movie_frame), 1))
+
+    for idx_list in [si_mini_idx, si_full_idx, so_idx]:
+        for s, e in idx_list:
+            spouts_active[s:e] = 1
+
+    return spouts_active
+
+
+def orthogonalize(movements, trial_data, movie_frame):
+    spouts_active = get_spouts_active(trial_data, movie_frame)
+
+    svds_stacked = np.vstack(
+        (spouts_active[: movements["SVT"].shape[1]].T, movements["SVT"])
+    ).T
+    svds_orthogonalized = np.linalg.qr(svds_stacked)[0][:, 1:].T
+
+    return svds_orthogonalized
+
+
 def get_svd_df(
     subj_id, sess_id, trial_data, session_data, svd_stepsize=None, **trial_idx_kwargs
 ):
@@ -464,6 +496,9 @@ def get_svd_df(
         allow_pickle=True,
     ).item()
 
+    # orthogonalize
+    svds_orthogonalized = orthogonalize(movements, trial_data, movie_frame)
+
     frame_trial_idxs = get_event_trial_idxs(
         trial_start,
         trial_data,
@@ -475,7 +510,9 @@ def get_svd_df(
     if svd_stepsize is None:
         svd_tavg = np.zeros((len(frame_trial_idxs), 200))
         for i, (start, end) in enumerate(frame_trial_idxs):
-            svd_tavg[i] = movements["SVT"][:, start:end].mean(axis=1)
+            svd_tavg[i] = svds_orthogonalized[:, start:end].mean(
+                axis=1
+            )  # movements["SVT"][:, start:end].mean(axis=1)
 
         svd_df = pd.DataFrame(svd_tavg, columns=[f"SVD_{i}" for i in range(200)])
     else:
@@ -483,7 +520,9 @@ def get_svd_df(
 
         for trial_i in range(len(frame_trial_idxs)):
             for bin_i, (start, end) in enumerate(frame_trial_idxs[trial_i]):
-                svd_tavg[trial_i][bin_i] = movements["SVT"][:, start:end].mean(axis=1)
+                svd_tavg[trial_i][bin_i] = svds_orthogonalized[:, start:end].mean(
+                    axis=1
+                )  # movements["SVT"][:, start:end].mean(axis=1)
 
         svd_df = pd.DataFrame({f"SVD_{i}": list(svd_tavg[:, :, i]) for i in range(200)})
 
@@ -538,6 +577,8 @@ def get_event_trial_idxs(
     else:
         if alignment == "choice":
             ts = trial_data["trial_start_time"] + trial_data["response_time"]  # s
+        elif alignment == "trial_start":
+            ts = trial_data["trial_start_time"]  # s
         else:
             raise NotImplementedError(
                 f"alignment {alignment} is not currently implemented"
