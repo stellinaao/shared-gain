@@ -641,8 +641,8 @@ class StrategyEncoder(Encoder):
             **kwargs,
         )
 
-    def get_data(self):
-        super().get_data()
+    def get_data(self, svd_stepsize=None):
+        super().get_data(svd_stepsize=svd_stepsize)
 
         if self.idxs is None:
             self.idxs_all = get_strategy_filter_idxs(
@@ -819,6 +819,91 @@ class ShuffledEncoder:
         for pivot in pivots:
             print(pivot)
             self.get_dr2(pivot, n_iters=20)
+
+    def get_cvr2_group(self, pivots, group, n_iters=20):
+        for pivot in pivots:
+            if pivot not in self.regressors:
+                raise ValueError(f"{pivot} is not in {self.regressors}")
+
+        if not hasattr(self, "cvr2"):
+            self.cvr2_unit = {}
+            self.cvr2 = {}
+
+        if not hasattr(self, "encoders_cvr2"):
+            self.encoders_cvr2 = {}
+
+        self.cvr2_unit[group] = np.zeros((n_iters, self.encoder_full.num_units))
+        self.cvr2[group] = np.zeros((n_iters,))
+
+        for i in range(n_iters):
+            encoder_shuffle = self.enc_class(
+                self.subj_id, self.sess_id, random_state=i, **self.kwargs
+            )
+            encoder_shuffle.build_dm()
+
+            # shuffle all taskvars besides the pivot
+            for tv in self.regressors:
+                if tv not in pivots:
+                    idx = encoder_shuffle.tv_idxs[tv]
+                    encoder_shuffle.tvs[:, idx] = np.random.permutation(
+                        encoder_shuffle.tvs[:, idx]
+                    )
+
+            encoder_shuffle.get_r2()
+
+            # ...
+            self.cvr2_unit[group][i] = encoder_shuffle.scores["encoder"]
+            self.cvr2[group][i] = self.cvr2_unit[group][i].mean()
+
+        self.encoders_cvr2[group] = encoder_shuffle
+
+    def get_dr2_group(self, pivots, group, n_iters=20):
+        for pivot in pivots:
+            if pivot not in self.regressors:
+                raise ValueError(f"{pivot} is not in {self.regressors}")
+
+        if not hasattr(self, "dr2"):
+            self.dr2_unit = {}
+            self.dr2 = {}
+
+        if not hasattr(self, "encoders_dr2"):
+            self.encoders_dr2 = {}
+
+        self.dr2_unit[group] = np.zeros((n_iters, self.encoder_full.num_units))
+        self.dr2[group] = np.zeros((n_iters,))
+
+        for i in range(n_iters):
+            encoder_shuffle = self.enc_class(
+                self.subj_id, self.sess_id, random_state=i, **self.kwargs
+            )
+            encoder_shuffle.build_dm()
+
+            # shuffle the pivot
+            for pivot in pivots:
+                idx = encoder_shuffle.tv_idxs[pivot]
+                encoder_shuffle.tvs[:, idx] = np.random.permutation(
+                    encoder_shuffle.tvs[:, idx]
+                )
+
+            encoder_shuffle.get_r2()
+
+            # ...
+            self.dr2_unit[group][i] = (
+                self.encoder_full.scores["encoder"] - encoder_shuffle.scores["encoder"]
+            )
+            self.dr2[group][i] = self.dr2_unit[group][i].mean()
+
+        self.encoders_dr2[group] = encoder_shuffle
+
+    def get_cvr2_groups(self, pivots_groups, n_iters=20):
+        for group, pivots in pivots_groups.items():
+            print(f"{group}, {pivots}")
+            self.get_cvr2_group(pivots, group, n_iters=n_iters)
+
+    def get_dr2_groups(self, pivots_groups, n_iters=20):
+        for group, pivots in pivots_groups.items():
+            print(f"{group}, {pivots}")
+            self.get_dr2_group(pivots, group, n_iters=n_iters)
 
     def plot_cvr2(self, mode="bar", add_full_r2=False):
         if (

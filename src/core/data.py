@@ -1212,8 +1212,16 @@ def get_dm(
 
                 tvs = np.hstack((tvs, tvs_interaction))
 
+            base_regressors = np.concatenate((tv_names, strategy_names))
             if num_bins is not None:
-                tv_names = [f"{tv}_{i}" for tv in tv_keys for i in range(num_bins)]
+                # tv
+                tv_names = [
+                    f"{tv}_{i}"
+                    for tv in np.concatenate(
+                        (tv_names, strategy_names, interaction_names)
+                    )
+                    for i in range(num_bins)
+                ]
                 num_trials = len(trial_data)
 
                 masks = np.zeros((num_bins, num_trials * num_bins))
@@ -1228,6 +1236,8 @@ def get_dm(
                 tv_tr = tv_tr_interstitial * masks[:, :, None]
                 tv_tr = tv_tr.transpose(2, 0, 1).reshape(-1, num_bins * num_trials).T
                 tvs = tv_tr
+            else:
+                tv_names = np.concatenate((tv_names, strategy_names, interaction_names))
 
     else:
         tvs = None
@@ -1265,12 +1275,9 @@ def get_dm(
     xs = np.linspace(0, num_trials - 1, num_tents)
     tents = tent_basis_generate(xs)
 
-    tv_names_ = tv_names
     tv_names = {
         "task_vars": tv_names,
         "bswitch_itrial": bswitch_names,
-        "strategy_params": strategy_names,
-        "interaction": interaction_names,
         "svd": svd_names,
         "lick": lick_names,
     }
@@ -1279,9 +1286,9 @@ def get_dm(
         tv_name: i for i, tv_name in enumerate(np.concatenate(list(tv_names.values())))
     }
 
-    tv_names["base_regressors"] = np.concatenate(
-        [tv_names_, bswitch_names, strategy_names]
-    )
+    tv_names["base_regressors"] = base_regressors
+    tv_names["strategy_params"] = strategy_names
+    tv_names["interaction"] = interaction_names
 
     return (tents, tvs), (tv_names, tv_idxs)
 
