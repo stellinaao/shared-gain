@@ -897,12 +897,12 @@ class ShuffledEncoder:
 
     def get_cvr2_groups(self, pivots_groups, n_iters=20):
         for group, pivots in pivots_groups.items():
-            print(f"{group}, {pivots}")
+            print(f"{group}")
             self.get_cvr2_group(pivots, group, n_iters=n_iters)
 
     def get_dr2_groups(self, pivots_groups, n_iters=20):
         for group, pivots in pivots_groups.items():
-            print(f"{group}, {pivots}")
+            print(f"{group}")
             self.get_dr2_group(pivots, group, n_iters=n_iters)
 
     def plot_cvr2(self, mode="bar", add_full_r2=False):

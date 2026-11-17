@@ -10,5 +10,7 @@ Python Version: 3.11.14
 """
 
 from sg.svds import build_video_svd_data
+from core.data import default_sessions
 
-build_video_svd_data(subj_id="MM012", sess_idx=5)
+# build_video_svd_data(subj_id="MM012", sess_idx=5)
+build_video_svd_data(subj_id="MR94", sess_id=default_sessions["MR94"])

@@ -153,6 +153,7 @@ def load_sess(
     )
 
     # add svds
+    # probably an issue with the mask and the lengths not being the same
     if add_svd:
         svds_df = get_svd_df(
             subj_id,
@@ -492,6 +493,7 @@ def get_svd_df(
         DATA_DIR
         / subj_id
         / sess_id
+        / "DynamicForaging"
         / f"{subj_id}_DynamicForaging_{sess_id}_cam1_run000_00000000.npy",
         allow_pickle=True,
     ).item()

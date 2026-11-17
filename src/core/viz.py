@@ -818,7 +818,9 @@ def plot_grouped_violin(
     return fig, ax
 
 
-def plot_grouped_boxes(data: dict, ylim=None, colors: dict = {}, widths=None, ax=None):
+def plot_grouped_boxes(
+    data: dict, ylim=None, colors: dict = {}, widths=None, plot_points=True, ax=None
+):
     if ax is None:
         fig, ax = plt.subplots(figsize=(2.5, 2.5), tight_layout=True)
     else:
@@ -866,9 +868,12 @@ def plot_grouped_boxes(data: dict, ylim=None, colors: dict = {}, widths=None, ax
         )
         parts["boxes"][0].set_label(hue)
 
-        for p, vals in zip(pos, sets):
-            x = p + (rng.random(len(vals)) - 0.5) * bw * 0.5
-            ax.scatter(x, vals, color=color, s=1.5, alpha=0.2, linewidths=0, zorder=3)
+        if plot_points:
+            for p, vals in zip(pos, sets):
+                x = p + (rng.random(len(vals)) - 0.5) * bw * 0.5
+                ax.scatter(
+                    x, vals, color=color, s=1.5, alpha=0.2, linewidths=0, zorder=3
+                )
 
     ax.set_ylim(ylim)
 

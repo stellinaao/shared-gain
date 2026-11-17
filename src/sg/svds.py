@@ -46,7 +46,9 @@ def build_video_svd_data(subj_id=None, sess_id=None, subj_idx=None, sess_idx=Non
             subj_idx = np.where(subject_ids == subj_id)[0][0]
         sess_id = session_ids[subj_idx][sess_idx]
 
-    vidfolder = PROJECT_ROOT.parents[0] / "data-np" / subj_id / sess_id
+    vidfolder = (
+        PROJECT_ROOT.parents[0] / "data-np" / subj_id / sess_id / "DynamicForaging"
+    )
 
     # Check if all SVD files exist
     missing_npy_file = False
